@@ -1,2 +1,2 @@
-# hydra
+# Hydra
 Materials Commons Backend Services

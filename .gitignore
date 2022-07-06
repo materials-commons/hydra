@@ -13,3 +13,8 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+.idea
+
+cmd/mc-sshd/mc-sshd
+cmd/mql/mql
+cmd/mqlservd/mqlservd
