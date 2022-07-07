@@ -3,7 +3,7 @@ package ast
 import (
 	"bytes"
 
-	"github.com/materials-commons/hydra/internal/internal/mql/token"
+	"github.com/materials-commons/hydra/internal/mql/token"
 )
 
 type Node interface {
