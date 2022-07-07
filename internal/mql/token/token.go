@@ -9,12 +9,10 @@ const (
 	ILLEGAL           = -1
 
 	// Identifiers and Literals
-	IDENT        = 0x100
-	INT          = 0x101
-	FLOAT        = 0x102
-	STRING       = 0x103
-	BOOL         = 0x104
-	QUOTED_IDENT = 0x105
+	IDENT  = 0x100
+	INT    = 0x101
+	FLOAT  = 0x102
+	STRING = 0x103
 
 	// Operators
 	EQUAL = 0x200 // =
@@ -29,16 +27,25 @@ const (
 	OR  = 0x301 // or
 	NOT = 0x302 // not
 
-	// build-in functions
-	HAS_PROCESS = 0x400 // has-process:
+	// built-in functions
+	SAMPLE_HAS_PROCESS_FUNC    = 0x400 // s-has-process:
+	SAMPLE_HAS_ATTRIBUTE_FUNC  = 0x401 // s-has-attribute:
+	PROCESS_HAS_SAMPLE_FUNC    = 0x402 // p-has-sample:
+	PROCESS_HAS_ATTRIBUTE_FUNC = 0x403 // p-has-attribute:
 
-	// keywords
-	SAMPLE  = 0x700 // s:
-	PROCESS = 0x701 // p:
-	ATTR    = 0x702 // a:
-	SELECT  = 0x703 // select
-	WHERE   = 0x704 // where
-	NULL    = 0x705 // null
+	// Keywords
+	SAMPLE       = 0x700 // s:
+	PROCESS      = 0x701 // p:
+	ATTR         = 0x702 // a:
+	SELECT       = 0x703 // select
+	WHERE        = 0x704 // where
+	NULL         = 0x705 // null
+	SAMPLES      = 0x706 // samples
+	PROCESSES    = 0x707 // processes
+	PROCESS_ATTR = 0x708 // pa:
+	SAMPLE_ATTR  = 0x709 // sa:
+	TRUE         = 0x710 // true
+	FALSE        = 0x711 // false
 
 	// Elements
 	LBRACKET  = 0x800 // [
@@ -49,6 +56,9 @@ const (
 	QUOTE     = 0x805 // "
 	COLON     = 0x806 // :
 	SEMICOLON = 0x807 // ;
+	MINUS     = 0x808 // -
+	BANG      = 0x809 // !
+	PLUS      = 0x810 // +
 )
 
 type Token struct {
@@ -57,16 +67,33 @@ type Token struct {
 }
 
 var keywords = map[string]TokenType{
-	"select":       SELECT,
-	"where":        WHERE,
-	"a:":           ATTR,
-	"p:":           PROCESS,
-	"s:":           SAMPLE,
-	"and":          AND,
-	"or":           OR,
-	"not":          NOT,
-	"null":         NULL,
-	"has-process:": HAS_PROCESS,
+	"select": SELECT,
+	"where":  WHERE,
+
+	"s:":           SAMPLE_ATTR,
+	"sa:":          SAMPLE_ATTR,
+	"sample-attr:": SAMPLE_ATTR,
+	"sample:":      SAMPLE_ATTR,
+
+	"pa:":           PROCESS_ATTR,
+	"process-attr:": PROCESS_ATTR,
+	"process:":      PROCESS_ATTR,
+	"p:":            PROCESS_ATTR,
+
+	"samples":   SAMPLES,
+	"processes": PROCESSES,
+	"and":       AND,
+	"or":        OR,
+	"not":       NOT,
+	"null":      NULL,
+
+	"s-has-process:":  SAMPLE_HAS_PROCESS_FUNC,
+	"s-has-attribute": SAMPLE_HAS_ATTRIBUTE_FUNC,
+	"p-has-sample":    PROCESS_HAS_SAMPLE_FUNC,
+	"p-has-attribute": PROCESS_HAS_ATTRIBUTE_FUNC,
+
+	"true":  TRUE,
+	"false": FALSE,
 }
 
 func LookupIdent(ident string) TokenType {
@@ -78,23 +105,26 @@ func LookupIdent(ident string) TokenType {
 }
 
 var tokenToStr = map[TokenType]string{
-	EQUAL:       "EQUAL: =",
-	LTEQ:        "LTEQ: <=",
-	NOTEQ:       "NOTEQ: <>",
-	LT:          "LT: <",
-	GTEQ:        "GTEQ: >=",
-	GT:          "GT: >",
-	COMMA:       "COMMA: ,",
-	LBRACKET:    "LBRACKET: [",
-	RBRACKET:    "RBRACKET: ]",
-	LPAREN:      "LPAREN: (",
-	RPAREN:      "RPAREN: )",
-	SEMICOLON:   "SEMICOLON: ;",
-	WHERE:       "WHERE: where",
-	AND:         "AND: and",
-	NOT:         "NOT: not",
-	NULL:        "NULL: null",
-	HAS_PROCESS: "HAS_PROCESS: has-process:",
+	EQUAL:                      "EQUAL: =",
+	LTEQ:                       "LTEQ: <=",
+	NOTEQ:                      "NOTEQ: <>",
+	LT:                         "LT: <",
+	GTEQ:                       "GTEQ: >=",
+	GT:                         "GT: >",
+	COMMA:                      "COMMA: ,",
+	LBRACKET:                   "LBRACKET: [",
+	RBRACKET:                   "RBRACKET: ]",
+	LPAREN:                     "LPAREN: (",
+	RPAREN:                     "RPAREN: )",
+	SEMICOLON:                  "SEMICOLON: ;",
+	WHERE:                      "WHERE: where",
+	AND:                        "AND: and",
+	NOT:                        "NOT: not",
+	NULL:                       "NULL: null",
+	SAMPLE_HAS_PROCESS_FUNC:    "SAMPLE_HAS_PROCESS_FUNC: s-has-process:",
+	SAMPLE_HAS_ATTRIBUTE_FUNC:  "SAMPLE_HAS_ATTRIBUTE_FUNC: s-has-attribute:",
+	PROCESS_HAS_SAMPLE_FUNC:    "PROCESS_HAS_SAMPLE_FUNC: p-has-sample:",
+	PROCESS_HAS_ATTRIBUTE_FUNC: "PROCESS_HAS_ATTRIBUTE_FUNC: p-has-attribute:",
 }
 
 func TokenToStr(token TokenType) string {

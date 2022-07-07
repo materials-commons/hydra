@@ -57,6 +57,12 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newTokenStr(token.STRING, l.readString())
 	case '\'':
 		tok = newTokenStr(token.IDENT, l.readQuotedIdentifier())
+	case '-':
+		tok = newToken(token.MINUS, l.ch)
+	case '+':
+		tok = newToken(token.PLUS, l.ch)
+	case '!':
+		tok = newToken(token.BANG, l.ch)
 	case 0:
 		tok = newTokenStr(token.EOF, "")
 	default:
