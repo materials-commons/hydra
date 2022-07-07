@@ -1,6 +1,6 @@
 package store
 
-import "github.com/materials-commons/gomcdb/mcmodel"
+import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 
 type FakeConversionStore struct{}
 

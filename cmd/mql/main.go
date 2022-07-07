@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/materials-commons/mql/cmd/mql/cmd"
+import "github.com/materials-commons/hydra/cmd/mql/cmd"
 
 func main() {
 	cmd.Execute()

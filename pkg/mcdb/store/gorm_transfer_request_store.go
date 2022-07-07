@@ -6,8 +6,8 @@ import (
 
 	"github.com/apex/log"
 	"github.com/hashicorp/go-uuid"
-	"github.com/materials-commons/gomcdb/mcmodel"
-	"github.com/materials-commons/gomcdb/mime"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/mime"
 	"gorm.io/gorm"
 )
 

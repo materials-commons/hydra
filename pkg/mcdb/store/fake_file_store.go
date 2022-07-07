@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/materials-commons/gomcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
 type FakeFileStore struct {

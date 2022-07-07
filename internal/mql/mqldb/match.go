@@ -3,7 +3,7 @@ package mqldb
 import (
 	"strconv"
 
-	"github.com/materials-commons/gomcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
 func tryEvalAttributeIntMatch(val1 int64, match MatchStatement) bool {

@@ -1,6 +1,6 @@
 package mqldb
 
-import "github.com/materials-commons/gomcdb/mcmodel"
+import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 
 func createTestDB() *DB {
 	db := &DB{

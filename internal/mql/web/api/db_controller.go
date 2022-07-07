@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/labstack/echo/v4"
-	"github.com/materials-commons/gomcdb/mcmodel"
-	"github.com/materials-commons/mql/internal/mqldb"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/internal/mqldb"
 	"gorm.io/gorm"
 )
 

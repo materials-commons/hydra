@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/apex/log"
-	"github.com/materials-commons/gomcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
 )
 

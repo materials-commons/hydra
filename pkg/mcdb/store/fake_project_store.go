@@ -3,7 +3,7 @@ package store
 import (
 	"fmt"
 
-	"github.com/materials-commons/gomcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
 type FakeProjectStore struct {

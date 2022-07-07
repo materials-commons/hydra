@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/materials-commons/gomcdb/config"
+	"github.com/materials-commons/hydra/pkg/mcdb/config"
 	"gorm.io/gorm"
 )
 
