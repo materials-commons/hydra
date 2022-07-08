@@ -17,6 +17,20 @@ func NewFakeFileStore(files []mcmodel.File) *FakeFileStore {
 	return &FakeFileStore{files: files, lastID: 10000}
 }
 
+func (s *FakeFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
+	for _, f := range s.files {
+		if f.ID == fileID {
+			return &f, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no such file")
+}
+
+func (s *FakeFileStore) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (s *FakeFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
 	for _, f := range s.files {
 		if f.ID == file.ID {

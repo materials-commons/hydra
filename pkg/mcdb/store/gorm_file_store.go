@@ -21,6 +21,24 @@ func NewGormFileStore(db *gorm.DB, mcfsRoot string) *GormFileStore {
 	return &GormFileStore{db: db, mcfsRoot: mcfsRoot}
 }
 
+func (s *GormFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
+	var file mcmodel.File
+	if err := s.db.Find(&file, fileID).Error; err != nil {
+		return nil, err
+	}
+
+	return &file, nil
+}
+
+func (s *GormFileStore) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
+	var file mcmodel.File
+	if err := s.db.Where("uuid = ?", fileUUID).First(&file).Error; err != nil {
+		return nil, err
+	}
+
+	return &file, nil
+}
+
 // UpdateMetadataForFileAndProject updates the metadata and project meta data for a file
 func (s *GormFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
 	finfo, err := os.Stat(file.ToUnderlyingFilePath(s.mcfsRoot))
