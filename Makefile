@@ -16,7 +16,13 @@ cli:
 	(cd ./cmd/mql; go build)
 
 server:
-	(cmd ./cmd/mchydrad; go build)
+	(cd ./cmd/mchydrad; go build)
+
+servers:
+	(cd ./cmd/mcbridgefsd; go build)
+	(cd ./cmd/mcftservd; go build)
+	(cd ./cmd/mc-sshd; go build)
+	(cd ./cmd/mqlservd; go build)
 
 deploy: deploy-cli deploy-server
 

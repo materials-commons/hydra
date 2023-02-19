@@ -31,9 +31,9 @@ type FileTransferHandler struct {
 	Project      *mcmodel.Project
 	User         mcmodel.User
 	File         *mcmodel.File
-	projectStore *store.ProjectStore
-	fileStore    *store.FileStore
-	convStore    *store.ConversionStore
+	projectStore store.ProjectStore
+	fileStore    store.FileStore
+	convStore    store.ConversionStore
 	hasher       hash.Hash
 	mcfsRoot     string
 }
@@ -42,9 +42,9 @@ func NewFileTransferHandler(ws *websocket.Conn, db *gorm.DB) *FileTransferHandle
 	return &FileTransferHandler{
 		ws:           ws,
 		db:           db,
-		projectStore: store.NewProjectStore(db),
-		fileStore:    store.NewFileStore(db, GetMCFSRoot()),
-		convStore:    store.NewConversionStore(db),
+		projectStore: store.NewGormProjectStore(db),
+		fileStore:    store.NewGormFileStore(db, GetMCFSRoot()),
+		convStore:    store.NewGormConversionStore(db),
 		hasher:       md5.New(),
 		mcfsRoot:     GetMCFSRoot(),
 	}
@@ -103,7 +103,7 @@ func (h *FileTransferHandler) close() {
 		finfo, err := os.Stat(h.File.ToUnderlyingFilePath(h.mcfsRoot))
 		if err == nil {
 			checksum := fmt.Sprintf("%x", h.hasher.Sum(nil))
-			if err := h.fileStore.UpdateMetadataForFileAndProject(h.File, checksum, h.Project.ID, finfo.Size()); err != nil {
+			if err := h.fileStore.UpdateMetadataForFileAndProject(h.File, checksum, finfo.Size()); err != nil {
 				log.Errorf("Failed to update metadata for file %d: %s", h.File.ID, err)
 			}
 			h.File.Checksum = checksum
@@ -157,7 +157,7 @@ func (h *FileTransferHandler) authenticate() error {
 	}
 
 	var err error
-	h.Project, err = h.projectStore.FindProject(authReq.ProjectID)
+	h.Project, err = h.projectStore.GetProjectByID(authReq.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (h *FileTransferHandler) getOrCreateDirectory(dirPath string) (*mcmodel.Fil
 	acquireProjectMutex(h.Project.ID)
 	defer releaseProjectMutex(h.Project.ID)
 
-	dir, err := h.fileStore.FindDirByPath(h.Project.ID, dirPath)
+	dir, err := h.fileStore.GetDirByPath(h.Project.ID, dirPath)
 	if err != nil {
 		dir, err = h.CreateDirectoryAll(dirPath)
 		if err != nil {
@@ -251,7 +251,7 @@ func (h *FileTransferHandler) CreateDirectoryAll(dir string) (*mcmodel.File, err
 	dirs := strings.Split(dir, "/")
 	pathToCheck := "/"
 
-	parentDir, err := h.fileStore.FindDirByPath(h.Project.ID, "/")
+	parentDir, err := h.fileStore.GetDirByPath(h.Project.ID, "/")
 	if err != nil {
 		log.Errorf("  CreateDirectoryAll - FindDirByPath failed: %s", err)
 		return nil, err

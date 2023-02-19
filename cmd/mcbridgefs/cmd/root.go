@@ -24,10 +24,10 @@ import (
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/materials-commons/hydra/pkg/mcdb"
-	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcbridgefs"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/monitor"
+	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/spf13/cobra"
 )
 
