@@ -2,9 +2,9 @@ package mqldb
 
 import (
 	"fmt"
+	"github.com/materials-commons/hydra/pkg/mql"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/internal/mql"
 )
 
 // EvalStatement runs a query and returns the results. At the moment selection is a simple boolean flag

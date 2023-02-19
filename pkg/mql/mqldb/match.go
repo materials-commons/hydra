@@ -1,10 +1,10 @@
 package mqldb
 
 import (
+	"github.com/materials-commons/hydra/pkg/mql"
 	"strconv"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/internal/mql"
 )
 
 func tryEvalAttributeIntMatch(val1 int64, match mql.MatchStatement) bool {

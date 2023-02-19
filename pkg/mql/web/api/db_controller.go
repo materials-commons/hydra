@@ -2,11 +2,11 @@ package api
 
 import (
 	"fmt"
+	mqldb2 "github.com/materials-commons/hydra/pkg/mql/mqldb"
 	"net/http"
 	"sync"
 
 	"github.com/labstack/echo/v4"
-	"github.com/materials-commons/hydra/internal/mql/mqldb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
 )
@@ -14,12 +14,12 @@ import (
 var (
 	DB               *gorm.DB
 	mutex            sync.Mutex
-	mqlDBByProjectID map[int]*mqldb.DB
+	mqlDBByProjectID map[int]*mqldb2.DB
 )
 
 func Init(db *gorm.DB) {
 	DB = db
-	mqlDBByProjectID = make(map[int]*mqldb.DB)
+	mqlDBByProjectID = make(map[int]*mqldb2.DB)
 }
 
 func LoadProjectController(c echo.Context) error {
@@ -81,7 +81,7 @@ func ExecuteQueryController(c echo.Context) error {
 		return badRequest(fmt.Errorf("illegal project: %d", req.ProjectID))
 	}
 
-	statement := mqldb.MapToStatement(req.Statement)
+	statement := mqldb2.MapToStatement(req.Statement)
 
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -91,11 +91,11 @@ func ExecuteQueryController(c echo.Context) error {
 		return badRequest(fmt.Errorf("project %d was never loaded", req.ProjectID))
 	}
 
-	selection := mqldb.Selection{
-		SampleSelection: mqldb.SampleSelection{
+	selection := mqldb2.Selection{
+		SampleSelection: mqldb2.SampleSelection{
 			All: req.SelectSamples,
 		},
-		ProcessSelection: mqldb.ProcessSelection{
+		ProcessSelection: mqldb2.ProcessSelection{
 			All: req.SelectProcesses,
 		},
 	}
@@ -105,7 +105,7 @@ func ExecuteQueryController(c echo.Context) error {
 		Samples   []mcmodel.Entity   `json:"samples"`
 	}
 
-	resp.Processes, resp.Samples = mqldb.EvalStatement(db, selection, statement)
+	resp.Processes, resp.Samples = mqldb2.EvalStatement(db, selection, statement)
 
 	return c.JSON(http.StatusOK, &resp)
 }
@@ -113,7 +113,7 @@ func ExecuteQueryController(c echo.Context) error {
 // loadProjectDB will load the mqldb for the project and save it into mqlDBByProjectID. It does not attempt to lock
 // access to mqlDBByProjectID. If this is important then the call must acquire the mutex.Lock().
 func loadProjectDB(projectID int) error {
-	db := mqldb.NewDB(projectID, DB)
+	db := mqldb2.NewDB(projectID, DB)
 	if err := db.Load(); err != nil {
 		return fmt.Errorf("failed to load project: %d", projectID)
 	}

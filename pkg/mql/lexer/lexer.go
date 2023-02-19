@@ -1,6 +1,8 @@
 package lexer
 
-import "github.com/materials-commons/hydra/internal/mql/token"
+import (
+	"github.com/materials-commons/hydra/pkg/mql/token"
+)
 
 type Lexer struct {
 	input        string

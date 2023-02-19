@@ -1,9 +1,8 @@
 package lexer
 
 import (
+	"github.com/materials-commons/hydra/pkg/mql/token"
 	"testing"
-
-	"github.com/materials-commons/hydra/internal/mql/token"
 )
 
 func TestNextToken(t *testing.T) {

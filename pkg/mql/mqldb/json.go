@@ -1,6 +1,8 @@
 package mqldb
 
-import "github.com/materials-commons/hydra/internal/mql"
+import (
+	"github.com/materials-commons/hydra/pkg/mql"
+)
 
 // MapToStatement takes a map, which represents the converted JSON payload for a statement
 // and converts it to statement. It recursively calls itself to build out the full statement.

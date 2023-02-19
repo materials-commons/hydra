@@ -2,10 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"github.com/materials-commons/hydra/pkg/mql/ast"
+	"github.com/materials-commons/hydra/pkg/mql/lexer"
 	"testing"
 
-	"github.com/materials-commons/hydra/internal/mql/ast"
-	"github.com/materials-commons/hydra/internal/mql/lexer"
 	"github.com/materials-commons/hydra/internal/mqldb"
 )
 

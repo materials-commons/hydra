@@ -2,10 +2,9 @@ package mqldb
 
 import (
 	"errors"
+	"github.com/materials-commons/hydra/pkg/mql"
+	"github.com/materials-commons/hydra/pkg/mql/ast"
 	"strings"
-
-	"github.com/materials-commons/hydra/internal/mql"
-	"github.com/materials-commons/hydra/internal/mql/ast"
 )
 
 var ErrNoSelectionStatement = errors.New("no selection statement")

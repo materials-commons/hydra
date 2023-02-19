@@ -2,9 +2,8 @@ package evaluator
 
 import (
 	"fmt"
-
-	"github.com/materials-commons/hydra/internal/mql/ast"
-	"github.com/materials-commons/hydra/internal/mql/object"
+	"github.com/materials-commons/hydra/pkg/mql/ast"
+	"github.com/materials-commons/hydra/pkg/mql/object"
 )
 
 var (

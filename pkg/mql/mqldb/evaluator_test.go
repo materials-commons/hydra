@@ -2,9 +2,8 @@ package mqldb
 
 import (
 	"fmt"
+	"github.com/materials-commons/hydra/pkg/mql"
 	"testing"
-
-	"github.com/materials-commons/hydra/internal/mql"
 )
 
 func TestSimpleProcessQueries(t *testing.T) {
