@@ -21,7 +21,7 @@ server:
 servers:
 	(cd ./cmd/mcbridgefsd; go build)
 	(cd ./cmd/mcftservd; go build)
-	(cd ./cmd/mc-sshd; go build)
+	(cd ./cmd/mcsshd; go build)
 	(cd ./cmd/mqlservd; go build)
 
 deploy: deploy-cli deploy-server
@@ -61,16 +61,16 @@ deploy-mcftservd: mcftservd
 	sudo cp operations/supervisord.d/mcftservd.ini /etc/supervisord.d
 	@sudo supervisorctl start mcftservd:mcftservd_00
 
-mc-sshd:
-	(cd ./cmd/mc-sshd; go build)
+mcsshd:
+	(cd ./cmd/mcsshd; go build)
 
-run-mc-sshd: mc-sshd
-	./cmd/mc-sshd/mc-sshd
+run-mcsshd: mcsshd
+	./cmd/mcsshd/mcsshd
 
-deploy-mc-sshd: mc-sshd ssh-hostkey
-	sudo cp cmd/mc-sshd/mc-sshd /usr/local/bin
-	sudo chmod a+rx /usr/local/bin/mc-sshd
-	sudo cp operations/supervisord.d/mc-sshd.ini /etc/supervisord.d
+deploy-mcsshd: mcsshd ssh-hostkey
+	sudo cp cmd/mcsshd/mcsshd /usr/local/bin
+	sudo chmod a+rx /usr/local/bin/mcsshd
+	sudo cp operations/supervisord.d/mcsshd.ini /etc/supervisord.d
 	@sudo supervisorctl update all
 
 mql-cli:

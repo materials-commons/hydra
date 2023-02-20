@@ -28,9 +28,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "mc-sshd",
+	Use:   "mcsshd",
 	Short: "SSH Server for Materials Commons that handles SFTP and SCP requests.",
-	Long: `mc-sshd is a custom SSH server that only implements the SFTP and SCP services. It connects
+	Long: `mcsshd is a custom SSH server that only implements the SFTP and SCP services. It connects
 these services to Materials Commons.`,
 	Run: mcsshdMain,
 }

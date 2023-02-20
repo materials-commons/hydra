@@ -51,7 +51,7 @@ import (
 //       username from the host. So for scp the user has to specify their user slug.
 //
 type mcfsHandler struct {
-	// The user is set in the context from the passwordHandler method in cmd/mc-sshd/cmd/root. Rather than
+	// The user is set in the context from the passwordHandler method in cmd/mcsshd/cmd/root. Rather than
 	// constantly retrieving it we get it one time and set it in the mcfsHandler. See
 	// loadProjectAndUserIntoHandler for details.
 	user *mcmodel.User
@@ -371,7 +371,7 @@ func (h *mcfsHandler) loadProjectAndUserIntoHandler(s ssh.Session, path string) 
 }
 
 // loadUserFromContextIntoHandler loads the user context that was set in the passwordHandler method
-// in cmd/mc-sshd/cmd/root.go.
+// in cmd/mcsshd/cmd/root.go.
 //
 // **This method should never be called outside loadProjectAndUserIntoHandler.**
 func (h *mcfsHandler) loadUserFromContextIntoHandler(s ssh.Session) error {
@@ -388,7 +388,7 @@ func (h *mcfsHandler) loadUserFromContextIntoHandler(s ssh.Session) error {
 	var ok bool
 
 	// Cache the user from the ssh.Session context into our handler. Only load this once.
-	// See passwordHandler in cmd/mc-sshd/cmd/root for setting the "mcuser" key.
+	// See passwordHandler in cmd/mcsshd/cmd/root for setting the "mcuser" key.
 	h.user, ok = s.Context().Value("mcuser").(*mcmodel.User)
 
 	// Make sure that we can retrieve the user and if not then return an error.
