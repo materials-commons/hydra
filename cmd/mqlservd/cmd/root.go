@@ -16,7 +16,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/materials-commons/hydra/pkg/mql/web/api"
+	"github.com/materials-commons/hydra/pkg/mql"
 	"os"
 
 	"github.com/apex/log"
@@ -45,13 +45,13 @@ to query their materials data and find matching samples and processes.`,
 		e.Use(middleware.Recover())
 
 		db := mcdb.MustConnectToDB()
-
-		api.Init(db)
-
 		g := e.Group("/api")
-		g.POST("/load-project", api.LoadProjectController)
-		g.POST("/reload-project", api.ReloadProjectController)
-		g.POST("/execute-query", api.ExecuteQueryController)
+
+		s := mql.NewServer(g, db)
+
+		if err := s.Init(); err != nil {
+			log.Fatalf("Failed initializing MQL Server: %s", err)
+		}
 
 		if err := e.Start("localhost:1324"); err != nil {
 			log.Fatalf("Unable to start web server: %s", err)
