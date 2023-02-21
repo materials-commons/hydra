@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/materials-commons/hydra/pkg/mcft"
 	"os"
 
 	"github.com/gorilla/websocket"
@@ -60,29 +61,15 @@ var rootCmd = &cobra.Command{
 		e.HideBanner = true
 		e.HidePort = true
 		e.Use(middleware.Recover())
-		e.GET("/ws", handleUploadDownloadConnection)
+
+		s := mcft.NewServer(e, db)
+
+		if err := s.Init(); err != nil {
+			log.Fatalf("Failed to initialize mcftservd: %s", err)
+		}
 
 		e.Logger.Fatal(e.Start(":1423"))
 	},
-}
-
-func handleUploadDownloadConnection(c echo.Context) error {
-	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
-	if err != nil {
-		return err
-	}
-
-	fileTransferHandler := ft.NewFileTransferHandler(ws, db)
-	defer func() {
-		_ = ws.Close()
-	}()
-
-	if err := fileTransferHandler.Run(); err != nil {
-		status := ft.Error2Status(err)
-		_ = ws.WriteJSON(status)
-	}
-
-	return nil
 }
 
 func showEnv() {
