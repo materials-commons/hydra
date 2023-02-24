@@ -100,6 +100,12 @@ func (f File) IsConvertible() bool {
 		"image/tiff":
 		// images that need to be converted to JPEG to display on web
 		return true
+	case "application/json":
+		// Handle Jupyter Notebooks
+		if strings.HasSuffix(f.Name, ".ipynb") {
+			return true
+		}
+		return false
 	default:
 		return false
 	}
