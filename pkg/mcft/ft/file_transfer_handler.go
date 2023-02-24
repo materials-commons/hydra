@@ -101,30 +101,24 @@ func (h *FileTransferHandler) close() {
 	if h.f != nil {
 		_ = h.f.Close()
 		finfo, err := os.Stat(h.File.ToUnderlyingFilePath(h.mcfsRoot))
-		if err == nil {
-			checksum := fmt.Sprintf("%x", h.hasher.Sum(nil))
-			if err := h.fileStore.UpdateMetadataForFileAndProject(h.File, checksum, finfo.Size()); err != nil {
-				log.Errorf("Failed to update metadata for file %d: %s", h.File.ID, err)
-			}
-			h.File.Checksum = checksum
-		}
-
-		if h.pointedAtExistingFile() {
-			// There is already an uploaded that matches the checksum. At this point the file entry has been updated
-			// to point at it, so we can remove the physical file that was uploaded. Not that we are deleting the file
-			// pointed at by h.File.UUID. At this point h.File.UsesUUID has been updated, so we explicitly need to
-			// remove the file that was just uploaded (which went into a path determined by h.File.UUID).
-			if err := os.Remove(h.File.ToUnderlyingFilePathForUUID(h.mcfsRoot)); err != nil {
-				log.Errorf("Failed to remove file %s: %s", h.File.ToUnderlyingFilePathForUUID(h.mcfsRoot), err)
-			}
+		if err != nil {
+			log.Errorf("Error stating file: %s", err)
 			return
 		}
 
-		// If we are here then this is a new file without a checksum match in the database. Check to see if
-		// we should create a converted version for viewing on the web.
-		if h.fileNeedsConverting() {
-			// Kick off a job to do a conversion
-			h.submitConversionJobOnFile()
+		checksum := fmt.Sprintf("%x", h.hasher.Sum(nil))
+		deleteFile, err := h.fileStore.DoneWritingToFile(h.File, checksum, finfo.Size(), h.convStore)
+		if err != nil {
+			log.Errorf("Error finishing file (%s/%d): %s", h.File.Name, h.File.ID, err)
+			return
+		}
+
+		// If deleteFile is true then DoneWritingToFile found a duplicate file and switched the pointer in the
+		// database to point at it. So we can delete the existing file.
+		if deleteFile {
+			if err := os.Remove(h.File.ToUnderlyingFilePathForUUID(h.mcfsRoot)); err != nil {
+				log.Errorf("Failed to remove file %s: %s", h.File.ToUnderlyingFilePathForUUID(h.mcfsRoot), err)
+			}
 		}
 	}
 }
