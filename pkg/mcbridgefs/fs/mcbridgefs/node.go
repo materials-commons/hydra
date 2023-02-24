@@ -28,16 +28,14 @@ type Node struct {
 }
 
 var (
-	uid, gid                 uint32
-	mcfsRoot                 string
-	db                       *gorm.DB
-	transferRequest          mcmodel.TransferRequest
-	openedFilesTracker       *OpenFilesTracker
-	txRetryCount             int
-	fileStore                store.FileStore
-	transferRequestFileStore store.TransferRequestFileStore
-	transferRequestStore     store.TransferRequestStore
-	conversionStore          store.ConversionStore
+	uid, gid             uint32
+	mcfsRoot             string
+	db                   *gorm.DB
+	transferRequest      mcmodel.TransferRequest
+	openedFilesTracker   *OpenFilesTracker
+	fileStore            store.FileStore
+	transferRequestStore store.TransferRequestStore
+	conversionStore      store.ConversionStore
 )
 
 func init() {
@@ -51,16 +49,6 @@ func init() {
 	uid = uint32(uid32)
 	gid = uint32(gid32)
 
-	// All updates and creates to the database are wrapped in a transaction. These transactions may need to be
-	// retried, especially when they fail because two transactions are deadlocked trying to acquire a lock on
-	// a foreign table reference.
-	txRetryCount64, err := strconv.ParseInt(os.Getenv("MC_TX_RETRY"), 10, 32)
-	if err != nil || txRetryCount64 < 3 {
-		txRetryCount64 = 3
-	}
-
-	txRetryCount = int(txRetryCount64)
-
 	// Track any files that this instance writes to/create, so that if another instance does the same
 	// each of them will see their versions of the file, rather than intermixing them.
 	openedFilesTracker = NewOpenFilesTracker()
@@ -72,7 +60,6 @@ func CreateFS(fsRoot string, dB *gorm.DB, tr mcmodel.TransferRequest) *Node {
 	transferRequest = tr
 	fileStore = store.NewGormFileStore(db, fsRoot)
 	conversionStore = store.NewGormConversionStore(db)
-	transferRequestFileStore = store.NewGormTransferRequestFileStore(db)
 	transferRequestStore = store.NewGormTransferRequestStore(db, fsRoot)
 	return rootNode()
 }
@@ -94,7 +81,7 @@ func (n *Node) newNode() *Node {
 }
 
 // Readdir reads the corresponding directory and returns its entries
-func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+func (n *Node) Readdir(_ context.Context) (fs.DirStream, syscall.Errno) {
 	// Directories can have a large amount of files. To speed up processing
 	// Readdir uses queries that don't retrieve either the underlying directory
 	// for a mcmodel.File, or the underlying file for a mcmodel.TransferRequestFile.
@@ -132,19 +119,19 @@ func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 }
 
 // Opendir just returns success
-func (n *Node) Opendir(ctx context.Context) syscall.Errno {
+func (n *Node) Opendir(_ context.Context) syscall.Errno {
 	return fs.OK
 }
 
 // Getxattr returns extra attributes. This is used by lstat. There are no extra attributes to
 // return so we always return a 0 for buffer length and success.
-func (n *Node) Getxattr(ctx context.Context, attr string, dest []byte) (uint32, syscall.Errno) {
+func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.Errno) {
 	//fmt.Println("Getxattr")
 	return 0, fs.OK
 }
 
 // Getattr gets attributes about the file
-func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	//fmt.Println("Getattr:", n.Path(n.Root()), n.IsDir())
 
 	// Owner is always the process the bridge is running as
@@ -204,7 +191,7 @@ func (n *Node) getMCDir(name string) (*mcmodel.File, error) {
 
 // Mkdir will create a new directory. If an attempt is made to create an existing directory then it will return
 // the existing directory rather than returning an error.
-func (n *Node) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	path := filepath.Join("/", n.Path(n.Root()), name)
 	parent, err := n.getMCDir("")
 	if err != nil {
@@ -228,7 +215,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.En
 	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(dir), Ino: n.inodeHash(dir)}), fs.OK
 }
 
-func (n *Node) Rmdir(ctx context.Context, name string) syscall.Errno {
+func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
 	fmt.Printf("Rmdir %s/%s\n", n.Path(n.Root()), name)
 	return syscall.EIO
 }
@@ -266,7 +253,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 }
 
 // Open will open an existing file.
-func (n *Node) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	var (
 		err     error
 		newFile *mcmodel.File
@@ -318,9 +305,9 @@ func (n *Node) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFl
 	return fhandle, 0, fs.OK
 }
 
-// Setattr will set attributes on a file. Currently the only attribute supported is setting the size. This is
+// Setattr will set attributes on a file. Currently, the only attribute supported is setting the size. This is
 // done by calling Ftruncate.
-func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+func (n *Node) Setattr(_ context.Context, f fs.FileHandle, in *fuse.SetAttrIn, _ *fuse.AttrOut) syscall.Errno {
 	if sz, ok := in.GetSize(); ok {
 		fh, ok := f.(*FileHandle)
 		if !ok {
@@ -432,7 +419,7 @@ func (n *Node) createNewMCFileVersion() (*mcmodel.File, error) {
 		log.Errorf("os.OpenFile failed (%s): %s\n", newFile.ToUnderlyingFilePath(mcfsRoot), err)
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return newFile, nil
 }
@@ -476,7 +463,7 @@ func getMimeType(name string) string {
 	return strings.TrimSpace(mimeType[:semicolon])
 }
 
-func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
+func (n *Node) Rename(_ context.Context, name string, newParent fs.InodeEmbedder, newName string, _ uint32) syscall.Errno {
 	fmt.Printf("Rename: %s/%s to %s/%s\n", n.Path(n.Root()), name, newParent.EmbeddedInode().Path(n.Root()), newName)
 	fromPath := filepath.Join("/", n.Path(n.Root()))
 	toPath := filepath.Join("/", newParent.EmbeddedInode().Path(n.Root()))
@@ -521,7 +508,7 @@ func (n *Node) renameFile(fromPath, toPath, name, toName string, f mcmodel.File)
 	return syscall.EPERM
 }
 
-func (n *Node) Unlink(ctx context.Context, name string) syscall.Errno {
+func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
 	fmt.Printf("Unlink: %s/%s\n", n.Path(n.Root()), name)
 	return syscall.EPERM
 }
