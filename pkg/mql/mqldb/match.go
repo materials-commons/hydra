@@ -1,13 +1,13 @@
 package mqldb
 
 import (
-	"github.com/materials-commons/hydra/pkg/mql"
+	"github.com/materials-commons/hydra/pkg/mql/parser"
 	"strconv"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-func tryEvalAttributeIntMatch(val1 int64, match mql.MatchStatement) bool {
+func tryEvalAttributeIntMatch(val1 int64, match parser.MatchStatement) bool {
 	val2, ok := matchValToInt(match)
 	if !ok {
 		return false
@@ -15,7 +15,7 @@ func tryEvalAttributeIntMatch(val1 int64, match mql.MatchStatement) bool {
 	return evalIntMatch(val1, val2, match.Operation)
 }
 
-func matchValToInt(match mql.MatchStatement) (int64, bool) {
+func matchValToInt(match parser.MatchStatement) (int64, bool) {
 	switch match.Value.(type) {
 	case int64:
 		return match.Value.(int64), true
@@ -37,7 +37,7 @@ func matchValToInt(match mql.MatchStatement) (int64, bool) {
 	}
 }
 
-func tryEvalAttributeFloatMatch(val1 float64, match mql.MatchStatement) bool {
+func tryEvalAttributeFloatMatch(val1 float64, match parser.MatchStatement) bool {
 	val2, ok := matchValToFloat(match)
 	if !ok {
 		return false
@@ -46,7 +46,7 @@ func tryEvalAttributeFloatMatch(val1 float64, match mql.MatchStatement) bool {
 	return evalFloatMatch(val1, val2, match.Operation)
 }
 
-func matchValToFloat(match mql.MatchStatement) (float64, bool) {
+func matchValToFloat(match parser.MatchStatement) (float64, bool) {
 	switch match.Value.(type) {
 	case int64:
 		return float64(match.Value.(int64)), true
@@ -68,7 +68,7 @@ func matchValToFloat(match mql.MatchStatement) (float64, bool) {
 	}
 }
 
-func tryEvalAttributeStringMatch(val1 string, match mql.MatchStatement) bool {
+func tryEvalAttributeStringMatch(val1 string, match parser.MatchStatement) bool {
 	val2, ok := match.Value.(string)
 	if !ok {
 		return false
@@ -76,7 +76,7 @@ func tryEvalAttributeStringMatch(val1 string, match mql.MatchStatement) bool {
 	return evalStringMatch(val1, val2, match.Operation)
 }
 
-func evalProcessFieldMatch(process *mcmodel.Activity, match mql.MatchStatement) bool {
+func evalProcessFieldMatch(process *mcmodel.Activity, match parser.MatchStatement) bool {
 	if process == nil {
 		return false
 	}
@@ -99,7 +99,7 @@ func evalProcessFieldMatch(process *mcmodel.Activity, match mql.MatchStatement) 
 	return false
 }
 
-func evalSampleFieldMatch(sampleState *SampleState, match mql.MatchStatement) bool {
+func evalSampleFieldMatch(sampleState *SampleState, match parser.MatchStatement) bool {
 	if sampleState == nil {
 		return false
 	}

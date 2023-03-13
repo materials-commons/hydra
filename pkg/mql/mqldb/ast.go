@@ -2,16 +2,16 @@ package mqldb
 
 import (
 	"errors"
-	"github.com/materials-commons/hydra/pkg/mql"
 	"github.com/materials-commons/hydra/pkg/mql/ast"
+	"github.com/materials-commons/hydra/pkg/mql/parser"
 	"strings"
 )
 
 var ErrNoSelectionStatement = errors.New("no selection statement")
 var ErrInvalidWhereStatement = errors.New("invalid where statement")
 
-func AST2Selection(query *ast.MQL) (*mql.Selection, error) {
-	var selection mql.Selection
+func AST2Selection(query *ast.MQL) (*parser.Selection, error) {
+	var selection parser.Selection
 	ss, ok := query.Statements[0].(*ast.SelectStatement)
 	if !ok {
 		return nil, ErrNoSelectionStatement
@@ -31,7 +31,7 @@ func AST2Selection(query *ast.MQL) (*mql.Selection, error) {
 	return &selection, nil
 }
 
-func convertAstExpression(expression ast.Expression) mql.Statement {
+func convertAstExpression(expression ast.Expression) parser.Statement {
 	switch e := expression.(type) {
 	case *ast.InfixExpression:
 		return convertAstInfixExpression(e)
@@ -44,13 +44,13 @@ func convertAstExpression(expression ast.Expression) mql.Statement {
 	}
 }
 
-func processAttributeIdentifier2MatchStatement(ai *ast.ProcessAttributeIdentifier) mql.MatchStatement {
-	m := mql.MatchStatement{}
+func processAttributeIdentifier2MatchStatement(ai *ast.ProcessAttributeIdentifier) parser.MatchStatement {
+	m := parser.MatchStatement{}
 	switch ai.Attribute {
 	case "name":
-		m.FieldType = mql.ProcessFieldType
+		m.FieldType = parser.ProcessFieldType
 	default:
-		m.FieldType = mql.ProcessAttributeFieldType
+		m.FieldType = parser.ProcessAttributeFieldType
 	}
 
 	m.FieldName = ai.Attribute
@@ -60,13 +60,13 @@ func processAttributeIdentifier2MatchStatement(ai *ast.ProcessAttributeIdentifie
 	return m
 }
 
-func sampleAttributeIdentifier2MatchStatement(ai *ast.SampleAttributeIdentifier) mql.MatchStatement {
-	m := mql.MatchStatement{}
+func sampleAttributeIdentifier2MatchStatement(ai *ast.SampleAttributeIdentifier) parser.MatchStatement {
+	m := parser.MatchStatement{}
 	switch ai.Attribute {
 	case "name":
-		m.FieldType = mql.SampleFieldType
+		m.FieldType = parser.SampleFieldType
 	default:
-		m.FieldType = mql.SampleAttributeFieldType
+		m.FieldType = parser.SampleAttributeFieldType
 	}
 
 	m.FieldName = ai.Attribute
@@ -76,15 +76,15 @@ func sampleAttributeIdentifier2MatchStatement(ai *ast.SampleAttributeIdentifier)
 	return m
 }
 
-func convertAstInfixExpression(ie *ast.InfixExpression) mql.Statement {
+func convertAstInfixExpression(ie *ast.InfixExpression) parser.Statement {
 	switch strings.ToLower(ie.Operator) {
 	case "and":
-		statement := mql.AndStatement{}
+		statement := parser.AndStatement{}
 		statement.Left = convertAstExpression(ie.Left)
 		statement.Right = convertAstExpression(ie.Right)
 		return statement
 	case "or":
-		statement := mql.OrStatement{}
+		statement := parser.OrStatement{}
 		statement.Left = convertAstExpression(ie.Left)
 		statement.Right = convertAstExpression(ie.Right)
 		return statement

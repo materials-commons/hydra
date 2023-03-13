@@ -1,4 +1,4 @@
-package mql
+package parser
 
 const (
 	ProcessFieldType          = 1

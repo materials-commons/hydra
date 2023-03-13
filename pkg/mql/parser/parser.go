@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"github.com/materials-commons/hydra/pkg/mql"
 	"github.com/materials-commons/hydra/pkg/mql/ast"
 	"github.com/materials-commons/hydra/pkg/mql/lexer"
 	"github.com/materials-commons/hydra/pkg/mql/token"
@@ -336,7 +335,7 @@ func (p *Parser) peekError(t token.TokenType) {
 }
 
 func (p *Parser) parseAndExpression(expression ast.Expression) ast.Expression {
-	s := mql.AndStatement{
+	s := AndStatement{
 		Left:  nil,
 		Right: nil,
 	}

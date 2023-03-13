@@ -2,14 +2,14 @@ package mqldb
 
 import (
 	"fmt"
-	"github.com/materials-commons/hydra/pkg/mql"
+	"github.com/materials-commons/hydra/pkg/mql/parser"
 	"testing"
 )
 
 func TestSimpleProcessQueries(t *testing.T) {
 	db := createTestDB()
-	processMatchStatement := mql.MatchStatement{
-		FieldType: mql.ProcessFieldType,
+	processMatchStatement := parser.MatchStatement{
+		FieldType: parser.ProcessFieldType,
 		FieldName: "name",
 		Operation: "=",
 		Value:     "Texture",
@@ -23,8 +23,8 @@ func TestSimpleProcessQueries(t *testing.T) {
 
 	////////////////////////////////////
 
-	processAttributeMatchStatement := mql.MatchStatement{
-		FieldType: mql.ProcessAttributeFieldType,
+	processAttributeMatchStatement := parser.MatchStatement{
+		FieldType: parser.ProcessAttributeFieldType,
 		FieldName: "frames per second",
 		Operation: ">",
 		Value:     3,
@@ -35,7 +35,7 @@ func TestSimpleProcessQueries(t *testing.T) {
 		t.Fatalf("Expected 1 match on attribute 'frames per second' > 2, but got %d", len(matchingProcesses))
 	}
 
-	orStatement := mql.OrStatement{
+	orStatement := parser.OrStatement{
 		Left:  processMatchStatement,
 		Right: processAttributeMatchStatement,
 	}
@@ -47,15 +47,15 @@ func TestSimpleProcessQueries(t *testing.T) {
 
 	////////////////////////////////////
 
-	andStatement := mql.AndStatement{
-		Left: mql.MatchStatement{
-			FieldType: mql.ProcessAttributeFieldType,
+	andStatement := parser.AndStatement{
+		Left: parser.MatchStatement{
+			FieldType: parser.ProcessAttributeFieldType,
 			FieldName: "note",
 			Operation: "=",
 			Value:     "ignore these results",
 		},
-		Right: mql.MatchStatement{
-			FieldType: mql.ProcessFieldType,
+		Right: parser.MatchStatement{
+			FieldType: parser.ProcessFieldType,
 			FieldName: "name",
 			Operation: "=",
 			Value:     "Texture",
@@ -68,8 +68,8 @@ func TestSimpleProcessQueries(t *testing.T) {
 	}
 
 	orStatement.Left = andStatement
-	orStatement.Right = mql.MatchStatement{
-		FieldType: mql.ProcessAttributeFieldType,
+	orStatement.Right = parser.MatchStatement{
+		FieldType: parser.ProcessAttributeFieldType,
 		FieldName: "Beam Type",
 		Operation: "=",
 		Value:     "Wide",
@@ -83,37 +83,37 @@ func TestSimpleProcessQueries(t *testing.T) {
 
 func TestComplexAndOrStatementProcessQuery(t *testing.T) {
 	db := createTestDB()
-	leftSideOfOrStatement := mql.AndStatement{
-		Left: mql.MatchStatement{
-			FieldType: mql.ProcessAttributeFieldType,
+	leftSideOfOrStatement := parser.AndStatement{
+		Left: parser.MatchStatement{
+			FieldType: parser.ProcessAttributeFieldType,
 			FieldName: "note",
 			Operation: "=",
 			Value:     "ignore these results",
 		},
-		Right: mql.MatchStatement{
-			FieldType: mql.ProcessFieldType,
+		Right: parser.MatchStatement{
+			FieldType: parser.ProcessFieldType,
 			FieldName: "name",
 			Operation: "=",
 			Value:     "Texture",
 		},
 	}
 
-	rightSideOfOrStatement := mql.OrStatement{
-		Left: mql.MatchStatement{
-			FieldType: mql.ProcessAttributeFieldType,
+	rightSideOfOrStatement := parser.OrStatement{
+		Left: parser.MatchStatement{
+			FieldType: parser.ProcessAttributeFieldType,
 			FieldName: "Beam Type",
 			Operation: "=",
 			Value:     "Wide",
 		},
-		Right: mql.MatchStatement{
-			FieldType: mql.ProcessAttributeFieldType,
+		Right: parser.MatchStatement{
+			FieldType: parser.ProcessAttributeFieldType,
 			FieldName: "frames per second",
 			Operation: "=",
 			Value:     3,
 		},
 	}
 
-	orStatement := mql.OrStatement{
+	orStatement := parser.OrStatement{
 		Left:  leftSideOfOrStatement,
 		Right: rightSideOfOrStatement,
 	}
@@ -132,8 +132,8 @@ func TestComplexAndOrStatementProcessQuery(t *testing.T) {
 func TestSimpleSampleQueries(t *testing.T) {
 	db := createTestDB()
 	// Test simple match on sample name
-	sampleNameMatchStatement := mql.MatchStatement{
-		FieldType: mql.SampleFieldType,
+	sampleNameMatchStatement := parser.MatchStatement{
+		FieldType: parser.SampleFieldType,
 		FieldName: "name",
 		Operation: "=",
 		Value:     "S1",
@@ -146,8 +146,8 @@ func TestSimpleSampleQueries(t *testing.T) {
 	}
 
 	// Test simple match on sample attribute
-	sampleAttributeMatchStatement := mql.MatchStatement{
-		FieldType: mql.SampleAttributeFieldType,
+	sampleAttributeMatchStatement := parser.MatchStatement{
+		FieldType: parser.SampleAttributeFieldType,
 		FieldName: "alloy",
 		Operation: "=",
 		Value:     "zn45",
@@ -159,7 +159,7 @@ func TestSimpleSampleQueries(t *testing.T) {
 	}
 
 	// Test simple or statement using the above two statements
-	orStatement := mql.OrStatement{
+	orStatement := parser.OrStatement{
 		Left:  sampleNameMatchStatement,
 		Right: sampleAttributeMatchStatement,
 	}
@@ -175,15 +175,15 @@ sample attribute 'alloy' = 'zn45', got %d`, len(matchingSamples))
 func TestComplexAndOrStatementSampleQuery(t *testing.T) {
 	db := createTestDB()
 	// Matches sample S1 in entity state 2 attributes
-	leftSideOfOrStatement := mql.AndStatement{
-		Left: mql.MatchStatement{
-			FieldType: mql.SampleAttributeFieldType,
+	leftSideOfOrStatement := parser.AndStatement{
+		Left: parser.MatchStatement{
+			FieldType: parser.SampleAttributeFieldType,
 			FieldName: "zn",
 			Operation: "=",
 			Value:     0.5,
 		},
-		Right: mql.MatchStatement{
-			FieldType: mql.SampleAttributeFieldType,
+		Right: parser.MatchStatement{
+			FieldType: parser.SampleAttributeFieldType,
 			FieldName: "mg",
 			Operation: "=",
 			Value:     0.5,
@@ -191,22 +191,22 @@ func TestComplexAndOrStatementSampleQuery(t *testing.T) {
 	}
 
 	// Matches S2, entity state 3 for Left, and matches nothing on right
-	rightSideOfOrStatement := mql.OrStatement{
-		Left: mql.MatchStatement{
-			FieldType: mql.SampleAttributeFieldType,
+	rightSideOfOrStatement := parser.OrStatement{
+		Left: parser.MatchStatement{
+			FieldType: parser.SampleAttributeFieldType,
 			FieldName: "ductility",
 			Operation: "=",
 			Value:     0.81,
 		},
-		Right: mql.MatchStatement{
-			FieldType: mql.SampleAttributeFieldType,
+		Right: parser.MatchStatement{
+			FieldType: parser.SampleAttributeFieldType,
 			FieldName: "no-such",
 			Operation: "=",
 			Value:     0.5,
 		},
 	}
 
-	orStatement := mql.OrStatement{
+	orStatement := parser.OrStatement{
 		Left:  leftSideOfOrStatement,
 		Right: rightSideOfOrStatement,
 	}
@@ -224,8 +224,8 @@ func TestComplexAndOrStatementSampleQuery(t *testing.T) {
 func TestSimpleSelectProcessesThroughSamplesQuery(t *testing.T) {
 	db := createTestDB()
 	selection := selectAllProcesses()
-	matchStatement := mql.MatchStatement{
-		FieldType: mql.SampleAttributeFieldType,
+	matchStatement := parser.MatchStatement{
+		FieldType: parser.SampleAttributeFieldType,
 		FieldName: "alloy",
 		Operation: "=",
 		Value:     "zn45",
@@ -244,8 +244,8 @@ func TestSimpleSelectProcessesThroughSamplesQuery(t *testing.T) {
 func TestSimpleSelectSamplesThroughProcessesQuery(t *testing.T) {
 	db := createTestDB()
 	selection := selectAllSamples()
-	matchStatement := mql.MatchStatement{
-		FieldType: mql.ProcessAttributeFieldType,
+	matchStatement := parser.MatchStatement{
+		FieldType: parser.ProcessAttributeFieldType,
 		FieldName: "Beam Type",
 		Operation: "=",
 		Value:     "Wide",

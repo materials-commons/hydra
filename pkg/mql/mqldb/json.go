@@ -1,19 +1,19 @@
 package mqldb
 
 import (
-	"github.com/materials-commons/hydra/pkg/mql"
+	"github.com/materials-commons/hydra/pkg/mql/parser"
 )
 
 // MapToStatement takes a map, which represents the converted JSON payload for a statement
 // and converts it to statement. It recursively calls itself to build out the full statement.
-func MapToStatement(m map[string]interface{}) mql.Statement {
+func MapToStatement(m map[string]interface{}) parser.Statement {
 	//fmt.Printf("MapToStatement = %+v\n", m)
 	_, hasAnd := m["and"]
 	_, hasOr := m["or"]
 	_, hasFieldName := m["field_name"]
 	switch {
 	case hasAnd:
-		andStatement := mql.AndStatement{}
+		andStatement := parser.AndStatement{}
 		left, hasLeft := m["left"]
 		if hasLeft {
 			andStatement.Left = MapToStatement(left.(map[string]interface{}))
@@ -27,7 +27,7 @@ func MapToStatement(m map[string]interface{}) mql.Statement {
 		return andStatement
 
 	case hasOr:
-		orStatement := mql.OrStatement{}
+		orStatement := parser.OrStatement{}
 		left, hasLeft := m["left"]
 		if hasLeft {
 			orStatement.Left = MapToStatement(left.(map[string]interface{}))
@@ -45,7 +45,7 @@ func MapToStatement(m map[string]interface{}) mql.Statement {
 		if !ok {
 			fieldName = ""
 		}
-		return mql.MatchStatement{
+		return parser.MatchStatement{
 			FieldType: int(m["field_type"].(float64)),
 			FieldName: fieldName,
 			Operation: m["operation"].(string),
