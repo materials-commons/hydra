@@ -26,7 +26,7 @@ servers:
 
 deploy: deploy-cli deploy-server
 
-deploy-mcbridgefs-cli: cli
+deploy-clis: cli
 	sudo cp cmd/mcbridgefs/mcbridgefs /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mcbridgefs
 	sudo cp scripts/mcbridgefs.sh /usr/local/bin
