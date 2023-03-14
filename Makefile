@@ -35,31 +35,31 @@ deploy-cli: cli
 	sudo chmod a+rx /usr/local/bin/mql
 
 deploy-server: ssh-hostkey server
-	@sudo supervisorctl stop mchydrad:mchydrad_00
+	- sudo supervisorctl stop mchydrad:mchydrad_00
 	sudo cp cmd/mchydrad/mchydrad /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mchydrad
 	sudo cp operations/supervisord.d/mchydrad.conf /etc/supervisor/conf.d
-	@sudo supervisorctl start mchydrad:mchydrad_00
+	- sudo supervisorctl start mchydrad:mchydrad_00
 
 mcbridgefsd:
 	(cd ./cmd/mcbridgefsd; go build)
 
 deploy-mcbridgefsd: mcbridgefsd
-	@sudo supervisorctl stop mcbridgefsd:mcbridgefsd_00
+	- sudo supervisorctl stop mcbridgefsd:mcbridgefsd_00
 	sudo cp cmd/mcbridgefsd/mcbridgefsd /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mcbridgefsd
 	sudo cp operations/supervisord.d/mcbridgefsd.conf /etc/supervisor/conf.d
-	@sudo supervisorctl start mcbridgefsd:mcbridgefsd_00
+	- sudo supervisorctl start mcbridgefsd:mcbridgefsd_00
 
 mcftservd:
 	(cd ./cmd/mcftservd; go build)
 
 deploy-mcftservd: mcftservd
-	@sudo supervisorctl stop mcftservd:mcftservd_00
+	- sudo supervisorctl stop mcftservd:mcftservd_00
 	sudo cp cmd/mcftservd/mcftservd /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mcftservd
 	sudo cp operations/supervisord.d/mcftservd.conf /etc/supervisor/conf.d/
-	@sudo supervisorctl start mcftservd:mcftservd_00
+	- sudo supervisorctl start mcftservd:mcftservd_00
 
 mcsshd:
 	(cd ./cmd/mcsshd; go build)
@@ -71,7 +71,7 @@ deploy-mcsshd: mcsshd ssh-hostkey
 	sudo cp cmd/mcsshd/mcsshd /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mcsshd
 	sudo cp operations/supervisord.d/mcsshd.conf /etc/supervisor/conf.d
-	@sudo supervisorctl update all
+	- sudo supervisorctl update all
 
 mql-cli:
 	(cd ./cmd/mql; go build)
@@ -86,8 +86,8 @@ deploy-mql-cli: mql-cli
 	sudo chmod a+rx /usr/local/bin/mql
 
 deploy-mql-server: mqlservd
-	@sudo supervisorctl stop mqlservd:mqlservd_00
+	- sudo supervisorctl stop mqlservd:mqlservd_00
 	sudo cp cmd/mqlservd/mqlservd /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mqlservd
 	sudo cp operations/supervisord.d/mqlservd.conf /etc/supervisor/conf.d
-	@sudo supervisorctl start mqlservd:mqlservd_00
+	- sudo supervisorctl start mqlservd:mqlservd_00
