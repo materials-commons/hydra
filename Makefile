@@ -85,7 +85,7 @@ deploy-mql-cli: mql-cli
 	sudo cp cmd/mql/mql /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mql
 
-deploy-mql-server: mqlservd
+deploy-mqlservd: mqlservd
 	- sudo supervisorctl stop mqlservd:mqlservd_00
 	sudo cp cmd/mqlservd/mqlservd /usr/local/bin
 	sudo chmod a+rx /usr/local/bin/mqlservd
