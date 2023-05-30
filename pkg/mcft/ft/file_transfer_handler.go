@@ -71,10 +71,12 @@ func (h *FileTransferHandler) Run() error {
 			err = ErrAlreadyAuthenticated
 		case protocol.UploadFileReq:
 			err = h.startUploadFile()
-		case protocol.FinishUploadReq:
-			return h.computeAndValidateChecksum()
 		case protocol.FileBlockReq:
 			err = h.writeFileBlock()
+		case protocol.FinishUploadReq:
+			return h.computeAndValidateChecksum()
+		case protocol.DownloadFileReq:
+			err = h.startDownloadFile()
 		default:
 			err = fmt.Errorf("unknown request type: %d", incomingRequest.RequestType)
 		}
@@ -316,6 +318,18 @@ func (h *FileTransferHandler) pointedAtExistingFile() bool {
 		return false
 	}
 	return switched
+}
+
+func (h *FileTransferHandler) startDownloadFile() error {
+	return nil
+}
+
+func (h *FileTransferHandler) handleUpload() error {
+	return nil
+}
+
+func (h *FileTransferHandler) handleDownload() error {
+	return nil
 }
 
 // getMimeType will determine the type of a file from its extension. It strips out the extra information

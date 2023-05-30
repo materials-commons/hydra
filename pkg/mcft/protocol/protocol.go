@@ -6,20 +6,30 @@ type RequestType int
 
 const (
 	AuthenticateReq RequestType = iota
-	DownloadReq
-	FileInfoReq
+
+	StartUploadReq
+	UploadFileReq
 	FinishUploadReq
+
+	StartDownloadReq
+	DownloadFileReq
+	FinishDownloadReq
+
+	FileInfoReq
+
 	ListDirectoryReq
 	PauseUploadReq
+
+	// FileBlockReq is used for both upload and downloads
 	FileBlockReq
+
 	ServerInfoReq
-	UploadFileReq
 	ServerConnectRequestType
 )
 
 var KnownRequestTypes = map[RequestType]bool{
 	AuthenticateReq:          true,
-	DownloadReq:              true,
+	DownloadFileReq:          true,
 	FileInfoReq:              true,
 	FinishUploadReq:          true,
 	ListDirectoryReq:         true,
