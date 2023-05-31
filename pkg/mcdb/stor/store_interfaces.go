@@ -1,4 +1,4 @@
-package store
+package stor
 
 import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 

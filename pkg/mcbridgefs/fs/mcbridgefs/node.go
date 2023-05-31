@@ -18,7 +18,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/bridgefs"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"gorm.io/gorm"
 )
 
@@ -33,9 +33,9 @@ var (
 	db                   *gorm.DB
 	transferRequest      mcmodel.TransferRequest
 	openedFilesTracker   *OpenFilesTracker
-	fileStore            store.FileStore
-	transferRequestStore store.TransferRequestStore
-	conversionStore      store.ConversionStore
+	fileStore            stor.FileStore
+	transferRequestStore stor.TransferRequestStore
+	conversionStore      stor.ConversionStore
 )
 
 func init() {
@@ -58,9 +58,9 @@ func CreateFS(fsRoot string, dB *gorm.DB, tr mcmodel.TransferRequest) *Node {
 	mcfsRoot = fsRoot
 	db = dB
 	transferRequest = tr
-	fileStore = store.NewGormFileStore(db, fsRoot)
-	conversionStore = store.NewGormConversionStore(db)
-	transferRequestStore = store.NewGormTransferRequestStore(db, fsRoot)
+	fileStore = stor.NewGormFileStore(db, fsRoot)
+	conversionStore = stor.NewGormConversionStore(db)
+	transferRequestStore = stor.NewGormTransferRequestStore(db, fsRoot)
 	return rootNode()
 }
 

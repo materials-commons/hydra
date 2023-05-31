@@ -8,7 +8,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
 // RemoveProjectSlugFromPath removes the slug project name from the path. For example the slug
@@ -63,7 +63,7 @@ func GetMimeType(name string) string {
 // GetAndValidateProjectFromPath retrieves the project by extracting the project slug from the path, and asking
 // the project store for that project. It also validates that the userID passed in has access to
 // the project.
-func GetAndValidateProjectFromPath(path string, userID int, projectStore store.ProjectStore) (*mcmodel.Project, error) {
+func GetAndValidateProjectFromPath(path string, userID int, projectStore stor.ProjectStore) (*mcmodel.Project, error) {
 	// Look up the project by the slug in the path. Each path needs to have the project slug encoded in it
 	// so that we know which project the user is accessing.
 	projectSlug := GetProjectSlugFromPath(path)

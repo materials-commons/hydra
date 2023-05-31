@@ -15,7 +15,7 @@ import (
 	"github.com/apex/log"
 	"github.com/gorilla/websocket"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcft/protocol"
 	"gorm.io/gorm"
 )
@@ -24,6 +24,14 @@ var ErrAlreadyAuthenticated = errors.New("already authenticated")
 var ErrBadProtocolSequence = errors.New("bad protocol sequence")
 var ErrNotAuthenticated = errors.New("not authenticated")
 
+type TransferStors struct {
+	projectStore stor.ProjectStore
+	fileStore    stor.FileStore
+	convStore    stor.ConversionStore
+}
+
+type AuthFn func(ws *websocket.Conn) bool
+
 type FileTransferHandler struct {
 	db           *gorm.DB
 	ws           *websocket.Conn
@@ -31,9 +39,9 @@ type FileTransferHandler struct {
 	Project      *mcmodel.Project
 	User         mcmodel.User
 	File         *mcmodel.File
-	projectStore store.ProjectStore
-	fileStore    store.FileStore
-	convStore    store.ConversionStore
+	projectStore stor.ProjectStore
+	fileStore    stor.FileStore
+	convStore    stor.ConversionStore
 	hasher       hash.Hash
 	mcfsRoot     string
 }
@@ -42,9 +50,9 @@ func NewFileTransferHandler(ws *websocket.Conn, db *gorm.DB) *FileTransferHandle
 	return &FileTransferHandler{
 		ws:           ws,
 		db:           db,
-		projectStore: store.NewGormProjectStore(db),
-		fileStore:    store.NewGormFileStore(db, GetMCFSRoot()),
-		convStore:    store.NewGormConversionStore(db),
+		projectStore: stor.NewGormProjectStore(db),
+		fileStore:    stor.NewGormFileStore(db, GetMCFSRoot()),
+		convStore:    stor.NewGormConversionStore(db),
 		hasher:       md5.New(),
 		mcfsRoot:     GetMCFSRoot(),
 	}

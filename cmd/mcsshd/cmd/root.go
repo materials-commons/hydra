@@ -16,7 +16,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
 	"github.com/materials-commons/hydra/pkg/mcssh/mcscp"
 	"github.com/materials-commons/hydra/pkg/mcssh/mcsftp"
@@ -45,7 +45,7 @@ func Execute() {
 }
 
 var mcfsRoot string
-var userStore store.UserStore
+var userStore stor.UserStore
 var mcsshdHost string
 var mcsshdPort string
 var mcsshdHostkeyPath string
@@ -101,7 +101,7 @@ func init() {
 func mcsshdMain(cmd *cobra.Command, args []string) {
 	db := mcdb.MustConnectToDB()
 	stores := mc.NewGormStores(db, mcfsRoot)
-	userStore = store.NewGormUserStore(db)
+	userStore = stor.NewGormUserStore(db)
 
 	// Setup SSH server and SCP Middleware handler
 	handler := mcscp.NewMCFSHandler(stores, mcfsRoot)

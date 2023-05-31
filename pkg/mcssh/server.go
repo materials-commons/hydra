@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/wish/scp"
 	"github.com/gliderlabs/ssh"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
 	"github.com/materials-commons/hydra/pkg/mcssh/mcscp"
 	"github.com/materials-commons/hydra/pkg/mcssh/mcsftp"
@@ -24,7 +23,7 @@ type Server struct {
 	db             *gorm.DB
 	server         *ssh.Server
 	mcfsRoot       string
-	userStore      store.UserStore
+	userStore      stor.UserStore
 	sshHost        string
 	sshPort        string
 	sshHostkeyPath string
@@ -85,7 +84,7 @@ func (s *Server) init() {
 func (s *Server) Start() error {
 	var err error
 	stores := mc.NewGormStores(s.db, s.mcfsRoot)
-	s.userStore = store.NewGormUserStore(s.db)
+	s.userStore = stor.NewGormUserStore(s.db)
 	handler := mcscp.NewMCFSHandler(stores, s.mcfsRoot)
 	s.server, err = wish.NewServer(
 		wish.WithAddress(fmt.Sprintf("%s:%s", s.sshHost, s.sshPort)),

@@ -1,4 +1,4 @@
-package store
+package stor
 
 import (
 	"path/filepath"

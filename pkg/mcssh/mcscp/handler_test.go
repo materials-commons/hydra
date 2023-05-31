@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/store"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
 	"github.com/stretchr/testify/require"
 )
@@ -75,8 +74,8 @@ func makeStoresWithFakes() *mc.Stores {
 	}
 
 	return &mc.Stores{
-		FileStore:       store.NewFakeFileStore(files),
-		ProjectStore:    store.NewFakeProjectStore(projects),
-		ConversionStore: store.NewFakeConversionStore(),
+		FileStore:       stor.NewFakeFileStore(files),
+		ProjectStore:    stor.NewFakeProjectStore(projects),
+		ConversionStore: stor.NewFakeConversionStore(),
 	}
 }
