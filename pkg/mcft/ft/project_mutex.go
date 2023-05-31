@@ -30,3 +30,20 @@ func releaseProjectMutex(projectID int) {
 
 	m.Unlock()
 }
+
+// ensureProjectMutexReleased will make sure that the project mutex
+// is unlocked. Because it is unknown when this will be called and
+// what the state of the mutex is, it will attempt to acquire it
+// and then release it. This is done because Unlock() cannot be
+// called on a Mutex that hasn't been locked.
+func ensureProjectMutexReleased(projectID int) {
+	mapMutex.Lock()
+	defer mapMutex.Unlock()
+	m, ok := mutexes[projectID]
+	if !ok {
+		return
+	}
+
+	m.TryLock()
+	m.Unlock()
+}

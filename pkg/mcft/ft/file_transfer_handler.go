@@ -24,14 +24,6 @@ var ErrAlreadyAuthenticated = errors.New("already authenticated")
 var ErrBadProtocolSequence = errors.New("bad protocol sequence")
 var ErrNotAuthenticated = errors.New("not authenticated")
 
-type TransferStors struct {
-	projectStore stor.ProjectStore
-	fileStore    stor.FileStore
-	convStore    stor.ConversionStore
-}
-
-type AuthFn func(ws *websocket.Conn) bool
-
 type FileTransferHandler struct {
 	db           *gorm.DB
 	ws           *websocket.Conn
@@ -78,13 +70,9 @@ func (h *FileTransferHandler) Run() error {
 		case protocol.AuthenticateReq:
 			err = ErrAlreadyAuthenticated
 		case protocol.UploadFileReq:
-			err = h.startUploadFile()
-		case protocol.FileBlockReq:
-			err = h.writeFileBlock()
-		case protocol.FinishUploadReq:
-			return h.computeAndValidateChecksum()
+			return h.uploadFile()
 		case protocol.DownloadFileReq:
-			err = h.startDownloadFile()
+			return h.downloadFile()
 		default:
 			err = fmt.Errorf("unknown request type: %d", incomingRequest.RequestType)
 		}
@@ -169,7 +157,7 @@ func (h *FileTransferHandler) authenticate() error {
 	return nil
 }
 
-func (h *FileTransferHandler) startUploadFile() error {
+func (h *FileTransferHandler) uploadFile() error {
 	var (
 		uploadReq protocol.UploadFileRequest
 		file      *mcmodel.File
@@ -204,7 +192,46 @@ func (h *FileTransferHandler) startUploadFile() error {
 		log.Errorf("Unable to create file: %s", err)
 	}
 
-	return err
+	return h.runUploadFile()
+}
+
+func (h *FileTransferHandler) runUploadFile() error {
+	var incomingRequest protocol.IncomingRequestType
+
+	defer ensureProjectMutexReleased(h.Project.ID)
+
+	for {
+		if err := h.ws.ReadJSON(&incomingRequest); err != nil {
+			//log.Errorf("Failed reading the incomingRequest: %s", err)
+			break
+		}
+
+		var err error
+		switch incomingRequest.RequestType {
+		case protocol.FileBlockReq:
+			err = h.writeFileBlock()
+		case protocol.FinishUploadReq:
+			return h.computeAndValidateChecksum()
+		default:
+			err = fmt.Errorf("unknown request type: %d", incomingRequest.RequestType)
+		}
+
+		statusResponse := protocol.StatusResponse{
+			Status:  "continue",
+			IsError: false,
+		}
+
+		if err != nil {
+			statusResponse.Status = fmt.Sprintf("%s", err)
+			statusResponse.IsError = true
+			_ = h.ws.WriteJSON(statusResponse)
+			return err
+		} else {
+			_ = h.ws.WriteJSON(statusResponse)
+		}
+	}
+
+	return nil
 }
 
 func (h *FileTransferHandler) getOrCreateDirectory(dirPath string) (*mcmodel.File, error) {
@@ -328,19 +355,49 @@ func (h *FileTransferHandler) pointedAtExistingFile() bool {
 	return switched
 }
 
-func (h *FileTransferHandler) startDownloadFile() error {
+func (h *FileTransferHandler) downloadFile() error {
 	return nil
 }
 
-func (h *FileTransferHandler) handleUpload() error {
+func (h *FileTransferHandler) runDownloadFile() error {
+	var incomingRequest protocol.IncomingRequestType
+
+	for {
+		if err := h.ws.ReadJSON(&incomingRequest); err != nil {
+			//log.Errorf("Failed reading the incomingRequest: %s", err)
+			break
+		}
+
+		var err error
+		switch incomingRequest.RequestType {
+		case protocol.FileBlockReq:
+			err = h.writeFileBlock()
+		case protocol.FinishDownloadReq:
+			// send expected checksum and size
+			// return h.computeAndValidateChecksum()
+		default:
+			err = fmt.Errorf("unknown request type: %d", incomingRequest.RequestType)
+		}
+
+		statusResponse := protocol.StatusResponse{
+			Status:  "continue",
+			IsError: false,
+		}
+
+		if err != nil {
+			statusResponse.Status = fmt.Sprintf("%s", err)
+			statusResponse.IsError = true
+			_ = h.ws.WriteJSON(statusResponse)
+			return err
+		} else {
+			_ = h.ws.WriteJSON(statusResponse)
+		}
+	}
+
 	return nil
 }
 
-func (h *FileTransferHandler) handleDownload() error {
-	return nil
-}
-
-// getMimeType will determine the type of a file from its extension. It strips out the extra information
+// getMimeType will determine the type of file from its extension. It strips out the extra information
 // such as the charset and just returns the underlying type. It returns "unknown" for the mime type if
 // the mime package is unable to determine the type.
 func getMimeType(name string) string {
@@ -350,7 +407,7 @@ func getMimeType(name string) string {
 	}
 
 	if mediaType, _, err := mime.ParseMediaType(mimeType); err == nil {
-		// If err is nil then we can returned the parsed mediaType
+		// If err is nil then we return the parsed mediaType
 		return mediaType
 	}
 
