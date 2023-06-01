@@ -190,6 +190,7 @@ func (h *FileTransferHandler) uploadFile() error {
 	h.f, err = os.Create(file.ToUnderlyingFilePath(h.mcfsRoot))
 	if err != nil {
 		log.Errorf("Unable to create file: %s", err)
+		return err
 	}
 
 	return h.runUploadFile()
@@ -356,11 +357,41 @@ func (h *FileTransferHandler) pointedAtExistingFile() bool {
 }
 
 func (h *FileTransferHandler) downloadFile() error {
-	return nil
+	var (
+		downloadReq protocol.DownloadRequest
+	)
+
+	if err := h.ws.ReadJSON(&downloadReq); err != nil {
+		log.Errorf("Expected download msg, got err: %s", err)
+		return err
+	}
+
+	file, err := h.fileStore.GetFileByPath(h.Project.ID, downloadReq.Path)
+	if err != nil {
+		log.Errorf("GetFileByPath failed: %s", err)
+		return err
+	}
+
+	h.File = file
+	h.f, err = os.Open(file.ToUnderlyingFilePath(h.mcfsRoot))
+
+	if err != nil {
+		log.Errorf("Unable to open file: %s", err)
+		return err
+	}
+
+	defer func() {
+		_ = h.f.Close()
+		h.f = nil
+	}()
+
+	return h.runDownloadFile()
 }
 
 func (h *FileTransferHandler) runDownloadFile() error {
 	var incomingRequest protocol.IncomingRequestType
+
+	buffer := make([]byte, 32*1024*1024)
 
 	for {
 		if err := h.ws.ReadJSON(&incomingRequest); err != nil {
@@ -371,8 +402,9 @@ func (h *FileTransferHandler) runDownloadFile() error {
 		var err error
 		switch incomingRequest.RequestType {
 		case protocol.FileBlockReq:
-			err = h.writeFileBlock()
+			err = h.readFileBlock(buffer)
 		case protocol.FinishDownloadReq:
+			err = nil
 			// send expected checksum and size
 			// return h.computeAndValidateChecksum()
 		default:
@@ -392,6 +424,33 @@ func (h *FileTransferHandler) runDownloadFile() error {
 		} else {
 			_ = h.ws.WriteJSON(statusResponse)
 		}
+	}
+
+	return nil
+}
+
+func (h *FileTransferHandler) readFileBlock(buffer []byte) error {
+	var req protocol.IncomingRequestType
+
+	fb := protocol.FileBlockRequest{}
+	n, err := h.f.Read(buffer)
+	if err != nil {
+		if err == io.EOF {
+			req.RequestType = protocol.FinishDownloadReq
+			return h.ws.WriteJSON(req)
+		}
+		return err
+	}
+
+	req.RequestType = protocol.FileBlockReq
+
+	if err := h.ws.WriteJSON(req); err != nil {
+		return err
+	}
+
+	fb.Block = buffer[:n]
+	if err := h.ws.WriteJSON(fb); err != nil {
+		return err
 	}
 
 	return nil
