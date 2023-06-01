@@ -199,8 +199,6 @@ func (h *FileTransferHandler) uploadFile() error {
 func (h *FileTransferHandler) runUploadFile() error {
 	var incomingRequest protocol.IncomingRequestType
 
-	defer ensureProjectMutexReleased(h.Project.ID)
-
 	for {
 		if err := h.ws.ReadJSON(&incomingRequest); err != nil {
 			//log.Errorf("Failed reading the incomingRequest: %s", err)
