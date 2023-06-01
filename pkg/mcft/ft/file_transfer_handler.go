@@ -404,7 +404,7 @@ func (h *FileTransferHandler) runDownloadFile() error {
 		case protocol.FileBlockReq:
 			err = h.readFileBlock(buffer)
 		case protocol.FinishDownloadReq:
-			err = nil
+			err = h.sendDownloadFinished()
 			// send expected checksum and size
 			// return h.computeAndValidateChecksum()
 		default:
@@ -454,6 +454,17 @@ func (h *FileTransferHandler) readFileBlock(buffer []byte) error {
 	}
 
 	return nil
+}
+
+func (h *FileTransferHandler) sendDownloadFinished() error {
+	resp := protocol.FinishDownloadRequest{
+		Checksum: h.File.Checksum,
+		Size:     int64(h.File.Size),
+		FileID:   h.File.ID,
+		FileUUID: h.File.UUID,
+	}
+
+	return h.ws.WriteJSON(resp)
 }
 
 // getMimeType will determine the type of file from its extension. It strips out the extra information

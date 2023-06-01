@@ -78,6 +78,15 @@ type FinishUploadRequest struct {
 	Version
 }
 
+type FinishDownloadRequest struct {
+	Path     string `json:"path"`
+	Checksum string `json:"checksum"`
+	Size     int64  `json:"size"`
+	FileID   int    `json:"file_id"`
+	FileUUID string `json:"file_uuid"`
+	Version
+}
+
 type FileInfo struct {
 	Name              string    `json:"name"`
 	IsDir             bool      `json:"is_dir"`
