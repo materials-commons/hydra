@@ -1,8 +1,10 @@
 package mqldb
 
 import (
-	"github.com/materials-commons/hydra/pkg/mql/parser"
 	"strconv"
+	"strings"
+
+	"github.com/materials-commons/hydra/pkg/mql/parser"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
@@ -122,12 +124,18 @@ func evalSampleFieldMatch(sampleState *SampleState, match parser.MatchStatement)
 	return false
 }
 
+func stringsMatchIgnoringCase(val1, val2 string) bool {
+	lvVal1 := strings.ToLower(val1)
+	lvVal2 := strings.ToLower(val2)
+	return strings.Compare(lvVal1, lvVal2) == 0
+}
+
 func evalStringMatch(val1, val2, operation string) bool {
 	switch operation {
 	case "=":
-		return val1 == val2
+		return stringsMatchIgnoringCase(val1, val2)
 	case "<>":
-		return val1 != val2
+		return !stringsMatchIgnoringCase(val1, val2)
 	default:
 		return false
 	}
