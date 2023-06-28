@@ -2,10 +2,11 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/materials-commons/hydra/pkg/mql/ast"
 	"github.com/materials-commons/hydra/pkg/mql/lexer"
 	"github.com/materials-commons/hydra/pkg/mql/token"
-	"strconv"
 )
 
 // Precendence from lowest to highest

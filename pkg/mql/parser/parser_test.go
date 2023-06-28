@@ -2,11 +2,10 @@ package parser
 
 import (
 	"fmt"
-	"github.com/materials-commons/hydra/pkg/mql/ast"
-	"github.com/materials-commons/hydra/pkg/mql/lexer"
 	"testing"
 
-	"github.com/materials-commons/hydra/internal/mqldb"
+	"github.com/materials-commons/hydra/pkg/mql/ast"
+	"github.com/materials-commons/hydra/pkg/mql/lexer"
 )
 
 func TestSimpleSelectStatement(t *testing.T) {
@@ -283,7 +282,7 @@ func TestComplexQueryExpression(t *testing.T) {
 	input := `select samples where (sample:hardness = 5 and (sample:'max size' > 5 or process:color = "blue"));`
 	mql := parseForTest(t, input, 1)
 	fmt.Println(mql)
-	s, _ := mqldb.AST2Selection(mql)
+	s, _ := AST2Selection(mql)
 	fmt.Printf("%+v\n", s)
 }
 
@@ -291,7 +290,7 @@ func TestSimpleQueryExpression(t *testing.T) {
 	input := `select samples where sample:hardness = 5`
 	mql := parseForTest(t, input, 1)
 	fmt.Println(mql)
-	s, _ := mqldb.AST2Selection(mql)
+	s, _ := AST2Selection(mql)
 	fmt.Printf("%+v\n", s)
 }
 
