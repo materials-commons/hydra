@@ -7,8 +7,10 @@ import (
 )
 
 type DB struct {
-	ProjectID int
-	db        *gorm.DB
+	ProjectID    int
+	ExperimentID int
+	DatasetID    int
+	db           *gorm.DB
 
 	// Process and process data lookups
 	Processes                    []mcmodel.Activity
@@ -59,6 +61,18 @@ type Activity2Entity struct {
 	ID         int
 	ActivityID int
 	EntityID   int
+}
+
+type Experiment2Entity struct {
+	ID           int
+	EntityID     int
+	ExperimentID int
+}
+
+type Experiment2Activity struct {
+	ID           int
+	ActivityID   int
+	ExperimentID int
 }
 
 func (Activity2Entity) TableName() string {
@@ -192,6 +206,24 @@ func (db *DB) loadProcessSampleMappings() error {
 				db.ProcessSamples[process.ID] = append(db.ProcessSamples[process.ID], sample)
 			}
 		}
+	}
+
+	return nil
+}
+
+func (db *DB) loadExperimentProcessSampleMappings() error {
+	experimentID := 1234
+	var experiment2entity []Experiment2Entity
+
+	err := db.db.Where("experiment_id = ?", experimentID).Find(&experiment2entity).Error
+	if err != nil {
+		return err
+	}
+
+	var experiment2activity []Experiment2Activity
+	err = db.db.Where("experiment_id = ?", experimentID).Find(&experiment2activity).Error
+	if err != nil {
+		return err
 	}
 
 	return nil
