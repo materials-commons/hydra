@@ -18,38 +18,37 @@ import (
 // mcfsHandler implements the scp.CopyToClientHandler and scp.CopyFromClientHandler interfaces
 // that implement receiving and sending files/directories over SCP. A few things of note:
 //
-//    1. All the callbacks that were implemented for scp.CopyToClientHandler and scp.CopyFromClientHandler
-//       have to load the project and the user. This is done by every method calling
-//       h.loadProjectAndUserIntoHandler. Because there is no guaranteed order that the callbacks will
-//       be called in, each callback calls this method. The loadProjectAndUserIntoHandler will load the
-//       mcfsHandler.user and mcfsHandler.project fields only if they are nil. Otherwise, it just returns
-//       because these are already set. Also, loadProjectAndUserIntoHandler checks the flag
-//       mcfsHandler.fatalErrorLoadingProjectOrUser allowing it to error fast if a previous call was made
-//       and failed to load either the project or user.
+//  1. All the callbacks that were implemented for scp.CopyToClientHandler and scp.CopyFromClientHandler
+//     have to load the project and the user. This is done by every method calling
+//     h.loadProjectAndUserIntoHandler. Because there is no guaranteed order that the callbacks will
+//     be called in, each callback calls this method. The loadProjectAndUserIntoHandler will load the
+//     mcfsHandler.user and mcfsHandler.project fields only if they are nil. Otherwise, it just returns
+//     because these are already set. Also, loadProjectAndUserIntoHandler checks the flag
+//     mcfsHandler.fatalErrorLoadingProjectOrUser allowing it to error fast if a previous call was made
+//     and failed to load either the project or user.
 //
-//    2. The callbacks have to deal with the path. Path handling is special because the mcscp server needs
-//       to know the project that the user is writing to/reading from. The way this is handled is that the
-//       user has to encode the project in the path. Each Materials Commons project has a "slug" associated
-//       with it, which is a short unique identifier derived from the project name. When a user uses scp
-//       to upload/download files for Materials Commons, the path encodes the project slug to identify
-//       which project is being accessed. For example if the user has a project with a unique project
-//       slug of "my-project", then to specify upload/download for the project the user specifies a
-//       path that starts with /my-project. As an example the following scp command would recursively upload
-//       the directory /tmp/d3 into the project with slug 'my-project' and into it's jpegs directory:
+//  2. The callbacks have to deal with the path. Path handling is special because the mcscp server needs
+//     to know the project that the user is writing to/reading from. The way this is handled is that the
+//     user has to encode the project in the path. Each Materials Commons project has a "slug" associated
+//     with it, which is a short unique identifier derived from the project name. When a user uses scp
+//     to upload/download files for Materials Commons, the path encodes the project slug to identify
+//     which project is being accessed. For example if the user has a project with a unique project
+//     slug of "my-project", then to specify upload/download for the project the user specifies a
+//     path that starts with /my-project. As an example the following scp command would recursively upload
+//     the directory /tmp/d3 into the project with slug 'my-project' and into it's jpegs directory:
 //
-//           scp -r /tmp/d3 mc-user@materialscommons.org:/my-project/jpegs
+//     scp -r /tmp/d3 mc-user@materialscommons.org:/my-project/jpegs
 //
-//       When this happens the callbacks will remove the project slug from the path, so that any files or
-//       directories that are accessed/created/read/written to use the path starting with /jpegs. This
-//       path handling is done in each routine by calling mc.RemoveProjectSlugFromPath(path, h.project.Slug)
-//       where path is the original path (eg /my-project/jpegs/file.jpg), and h.project.Slug is the project
-//       slug to remove from the path (in this case 'my-project').
+//     When this happens the callbacks will remove the project slug from the path, so that any files or
+//     directories that are accessed/created/read/written to use the path starting with /jpegs. This
+//     path handling is done in each routine by calling mc.RemoveProjectSlugFromPath(path, h.project.Slug)
+//     where path is the original path (eg /my-project/jpegs/file.jpg), and h.project.Slug is the project
+//     slug to remove from the path (in this case 'my-project').
 //
-//    3. Each Materials Commons user also has a unique user slug. This is derived from the users email
-//       address and is how the user identifies their materials commons account. For the website the
-//       user uses their email to login. This doesn't work for scp as scp uses the @ to separate the
-//       username from the host. So for scp the user has to specify their user slug.
-//
+//  3. Each Materials Commons user also has a unique user slug. This is derived from the users email
+//     address and is how the user identifies their materials commons account. For the website the
+//     user uses their email to login. This doesn't work for scp as scp uses the @ to separate the
+//     username from the host. So for scp the user has to specify their user slug.
 type mcfsHandler struct {
 	// The user is set in the context from the passwordHandler method in cmd/mcsshd/cmd/root. Rather than
 	// constantly retrieving it we get it one time and set it in the mcfsHandler. See

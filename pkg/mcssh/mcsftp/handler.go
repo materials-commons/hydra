@@ -24,13 +24,13 @@ import (
 // path to the file.txt file would be /dir1/file.txt in the project with slug my-project. A few things
 // to note:
 //
-// 1. All the SFTP callbacks have to handle manipulating the path get the project slug, and to remove
-//    it from the path so specify the underlying Materials Commons path.
+//  1. All the SFTP callbacks have to handle manipulating the path get the project slug, and to remove
+//     it from the path so specify the underlying Materials Commons path.
 //
-// 2. Because a user can access many files, which could be in different projects, we don't want to
-//    continuously look up projects. The mcfsHandler caches projects that were already looked up.
-//    These are cached by project slug. It also caches failed projects either because the
-//   project-slug didn't exist or the user didn't have access to the project.
+//  2. Because a user can access many files, which could be in different projects, we don't want to
+//     continuously look up projects. The mcfsHandler caches projects that were already looked up.
+//     These are cached by project slug. It also caches failed projects either because the
+//     project-slug didn't exist or the user didn't have access to the project.
 type mcfsHandler struct {
 	// user is the Materials Commons user for this SFTP session.
 	user *mcmodel.User
