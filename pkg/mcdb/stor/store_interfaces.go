@@ -2,11 +2,11 @@ package stor
 
 import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 
-type ConversionStore interface {
+type ConversionStor interface {
 	AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error)
 }
 
-type FileStore interface {
+type FileStor interface {
 	GetFileByID(fileID int) (*mcmodel.File, error)
 	GetFileByUUID(fileUUID string) (*mcmodel.File, error)
 	UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error
@@ -19,10 +19,10 @@ type FileStore interface {
 	GetFileByPath(projectID int, path string) (*mcmodel.File, error)
 	UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error
 	PointAtExistingIfExists(file *mcmodel.File) (bool, error)
-	DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStore) (bool, error)
+	DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error)
 }
 
-type ProjectStore interface {
+type ProjectStor interface {
 	GetProjectByID(projectID int) (*mcmodel.Project, error)
 	GetProjectBySlug(slug string) (*mcmodel.Project, error)
 	GetProjectsForUser(userID int) ([]mcmodel.Project, error)
@@ -31,13 +31,13 @@ type ProjectStore interface {
 	UserCanAccessProject(userID, projectID int) bool
 }
 
-type TransferRequestFileStore interface {
+type TransferRequestFileStor interface {
 	DeleteTransferFileRequestByPath(ownerID, projectID int, path string) error
 	GetTransferFileRequestByPath(ownerID, projectID int, path string) (*mcmodel.TransferRequestFile, error)
 	DeleteTransferRequestFile(transferRequestFile *mcmodel.TransferRequestFile) error
 }
 
-type TransferRequestStore interface {
+type TransferRequestStor interface {
 	MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error
 	MarkFileAsOpen(file *mcmodel.File) error
 	CreateNewFile(file, dir *mcmodel.File, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error)
@@ -46,7 +46,7 @@ type TransferRequestStore interface {
 	GetFileByPath(path string, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error)
 }
 
-type UserStore interface {
+type UserStor interface {
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
 }

@@ -31,9 +31,9 @@ type FileTransferHandler struct {
 	Project      *mcmodel.Project
 	User         mcmodel.User
 	File         *mcmodel.File
-	projectStore stor.ProjectStore
-	fileStore    stor.FileStore
-	convStore    stor.ConversionStore
+	projectStore stor.ProjectStor
+	fileStore    stor.FileStor
+	convStore    stor.ConversionStor
 	hasher       hash.Hash
 	mcfsRoot     string
 }

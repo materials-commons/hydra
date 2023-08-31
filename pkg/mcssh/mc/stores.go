@@ -9,9 +9,9 @@ import (
 // allows the stores to be easily created and cleans up the number of parameters that need
 // to be passed in to create a mcscp.Handler or mcsftp.Handler.
 type Stores struct {
-	FileStore       stor.FileStore
-	ProjectStore    stor.ProjectStore
-	ConversionStore stor.ConversionStore
+	FileStore       stor.FileStor
+	ProjectStore    stor.ProjectStor
+	ConversionStore stor.ConversionStor
 }
 
 func NewGormStores(db *gorm.DB, mcfsRoot string) *Stores {

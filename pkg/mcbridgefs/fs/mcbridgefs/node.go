@@ -33,9 +33,9 @@ var (
 	db                   *gorm.DB
 	transferRequest      mcmodel.TransferRequest
 	openedFilesTracker   *OpenFilesTracker
-	fileStore            stor.FileStore
-	transferRequestStore stor.TransferRequestStore
-	conversionStore      stor.ConversionStore
+	fileStore            stor.FileStor
+	transferRequestStore stor.TransferRequestStor
+	conversionStore      stor.ConversionStor
 )
 
 func init() {

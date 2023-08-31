@@ -164,7 +164,7 @@ func (s *FakeFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error
 	return false, nil
 }
 
-func (s *FakeFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStore) (bool, error) {
+func (s *FakeFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
 	// Do nothing, don't switch
 	return false, nil
 }

@@ -45,7 +45,7 @@ func Execute() {
 }
 
 var mcfsRoot string
-var userStore stor.UserStore
+var userStore stor.UserStor
 var mcsshdHost string
 var mcsshdPort string
 var mcsshdHostkeyPath string

@@ -332,7 +332,7 @@ func (s *GormFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error
 // DoneWritingToFile is called when a file has been opened for writing and the caller is finished writing to it.
 // It consolidates common steps such as updating metadata, switching to point to a file that already exists with
 // the same checksum, and queuing the file for conversion (if needed).
-func (s *GormFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStore) (bool, error) {
+func (s *GormFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
 	var (
 		fileSwitched = false
 		err          error
