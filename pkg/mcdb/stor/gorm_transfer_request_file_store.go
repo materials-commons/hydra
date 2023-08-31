@@ -27,7 +27,7 @@ func (s *GormTransferRequestFileStore) DeleteTransferFileRequestByPath(ownerID, 
 		return err
 	}
 
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.
 			Where("project_id = ?", projectID).
 			Where("owner_id = ?", ownerID).
@@ -58,11 +58,7 @@ func (s *GormTransferRequestFileStore) GetTransferFileRequestByPath(ownerID, pro
 }
 
 func (s *GormTransferRequestFileStore) DeleteTransferRequestFile(transferRequestFile *mcmodel.TransferRequestFile) error {
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Delete(transferRequestFile).Error
 	})
-}
-
-func (s *GormTransferRequestFileStore) withTxRetry(fn func(tx *gorm.DB) error) error {
-	return WithTxRetryDefault(fn, s.db)
 }

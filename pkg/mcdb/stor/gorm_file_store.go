@@ -47,7 +47,7 @@ func (s *GormFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, chec
 		return err
 	}
 
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		// To set file as the current (ie viewable) version we first need to set all its previous
 		// versions to have current set to false.
 		err := tx.Model(&mcmodel.File{}).
@@ -99,7 +99,7 @@ func (s *GormFileStore) CreateFile(name string, projectID, directoryID, ownerID 
 		return nil, err
 	}
 
-	err = s.withTxRetry(func(tx *gorm.DB) error {
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Create(newFile).Error
 	})
 
@@ -128,7 +128,7 @@ func findDirByPath(db *gorm.DB, projectID int, path string) (*mcmodel.File, erro
 
 func (s *GormFileStore) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
 	var dir mcmodel.File
-	err := s.withTxRetry(func(tx *gorm.DB) error {
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		err := tx.Where("path = ", path).
 			Where("deleted_at IS NULL").
 			Where("dataset_id IS NULL").
@@ -175,7 +175,7 @@ func (s *GormFileStore) CreateDirIfNotExists(parentDirID int, path, name string,
 		err error
 	)
 
-	err = s.withTxRetry(func(tx *gorm.DB) error {
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
 		dir, err = findDirByPath(tx, projectID, path)
 		if err == nil {
 			// dir found
@@ -297,7 +297,7 @@ func (s *GormFileStore) GetFileByPath(projectID int, path string) (*mcmodel.File
 }
 
 func (s *GormFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error {
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Model(file).Updates(mcmodel.File{
 			UsesUUID: uuid,
 			UsesID:   fileID,
@@ -307,7 +307,7 @@ func (s *GormFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID i
 
 func (s *GormFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error) {
 	switched := false // Set to true in withTxRetry if an existing file with same checksum is found
-	err := s.withTxRetry(func(tx *gorm.DB) error {
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var matched mcmodel.File
 		err := tx.Where("checksum = ?", file.Checksum).
 			Where("deleted_at IS NULL").
@@ -360,8 +360,4 @@ func (s *GormFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, s
 	}
 
 	return fileSwitched, nil
-}
-
-func (s *GormFileStore) withTxRetry(fn func(tx *gorm.DB) error) error {
-	return WithTxRetryDefault(fn, s.db)
 }

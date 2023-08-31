@@ -27,13 +27,9 @@ func (s *GormConversionStore) AddFileToConvert(file *mcmodel.File) (*mcmodel.Con
 		return nil, err
 	}
 
-	err = s.withTxRetry(func(tx *gorm.DB) error {
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Create(c).Error
 	})
 
 	return c, err
-}
-
-func (s *GormConversionStore) withTxRetry(fn func(tx *gorm.DB) error) error {
-	return WithTxRetryDefault(fn, s.db)
 }

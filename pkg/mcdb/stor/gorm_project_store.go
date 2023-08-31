@@ -42,7 +42,7 @@ func (s *GormProjectStore) GetProjectsForUser(userID int) ([]mcmodel.Project, er
 }
 
 func (s *GormProjectStore) UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error {
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var p mcmodel.Project
 		// Get latest project
 		if result := tx.Find(&p, projectID); result.Error != nil {
@@ -57,7 +57,7 @@ func (s *GormProjectStore) UpdateProjectSizeAndFileCount(projectID int, size int
 }
 
 func (s *GormProjectStore) UpdateProjectDirectoryCount(projectID int, directoryCount int) error {
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var p mcmodel.Project
 		// Get latest project
 		if result := tx.Find(&p, projectID); result.Error != nil {
@@ -101,8 +101,4 @@ func (s *GormProjectStore) UserCanAccessProject(userID, projectID int) bool {
 	}
 
 	return false
-}
-
-func (s *GormProjectStore) withTxRetry(fn func(tx *gorm.DB) error) error {
-	return WithTxRetryDefault(fn, s.db)
 }

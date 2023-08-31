@@ -5,12 +5,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func WithTxRetryDefault(fn func(tx *gorm.DB) error, db *gorm.DB) error {
-	return WithTxRetry(fn, db, config.GetTxRetry())
-}
-
-func WithTxRetry(fn func(tx *gorm.DB) error, db *gorm.DB, retryCount int) error {
+func WithTxRetry(db *gorm.DB, fn func(tx *gorm.DB) error) error {
 	var err error
+
+	retryCount := config.GetTxRetry()
 
 	if retryCount < 3 {
 		retryCount = 3

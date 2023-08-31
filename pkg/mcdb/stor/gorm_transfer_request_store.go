@@ -28,7 +28,7 @@ func (s *GormTransferRequestStore) MarkFileReleased(file *mcmodel.File, checksum
 		return err
 	}
 
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		// To set file as the current (ie viewable) version we first need to set all its previous
 		// versions to have current set to false.
 		err := tx.Model(&mcmodel.File{}).
@@ -79,7 +79,7 @@ func (s *GormTransferRequestStore) MarkFileReleased(file *mcmodel.File, checksum
 }
 
 func (s *GormTransferRequestStore) MarkFileAsOpen(file *mcmodel.File) error {
-	return s.withTxRetry(func(tx *gorm.DB) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Model(&mcmodel.TransferRequestFile{}).
 			Where("file_id = ?", file.ID).
 			Update("state", "open").Error
@@ -139,7 +139,7 @@ func (s *GormTransferRequestStore) addFileToDatabase(file *mcmodel.File, dirID i
 
 	// Wrap creation in a transaction so that both the file and the TransferRequestFile are either
 	// both created, or neither is created.
-	err = s.withTxRetry(func(tx *gorm.DB) error {
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
 		if result := tx.Create(file); result.Error != nil {
 			return result.Error
 		}
@@ -282,8 +282,4 @@ func incrementProjectFileTypeCountAndFilesCount(db *gorm.DB, projectID int, file
 	}
 
 	return db.Model(&p).Updates(&mcmodel.Project{FileTypes: fileTypesAsStr, FileCount: p.FileCount + 1}).Error
-}
-
-func (s *GormTransferRequestStore) withTxRetry(fn func(tx *gorm.DB) error) error {
-	return WithTxRetryDefault(fn, s.db)
 }
