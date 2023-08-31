@@ -2,23 +2,28 @@ package mcbridgefs
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-uuid"
+	"github.com/materials-commons/hydra/pkg/tutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWrite100ThousandFiles(t *testing.T) {
+	if !tutil.IsIntegrationTest() {
+		t.Skip("Skipping integration test...")
+	}
+
 	timeStart := time.Now()
 	for i := 0; i < 100_000; i++ {
 		fname, err := uuid.GenerateUUID()
 		require.NoError(t, err, "GenerateUUID failed: %s", err)
 		filename := filepath.Join("/home/gtarcea/mcdir/mcfs/data/test/tproj", fname+".txt")
-		err = ioutil.WriteFile(filename, []byte(fname), 0644)
+		err = os.WriteFile(filename, []byte(fname), 0644)
 		require.NoError(t, err, "ioutil.WriteFile(%s) failed: %s", fname, err)
 		if i%100 == 0 {
 			timeElapsed := time.Now().Sub(timeStart)
@@ -29,6 +34,10 @@ func TestWrite100ThousandFiles(t *testing.T) {
 }
 
 func TestWrite500FilesInParallel(t *testing.T) {
+	if !tutil.IsIntegrationTest() {
+		t.Skip("Skipping integration test...")
+	}
+
 	timeStart := time.Now()
 	for i := 0; i < 50; i++ {
 		t.Run(fmt.Sprintf("Parallel%d", i), func(t *testing.T) {
@@ -37,7 +46,7 @@ func TestWrite500FilesInParallel(t *testing.T) {
 				fname, err := uuid.GenerateUUID()
 				require.NoError(t, err, "GenerateUUID failed: %s", err)
 				filename := filepath.Join("/home/gtarcea/mcdir/mcfs/data/test/tproj", fname+".txt")
-				err = ioutil.WriteFile(filename, []byte(fname), 0644)
+				err = os.WriteFile(filename, []byte(fname), 0644)
 				require.NoError(t, err, "ioutil.WriteFile(%s) failed: %s", fname, err)
 				if j%10 == 0 {
 					timeElapsed := time.Now().Sub(timeStart)
@@ -50,6 +59,10 @@ func TestWrite500FilesInParallel(t *testing.T) {
 }
 
 func TestFTruncateFile(t *testing.T) {
+	if !tutil.IsIntegrationTest() {
+		t.Skip("Skipping integration test...")
+	}
+
 	fd, err := syscall.Open("/home/gtarcea/mcdir/mcfs/data/test/tproj/newfile.txt", syscall.O_RDWR, 0)
 	require.NoError(t, err, "Open failed: %s", err)
 	err = syscall.Ftruncate(fd, 0)
