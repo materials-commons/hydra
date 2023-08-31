@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -51,4 +52,9 @@ func MustConnectToDB() *gorm.DB {
 			time.Sleep(3 * time.Second)
 		}
 	}
+}
+
+func RunMigrations(db *gorm.DB) error {
+	return db.AutoMigrate(&mcmodel.File{}, &mcmodel.Project{}, &mcmodel.User{}, &mcmodel.Conversion{},
+		&mcmodel.TransferRequest{}, &mcmodel.TransferRequestFile{}, &mcmodel.GlobusTransfer{})
 }
