@@ -8,16 +8,16 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-type FakeFileStore struct {
+type FakeFileStor struct {
 	files  []mcmodel.File
 	lastID int
 }
 
-func NewFakeFileStore(files []mcmodel.File) *FakeFileStore {
-	return &FakeFileStore{files: files, lastID: 10000}
+func NewFakeFileStor(files []mcmodel.File) *FakeFileStor {
+	return &FakeFileStor{files: files, lastID: 10000}
 }
 
-func (s *FakeFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
+func (s *FakeFileStor) GetFileByID(fileID int) (*mcmodel.File, error) {
 	for _, f := range s.files {
 		if f.ID == fileID {
 			return &f, nil
@@ -27,11 +27,11 @@ func (s *FakeFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
 	return nil, fmt.Errorf("no such file")
 }
 
-func (s *FakeFileStore) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
+func (s *FakeFileStor) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (s *FakeFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
+func (s *FakeFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
 	for _, f := range s.files {
 		if f.ID == file.ID {
 			f.Checksum = checksum
@@ -41,7 +41,7 @@ func (s *FakeFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, chec
 	return fmt.Errorf("no such file: %d", file.ID)
 }
 
-func (s *FakeFileStore) CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error) {
+func (s *FakeFileStor) CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error) {
 	f := mcmodel.File{
 		ID:          s.lastID,
 		ProjectID:   projectID,
@@ -55,7 +55,7 @@ func (s *FakeFileStore) CreateFile(name string, projectID, directoryID, ownerID 
 	return &f, nil
 }
 
-func (s *FakeFileStore) GetDirByPath(projectID int, path string) (*mcmodel.File, error) {
+func (s *FakeFileStor) GetDirByPath(projectID int, path string) (*mcmodel.File, error) {
 	for _, f := range s.files {
 		if f.IsDir() {
 			if f.ProjectID == projectID && f.Path == path {
@@ -66,7 +66,7 @@ func (s *FakeFileStore) GetDirByPath(projectID int, path string) (*mcmodel.File,
 	return nil, fmt.Errorf("no such dir")
 }
 
-func (s *FakeFileStore) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
+func (s *FakeFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
 	d := mcmodel.File{
 		ID:          s.lastID,
 		Path:        path,
@@ -81,7 +81,7 @@ func (s *FakeFileStore) CreateDirectory(parentDirID, projectID, ownerID int, pat
 	return &d, nil
 }
 
-func (s *FakeFileStore) CreateDirIfNotExists(parentDirID int, path, name string, projectID, ownerID int) (*mcmodel.File, error) {
+func (s *FakeFileStor) CreateDirIfNotExists(parentDirID int, path, name string, projectID, ownerID int) (*mcmodel.File, error) {
 	d, err := s.GetDirByPath(projectID, path)
 	if err == nil {
 		return d, nil
@@ -89,7 +89,7 @@ func (s *FakeFileStore) CreateDirIfNotExists(parentDirID int, path, name string,
 	return s.CreateDirectory(parentDirID, projectID, ownerID, path, name)
 }
 
-func (s *FakeFileStore) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
+func (s *FakeFileStor) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
 	var files []mcmodel.File
 	dir, err := s.GetDirByPath(projectID, path)
 	if err != nil {
@@ -103,7 +103,7 @@ func (s *FakeFileStore) ListDirectoryByPath(projectID int, path string) ([]mcmod
 	return files, nil
 }
 
-func (s *FakeFileStore) GetOrCreateDirPath(projectID, ownerID int, path string) (*mcmodel.File, error) {
+func (s *FakeFileStor) GetOrCreateDirPath(projectID, ownerID int, path string) (*mcmodel.File, error) {
 	dir, err := s.GetDirByPath(projectID, path)
 	if err == nil {
 		return dir, nil
@@ -131,7 +131,7 @@ func (s *FakeFileStore) GetOrCreateDirPath(projectID, ownerID int, path string) 
 	return dir, nil
 }
 
-func (s *FakeFileStore) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
+func (s *FakeFileStor) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
 	dirPath := filepath.Dir(path)
 	fileName := filepath.Base(path)
 	dir, err := s.GetDirByPath(projectID, dirPath)
@@ -148,7 +148,7 @@ func (s *FakeFileStore) GetFileByPath(projectID int, path string) (*mcmodel.File
 	return nil, fmt.Errorf("no such file")
 }
 
-func (s *FakeFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error {
+func (s *FakeFileStor) UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error {
 	for _, f := range s.files {
 		if f.ID == file.ID {
 			f.UsesUUID = uuid
@@ -159,12 +159,12 @@ func (s *FakeFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID i
 	return fmt.Errorf("no such file")
 }
 
-func (s *FakeFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error) {
+func (s *FakeFileStor) PointAtExistingIfExists(file *mcmodel.File) (bool, error) {
 	// Do nothing, don't switch
 	return false, nil
 }
 
-func (s *FakeFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
+func (s *FakeFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
 	// Do nothing, don't switch
 	return false, nil
 }

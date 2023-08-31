@@ -6,15 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
-type GormConversionStore struct {
+type GormConversionStor struct {
 	db *gorm.DB
 }
 
-func NewGormConversionStore(db *gorm.DB) *GormConversionStore {
-	return &GormConversionStore{db: db}
+func NewGormConversionStor(db *gorm.DB) *GormConversionStor {
+	return &GormConversionStor{db: db}
 }
 
-func (s *GormConversionStore) AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error) {
+func (s *GormConversionStor) AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error) {
 	var err error
 
 	c := &mcmodel.Conversion{

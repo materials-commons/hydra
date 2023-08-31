@@ -2,12 +2,12 @@ package stor
 
 import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 
-type FakeConversionStore struct{}
+type FakeConversionStor struct{}
 
-func NewFakeConversionStore() *FakeConversionStore {
-	return &FakeConversionStore{}
+func NewFakeConversionStor() *FakeConversionStor {
+	return &FakeConversionStor{}
 }
 
-func (s *FakeConversionStore) AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error) {
+func (s *FakeConversionStor) AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error) {
 	return nil, nil
 }

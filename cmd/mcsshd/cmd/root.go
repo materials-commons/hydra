@@ -101,7 +101,7 @@ func init() {
 func mcsshdMain(cmd *cobra.Command, args []string) {
 	db := mcdb.MustConnectToDB()
 	stores := mc.NewGormStores(db, mcfsRoot)
-	userStore = stor.NewGormUserStore(db)
+	userStore = stor.NewGormUserStor(db)
 
 	// Setup SSH server and SCP Middleware handler
 	handler := mcscp.NewMCFSHandler(stores, mcfsRoot)

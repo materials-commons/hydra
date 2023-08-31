@@ -42,9 +42,9 @@ func NewFileTransferHandler(ws *websocket.Conn, db *gorm.DB) *FileTransferHandle
 	return &FileTransferHandler{
 		ws:           ws,
 		db:           db,
-		projectStore: stor.NewGormProjectStore(db),
-		fileStore:    stor.NewGormFileStore(db, GetMCFSRoot()),
-		convStore:    stor.NewGormConversionStore(db),
+		projectStore: stor.NewGormProjectStor(db),
+		fileStore:    stor.NewGormFileStor(db, GetMCFSRoot()),
+		convStore:    stor.NewGormConversionStor(db),
 		hasher:       md5.New(),
 		mcfsRoot:     GetMCFSRoot(),
 	}

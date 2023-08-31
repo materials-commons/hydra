@@ -16,8 +16,8 @@ type Stores struct {
 
 func NewGormStores(db *gorm.DB, mcfsRoot string) *Stores {
 	return &Stores{
-		FileStore:       stor.NewGormFileStore(db, mcfsRoot),
-		ProjectStore:    stor.NewGormProjectStore(db),
-		ConversionStore: stor.NewGormConversionStore(db),
+		FileStore:       stor.NewGormFileStor(db, mcfsRoot),
+		ProjectStore:    stor.NewGormProjectStor(db),
+		ConversionStore: stor.NewGormConversionStor(db),
 	}
 }

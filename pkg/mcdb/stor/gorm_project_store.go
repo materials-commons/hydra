@@ -5,15 +5,15 @@ import (
 	"gorm.io/gorm"
 )
 
-type GormProjectStore struct {
+type GormProjectStor struct {
 	db *gorm.DB
 }
 
-func NewGormProjectStore(db *gorm.DB) *GormProjectStore {
-	return &GormProjectStore{db: db}
+func NewGormProjectStor(db *gorm.DB) *GormProjectStor {
+	return &GormProjectStor{db: db}
 }
 
-func (s *GormProjectStore) GetProjectByID(projectID int) (*mcmodel.Project, error) {
+func (s *GormProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error) {
 	var project mcmodel.Project
 	err := s.db.Find(&project, projectID).Error
 	if err != nil {
@@ -23,7 +23,7 @@ func (s *GormProjectStore) GetProjectByID(projectID int) (*mcmodel.Project, erro
 	return &project, nil
 }
 
-func (s *GormProjectStore) GetProjectBySlug(slug string) (*mcmodel.Project, error) {
+func (s *GormProjectStor) GetProjectBySlug(slug string) (*mcmodel.Project, error) {
 	var project mcmodel.Project
 	if err := s.db.Where("slug = ?", slug).First(&project).Error; err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (s *GormProjectStore) GetProjectBySlug(slug string) (*mcmodel.Project, erro
 	return &project, nil
 }
 
-func (s *GormProjectStore) GetProjectsForUser(userID int) ([]mcmodel.Project, error) {
+func (s *GormProjectStor) GetProjectsForUser(userID int) ([]mcmodel.Project, error) {
 	var projects []mcmodel.Project
 
 	err := s.db.Where("team_id in (select team_id from team2admin where user_id = ?)", userID).
@@ -41,7 +41,7 @@ func (s *GormProjectStore) GetProjectsForUser(userID int) ([]mcmodel.Project, er
 	return projects, err
 }
 
-func (s *GormProjectStore) UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error {
+func (s *GormProjectStor) UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error {
 	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var p mcmodel.Project
 		// Get latest project
@@ -56,7 +56,7 @@ func (s *GormProjectStore) UpdateProjectSizeAndFileCount(projectID int, size int
 	})
 }
 
-func (s *GormProjectStore) UpdateProjectDirectoryCount(projectID int, directoryCount int) error {
+func (s *GormProjectStor) UpdateProjectDirectoryCount(projectID int, directoryCount int) error {
 	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var p mcmodel.Project
 		// Get latest project
@@ -70,7 +70,7 @@ func (s *GormProjectStore) UpdateProjectDirectoryCount(projectID int, directoryC
 	})
 }
 
-func (s *GormProjectStore) UserCanAccessProject(userID, projectID int) bool {
+func (s *GormProjectStor) UserCanAccessProject(userID, projectID int) bool {
 	var project mcmodel.Project
 
 	if err := s.db.Find(&project, projectID).Error; err != nil {

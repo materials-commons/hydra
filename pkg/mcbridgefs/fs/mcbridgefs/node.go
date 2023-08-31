@@ -58,9 +58,9 @@ func CreateFS(fsRoot string, dB *gorm.DB, tr mcmodel.TransferRequest) *Node {
 	mcfsRoot = fsRoot
 	db = dB
 	transferRequest = tr
-	fileStore = stor.NewGormFileStore(db, fsRoot)
-	conversionStore = stor.NewGormConversionStore(db)
-	transferRequestStore = stor.NewGormTransferRequestStore(db, fsRoot)
+	fileStore = stor.NewGormFileStor(db, fsRoot)
+	conversionStore = stor.NewGormConversionStor(db)
+	transferRequestStore = stor.NewGormTransferRequestStor(db, fsRoot)
 	return rootNode()
 }
 

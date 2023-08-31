@@ -6,15 +6,15 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-type FakeUserStore struct {
+type FakeUserStor struct {
 	users []mcmodel.User
 }
 
-func NewFakeUserStore(users []mcmodel.User) *FakeUserStore {
-	return &FakeUserStore{users: users}
+func NewFakeUserStor(users []mcmodel.User) *FakeUserStor {
+	return &FakeUserStor{users: users}
 }
 
-func (s *FakeUserStore) GetUsersWithGlobusAccount() (error, []mcmodel.User) {
+func (s *FakeUserStor) GetUsersWithGlobusAccount() (error, []mcmodel.User) {
 	var users []mcmodel.User
 
 	for _, u := range s.users {
@@ -29,7 +29,7 @@ func (s *FakeUserStore) GetUsersWithGlobusAccount() (error, []mcmodel.User) {
 	return nil, users
 }
 
-func (s *FakeUserStore) GetUserBySlug(slug string) (*mcmodel.User, error) {
+func (s *FakeUserStor) GetUserBySlug(slug string) (*mcmodel.User, error) {
 	for _, u := range s.users {
 		if u.Slug == slug {
 			return &u, nil

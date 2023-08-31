@@ -15,7 +15,7 @@ func TestFindFileByPath(t *testing.T) {
 		t.Errorf("Failed to open db: %s", err)
 	}
 
-	fileStore := NewGormFileStore(db, "/")
+	fileStore := NewGormFileStor(db, "/")
 
 	f, err := fileStore.GetDirByPath(509, "/D1")
 	if err != nil {

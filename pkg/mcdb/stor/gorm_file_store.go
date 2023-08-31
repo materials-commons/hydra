@@ -12,16 +12,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type GormFileStore struct {
+type GormFileStor struct {
 	db       *gorm.DB
 	mcfsRoot string
 }
 
-func NewGormFileStore(db *gorm.DB, mcfsRoot string) *GormFileStore {
-	return &GormFileStore{db: db, mcfsRoot: mcfsRoot}
+func NewGormFileStor(db *gorm.DB, mcfsRoot string) *GormFileStor {
+	return &GormFileStor{db: db, mcfsRoot: mcfsRoot}
 }
 
-func (s *GormFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
+func (s *GormFileStor) GetFileByID(fileID int) (*mcmodel.File, error) {
 	var file mcmodel.File
 	if err := s.db.Find(&file, fileID).Error; err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (s *GormFileStore) GetFileByID(fileID int) (*mcmodel.File, error) {
 	return &file, nil
 }
 
-func (s *GormFileStore) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
+func (s *GormFileStor) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
 	var file mcmodel.File
 	if err := s.db.Where("uuid = ?", fileUUID).First(&file).Error; err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (s *GormFileStore) GetFileByUUID(fileUUID string) (*mcmodel.File, error) {
 }
 
 // UpdateMetadataForFileAndProject updates the metadata and project meta data for a file
-func (s *GormFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
+func (s *GormFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error {
 	finfo, err := os.Stat(file.ToUnderlyingFilePath(s.mcfsRoot))
 	if err != nil {
 		log.Errorf("MarkFileReleased Stat %s failed: %s", file.ToUnderlyingFilePath(s.mcfsRoot), err)
@@ -81,7 +81,7 @@ func (s *GormFileStore) UpdateMetadataForFileAndProject(file *mcmodel.File, chec
 	})
 }
 
-func (s *GormFileStore) CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error) {
+func (s *GormFileStor) CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error) {
 	newFile := &mcmodel.File{
 		ProjectID:   projectID,
 		Name:        name,
@@ -106,7 +106,7 @@ func (s *GormFileStore) CreateFile(name string, projectID, directoryID, ownerID 
 	return newFile, err
 }
 
-func (s *GormFileStore) GetDirByPath(projectID int, path string) (*mcmodel.File, error) {
+func (s *GormFileStor) GetDirByPath(projectID int, path string) (*mcmodel.File, error) {
 	return findDirByPath(s.db, projectID, path)
 }
 
@@ -126,7 +126,7 @@ func findDirByPath(db *gorm.DB, projectID int, path string) (*mcmodel.File, erro
 	return &dir, nil
 }
 
-func (s *GormFileStore) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
+func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
 	var dir mcmodel.File
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		err := tx.Where("path = ", path).
@@ -169,7 +169,7 @@ func (s *GormFileStore) CreateDirectory(parentDirID, projectID, ownerID int, pat
 	return &dir, err
 }
 
-func (s *GormFileStore) CreateDirIfNotExists(parentDirID int, path, name string, projectID, ownerID int) (*mcmodel.File, error) {
+func (s *GormFileStor) CreateDirIfNotExists(parentDirID int, path, name string, projectID, ownerID int) (*mcmodel.File, error) {
 	var (
 		dir *mcmodel.File
 		err error
@@ -209,7 +209,7 @@ func (s *GormFileStore) CreateDirIfNotExists(parentDirID int, path, name string,
 	return dir, err
 }
 
-func (s *GormFileStore) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
+func (s *GormFileStor) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
 	dir, err := s.GetDirByPath(projectID, path)
 	if err != nil {
 		return nil, err
@@ -228,7 +228,7 @@ func (s *GormFileStore) ListDirectoryByPath(projectID int, path string) ([]mcmod
 }
 
 // GetOrCreateDirPath will create all entries in the directory path if the path doesn't exist
-func (s *GormFileStore) GetOrCreateDirPath(projectID, ownerID int, path string) (*mcmodel.File, error) {
+func (s *GormFileStor) GetOrCreateDirPath(projectID, ownerID int, path string) (*mcmodel.File, error) {
 	dir, err := s.GetDirByPath(projectID, path)
 	if err == nil {
 		// If we are here then the path was found, and we have nothing left to do.
@@ -270,7 +270,7 @@ func (s *GormFileStore) GetOrCreateDirPath(projectID, ownerID int, path string) 
 	return dir, nil
 }
 
-func (s *GormFileStore) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
+func (s *GormFileStor) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
 	if path == "/" {
 		return s.GetDirByPath(projectID, path)
 	}
@@ -296,7 +296,7 @@ func (s *GormFileStore) GetFileByPath(projectID int, path string) (*mcmodel.File
 	return &file, nil
 }
 
-func (s *GormFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error {
+func (s *GormFileStor) UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error {
 	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Model(file).Updates(mcmodel.File{
 			UsesUUID: uuid,
@@ -305,7 +305,7 @@ func (s *GormFileStore) UpdateFileUses(file *mcmodel.File, uuid string, fileID i
 	})
 }
 
-func (s *GormFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error) {
+func (s *GormFileStor) PointAtExistingIfExists(file *mcmodel.File) (bool, error) {
 	switched := false // Set to true in withTxRetry if an existing file with same checksum is found
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		var matched mcmodel.File
@@ -332,7 +332,7 @@ func (s *GormFileStore) PointAtExistingIfExists(file *mcmodel.File) (bool, error
 // DoneWritingToFile is called when a file has been opened for writing and the caller is finished writing to it.
 // It consolidates common steps such as updating metadata, switching to point to a file that already exists with
 // the same checksum, and queuing the file for conversion (if needed).
-func (s *GormFileStore) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
+func (s *GormFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
 	var (
 		fileSwitched = false
 		err          error
