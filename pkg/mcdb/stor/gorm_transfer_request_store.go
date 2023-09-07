@@ -121,8 +121,6 @@ func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, 
 // addFileToDatabase will add an mcmodel.File entry and an associated mcmodel.TransferRequestFile entry
 // to the database. The file parameter must be filled out, except for the UUID which will be generated
 // for the file. The TransferRequestFile will be created based on the file entry.
-// to the database. The file parameter must be filled out, except for the UUID which will be generated
-// for the file. The TransferRequestFile will be created based on the file entry.
 func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID int, transferRequest mcmodel.TransferRequest, updateProject bool) (*mcmodel.File, error) {
 	var (
 		err                     error
