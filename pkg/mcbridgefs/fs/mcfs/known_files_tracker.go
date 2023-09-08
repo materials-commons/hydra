@@ -1,6 +1,8 @@
 package mcfs
 
 import (
+	"crypto/md5"
+	"hash"
 	"sync"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -15,18 +17,36 @@ type KnownFilesTracker struct {
 	m sync.Map
 }
 
+type KnownFile struct {
+	file   *mcmodel.File
+	hasher hash.Hash
+}
+
 func NewKnownFilesTracker() *KnownFilesTracker {
 	return &KnownFilesTracker{}
 }
 
 func (t *KnownFilesTracker) Store(path string, file *mcmodel.File) {
-	t.m.Store(path, file)
+	knownFile := &KnownFile{
+		file:   file,
+		hasher: md5.New(),
+	}
+	t.m.Store(path, knownFile)
 }
 
-func (t *KnownFilesTracker) Get(path string) *mcmodel.File {
+func (t *KnownFilesTracker) GetFile(path string) *mcmodel.File {
 	val, _ := t.m.Load(path)
 	if val != nil {
-		return val.(*mcmodel.File)
+		return val.(*KnownFile).file
+	}
+
+	return nil
+}
+
+func (t *KnownFilesTracker) Get(path string) *KnownFile {
+	val, _ := t.m.Load(path)
+	if val != nil {
+		return val.(*KnownFile)
 	}
 
 	return nil
