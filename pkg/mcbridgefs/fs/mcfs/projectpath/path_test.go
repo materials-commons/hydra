@@ -9,28 +9,32 @@ import (
 
 func TestProjectPath(t *testing.T) {
 	var tests = []struct {
-		path                string
-		expectedProjectID   int
-		expectedUserID      int
-		expectedProjectPath string
+		path                 string
+		expectedProjectID    int
+		expectedUserID       int
+		expectedProjectPath  string
+		expectedTransferBase string
 	}{
 		{
-			path:                "/25/301/dir1",
-			expectedProjectID:   25,
-			expectedUserID:      301,
-			expectedProjectPath: "/dir1",
+			path:                 "/25/301/dir1",
+			expectedProjectID:    25,
+			expectedUserID:       301,
+			expectedProjectPath:  "/dir1",
+			expectedTransferBase: "/25/301",
 		},
 		{
-			path:                "/25/301/dir1/dir2/dir3",
-			expectedProjectID:   25,
-			expectedUserID:      301,
-			expectedProjectPath: "/dir1/dir2/dir3",
+			path:                 "/25/301/dir1/dir2/dir3",
+			expectedProjectID:    25,
+			expectedUserID:       301,
+			expectedProjectPath:  "/dir1/dir2/dir3",
+			expectedTransferBase: "/25/301",
 		},
 		{
-			path:                "/25/301/dir1/../dir2",
-			expectedProjectID:   25,
-			expectedUserID:      301,
-			expectedProjectPath: "/dir2",
+			path:                 "/25/301/dir1/../dir2",
+			expectedProjectID:    25,
+			expectedUserID:       301,
+			expectedProjectPath:  "/dir2",
+			expectedTransferBase: "/25/301",
 		},
 	}
 
@@ -40,6 +44,7 @@ func TestProjectPath(t *testing.T) {
 			require.Equal(t, test.expectedProjectID, p.ProjectID)
 			require.Equal(t, test.expectedUserID, p.UserID)
 			require.Equal(t, test.expectedProjectPath, p.ProjectPath)
+			require.Equal(t, test.expectedTransferBase, p.TransferBase)
 			require.Equal(t, filepath.Clean(test.path), p.FullPath)
 		})
 	}

@@ -23,6 +23,10 @@ type ProjectPath struct {
 	// The project path, ie after remove the project-id and user-id portions
 	ProjectPath string
 
+	// The TransferBase is the project user path. For example if the path
+	// is /25/301/rest/of/path, then TransferBase is /25/301
+	TransferBase string
+
 	// The full path, containing the project-id and the user-id
 	FullPath string
 }
@@ -50,6 +54,8 @@ func NewProjectPath(path string) *ProjectPath {
 	pathPieces := append([]string{"/"}, pathParts[3:]...)
 	projectPath := filepath.Join(pathPieces...)
 
+	transferBase := filepath.Join("/", pathParts[1], pathParts[2])
+
 	var (
 		projectID, userID int
 		err               error
@@ -64,10 +70,11 @@ func NewProjectPath(path string) *ProjectPath {
 	}
 
 	return &ProjectPath{
-		ProjectID:   projectID,
-		UserID:      userID,
-		ProjectPath: projectPath,
-		FullPath:    filepath.Clean(path),
+		ProjectID:    projectID,
+		UserID:       userID,
+		ProjectPath:  projectPath,
+		TransferBase: transferBase,
+		FullPath:     filepath.Clean(path),
 	}
 }
 
@@ -93,6 +100,14 @@ func (p *ProjectPath) FullPathJoin(elements ...string) string {
 func ToProjectPath(path string) string {
 	p := NewProjectPath(path)
 	return p.ProjectPath
+}
+
+// TransferBase takes a path that contains the project/user portions and returns
+// the TransferBase. For example "/25/301/rest/of/path" will return
+// "/25/301".
+func TransferBase(path string) string {
+	p := NewProjectPath(path)
+	return p.TransferBase
 }
 
 // ProjectID takes a path that contains the project/user portions and returns
