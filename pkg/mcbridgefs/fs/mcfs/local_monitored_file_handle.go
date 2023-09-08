@@ -23,8 +23,6 @@ type LocalMonitoredFileHandle struct {
 	conversionStor      stor.ConversionStor
 }
 
-type LocalMonitoredFileHandleOptionFunc func(handle *LocalMonitoredFileHandle)
-
 var _ = (fs.FileHandle)((*LocalMonitoredFileHandle)(nil))
 var _ = (fs.FileWriter)((*LocalMonitoredFileHandle)(nil))
 var _ = (fs.FileReader)((*LocalMonitoredFileHandle)(nil))
@@ -34,6 +32,11 @@ func NewLocalMonitoredFileHandle(fd int) *LocalMonitoredFileHandle {
 	return &LocalMonitoredFileHandle{
 		BaseLocalFileHandle: NewBaseLocalFileHandle(fd).(*BaseLocalFileHandle),
 	}
+}
+
+func (h *LocalMonitoredFileHandle) WithPath(path string) *LocalMonitoredFileHandle {
+	h.Path = path
+	return h
 }
 
 func (h *LocalMonitoredFileHandle) WithFile(f *mcmodel.File) *LocalMonitoredFileHandle {
