@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"hash"
 	"io"
 	"log/slog"
 	"syscall"
@@ -17,8 +16,7 @@ import (
 
 type LocalMonitoredFileHandle struct {
 	*BaseLocalFileHandle
-	hasher              hash.Hash
-	Checksum            string
+	Path                string
 	File                *mcmodel.File
 	activityCounter     ActivityCounter
 	transferRequestStor stor.TransferRequestStor
@@ -36,11 +34,6 @@ func NewLocalMonitoredFileHandle(fd int) *LocalMonitoredFileHandle {
 	return &LocalMonitoredFileHandle{
 		BaseLocalFileHandle: NewBaseLocalFileHandle(fd).(*BaseLocalFileHandle),
 	}
-}
-
-func (h *LocalMonitoredFileHandle) WithHasher(hasher hash.Hash) *LocalMonitoredFileHandle {
-	h.hasher = hasher
-	return h
 }
 
 func (h *LocalMonitoredFileHandle) WithFile(f *mcmodel.File) *LocalMonitoredFileHandle {
@@ -67,13 +60,19 @@ func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
 
+	knownFile := knownFilesTracker.Get(h.Path)
+	if knownFile == nil {
+		slog.Error("Unknown file in LocalMonitoredFileHandle: %s", h.Path)
+		return 0, syscall.EIO
+	}
+
 	h.activityCounter.IncrementActivityCount()
 	n, err := syscall.Pwrite(h.Fd, data, off)
 	if err != nil {
 		return uint32(n), fs.ToErrno(err)
 	}
 
-	_, _ = io.Copy(h.hasher, bytes.NewBuffer(data[:n]))
+	_, _ = io.Copy(knownFile.hasher, bytes.NewBuffer(data[:n]))
 
 	return uint32(n), fs.OK
 }
@@ -107,7 +106,9 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
 		size = attrs.Size
 	}
 
-	checksum = fmt.Sprintf("%x", h.hasher.Sum(nil))
+	knownFile := knownFilesTracker.Get(h.Path)
+
+	checksum = fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
 
 	errno := fs.ToErrno(transferRequestStore.MarkFileReleased(h.File, checksum, transferRequest.ProjectID, int64(size)))
 
@@ -121,5 +122,4 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
 	}
 
 	return errno
-
 }

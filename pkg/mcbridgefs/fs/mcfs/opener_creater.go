@@ -29,9 +29,9 @@ func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint
 
 	switch flags & syscall.O_ACCMODE {
 	case syscall.O_RDONLY:
-		knownFile = knownFilesTracker.Get(path)
+		knownFile = knownFilesTracker.GetFile(path)
 	case syscall.O_WRONLY:
-		knownFile = knownFilesTracker.Get(path)
+		knownFile = knownFilesTracker.GetFile(path)
 		if knownFile == nil {
 			knownFile, err = h.createNewMCFileVersion(projPath.ProjectPath)
 			if err != nil {
@@ -44,7 +44,7 @@ func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint
 		flags = flags &^ syscall.O_CREAT
 		flags = flags &^ syscall.O_APPEND
 	case syscall.O_RDWR:
-		knownFile = knownFilesTracker.Get(path)
+		knownFile = knownFilesTracker.GetFile(path)
 		if knownFile == nil {
 			knownFile, err = h.createNewMCFileVersion(projPath.ProjectPath)
 			if err != nil {
@@ -101,7 +101,7 @@ func (h *LocalOpenCreateHandler) Create(_ context.Context, path string, flags, m
 
 func (h *LocalOpenCreateHandler) createNewMCFileVersion(fullPath string) (*mcmodel.File, error) {
 	// First check if there is already a version of this file being written to for this upload context.
-	existingFile := knownFilesTracker.Get(fullPath)
+	existingFile := knownFilesTracker.GetFile(fullPath)
 	if existingFile != nil {
 		return existingFile, nil
 	}

@@ -306,9 +306,9 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 
 	switch flags & syscall.O_ACCMODE {
 	case syscall.O_RDONLY:
-		newFile = knownFilesTracker.Get(path)
+		newFile = knownFilesTracker.GetFile(path)
 	case syscall.O_WRONLY:
-		newFile = knownFilesTracker.Get(path)
+		newFile = knownFilesTracker.GetFile(path)
 		if newFile == nil {
 			newFile, err = n.createNewMCFileVersion()
 			if err != nil {
@@ -321,7 +321,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 		flags = flags &^ syscall.O_CREAT
 		flags = flags &^ syscall.O_APPEND
 	case syscall.O_RDWR:
-		newFile = knownFilesTracker.Get(path)
+		newFile = knownFilesTracker.GetFile(path)
 		if newFile == nil {
 			newFile, err = n.createNewMCFileVersion()
 			if err != nil {
@@ -387,7 +387,7 @@ func (n *Node) Release(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	// file size, set this as the current file, and if a new checksum was computed, set the checksum.
 	fileToUpdate := n.file
 	fpath := filepath.Join("/", n.Path(n.Root()))
-	nf := knownFilesTracker.Get(fpath)
+	nf := knownFilesTracker.GetFile(fpath)
 	if nf != nil {
 		fileToUpdate = nf
 	}
@@ -433,7 +433,7 @@ func (n *Node) Release(ctx context.Context, f fs.FileHandle) syscall.Errno {
 // file is written to it.
 func (n *Node) createNewMCFileVersion() (*mcmodel.File, error) {
 	// First check if there is already a version of this file being written to for this upload context.
-	existing := knownFilesTracker.Get(filepath.Join("/", n.Path(n.Root()), n.file.Name))
+	existing := knownFilesTracker.GetFile(filepath.Join("/", n.Path(n.Root()), n.file.Name))
 	if existing != nil {
 		return existing, nil
 	}
