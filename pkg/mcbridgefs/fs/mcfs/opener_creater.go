@@ -9,6 +9,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
 type OpenerCreater interface {
@@ -16,7 +17,78 @@ type OpenerCreater interface {
 	Create(ctx context.Context, path string, flags, mode uint32) (fh fs.FileHandle, errno syscall.Errno)
 }
 
+type OpenerCreaterFactory interface {
+	NewOpenerCreaterHandler() OpenerCreater
+}
+
+type LocalOpenCreateHandlerFactory struct {
+	knownFilesTracker   *KnownFilesTracker
+	transferRequestStor stor.TransferRequestStor
+	fileStor            stor.FileStor
+	fileHandleFactory   FileHandleFactory
+}
+
+func NewLocalOpenCreateHandlerFactory() *LocalOpenCreateHandlerFactory {
+	return &LocalOpenCreateHandlerFactory{}
+}
+
+func (h *LocalOpenCreateHandlerFactory) WithKnownFileTracker(knownFilesTracker *KnownFilesTracker) *LocalOpenCreateHandlerFactory {
+	h.knownFilesTracker = knownFilesTracker
+	return h
+}
+
+func (h *LocalOpenCreateHandlerFactory) WithTransferRequestStor(transferRequestStor stor.TransferRequestStor) *LocalOpenCreateHandlerFactory {
+	h.transferRequestStor = transferRequestStor
+	return h
+}
+
+func (h *LocalOpenCreateHandlerFactory) WithFileStor(fileStor stor.FileStor) *LocalOpenCreateHandlerFactory {
+	h.fileStor = fileStor
+	return h
+}
+
+func (h *LocalOpenCreateHandlerFactory) NewOpenerCreaterHandler() *LocalOpenCreateHandler {
+	return NewLocalOpenCreateHandler().
+		WithFileStor(h.fileStor).
+		WithTransferRequestStor(h.transferRequestStor).
+		WithKnownFileTracker(h.knownFilesTracker).
+		WithFileHandleFactory(h.fileHandleFactory)
+}
+
+func (h *LocalOpenCreateHandlerFactory) WithFileHandleFactory(fileHandleFactory FileHandleFactory) *LocalOpenCreateHandlerFactory {
+	h.fileHandleFactory = fileHandleFactory
+	return h
+}
+
 type LocalOpenCreateHandler struct {
+	knownFilesTracker   *KnownFilesTracker
+	transferRequestStor stor.TransferRequestStor
+	fileStor            stor.FileStor
+	fileHandleFactory   FileHandleFactory
+}
+
+func NewLocalOpenCreateHandler() *LocalOpenCreateHandler {
+	return &LocalOpenCreateHandler{}
+}
+
+func (h *LocalOpenCreateHandler) WithKnownFileTracker(knownFilesTracker *KnownFilesTracker) *LocalOpenCreateHandler {
+	h.knownFilesTracker = knownFilesTracker
+	return h
+}
+
+func (h *LocalOpenCreateHandler) WithTransferRequestStor(transferRequestStor stor.TransferRequestStor) *LocalOpenCreateHandler {
+	h.transferRequestStor = transferRequestStor
+	return h
+}
+
+func (h *LocalOpenCreateHandler) WithFileStor(fileStor stor.FileStor) *LocalOpenCreateHandler {
+	h.fileStor = fileStor
+	return h
+}
+
+func (h *LocalOpenCreateHandler) WithFileHandleFactory(fileHandleFactory FileHandleFactory) *LocalOpenCreateHandler {
+	h.fileHandleFactory = fileHandleFactory
+	return h
 }
 
 func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint32) (fh fs.FileHandle, errno syscall.Errno) {
@@ -29,9 +101,9 @@ func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint
 
 	switch flags & syscall.O_ACCMODE {
 	case syscall.O_RDONLY:
-		knownFile = knownFilesTracker.GetFile(path)
+		knownFile = h.knownFilesTracker.GetFile(path)
 	case syscall.O_WRONLY:
-		knownFile = knownFilesTracker.GetFile(path)
+		knownFile = h.knownFilesTracker.GetFile(path)
 		if knownFile == nil {
 			knownFile, err = h.createNewMCFileVersion(projPath.ProjectPath)
 			if err != nil {
@@ -39,7 +111,7 @@ func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint
 				return nil, syscall.EIO
 			}
 
-			knownFilesTracker.Store(path, knownFile)
+			h.knownFilesTracker.Store(path, knownFile)
 		}
 		flags = flags &^ syscall.O_CREAT
 		flags = flags &^ syscall.O_APPEND
@@ -68,7 +140,7 @@ func (h *LocalOpenCreateHandler) Open(_ context.Context, path string, flags uint
 		return nil, fs.ToErrno(err)
 	}
 
-	fhandle := NewFileHandle(fd, flags, path)
+	fhandle := h.fileHandleFactory.NewFileHandle(fd, path, knownFile)
 	return fhandle, fs.OK
 }
 
@@ -80,7 +152,7 @@ func (h *LocalOpenCreateHandler) Create(_ context.Context, path string, flags, m
 		return nil, syscall.EIO
 	}
 
-	knownFilesTracker.Store(path, f)
+	h.knownFilesTracker.Store(path, f)
 
 	flags = flags &^ syscall.O_APPEND
 	fd, err := syscall.Open(f.ToUnderlyingFilePath(mcfsRoot), int(flags)|os.O_CREATE, mode)
@@ -96,7 +168,7 @@ func (h *LocalOpenCreateHandler) Create(_ context.Context, path string, flags, m
 		return nil, fs.ToErrno(err)
 	}
 
-	return nil, fs.OK // return file handle here not nil
+	return h.fileHandleFactory.NewFileHandle(fd, path, f), fs.OK
 }
 
 func (h *LocalOpenCreateHandler) createNewMCFileVersion(fullPath string) (*mcmodel.File, error) {
