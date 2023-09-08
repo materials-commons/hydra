@@ -6,7 +6,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-type FakeProjectStor struct {
+type InMemoryProjectStor struct {
 	projects []mcmodel.Project
 
 	// Allow user to set this to determine if the call to UserCanAccessProject should return true or false.
@@ -14,11 +14,11 @@ type FakeProjectStor struct {
 	UserCanAccess bool
 }
 
-func NewFakeProjectStor(projects []mcmodel.Project) *FakeProjectStor {
-	return &FakeProjectStor{projects: projects, UserCanAccess: true}
+func NewInMemoryProjectStor(projects []mcmodel.Project) *InMemoryProjectStor {
+	return &InMemoryProjectStor{projects: projects, UserCanAccess: true}
 }
 
-func (s *FakeProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error) {
+func (s *InMemoryProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error) {
 	for _, p := range s.projects {
 		if p.ID == projectID {
 			return &p, nil
@@ -27,7 +27,7 @@ func (s *FakeProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error
 	return nil, fmt.Errorf("no such project: %d", projectID)
 }
 
-func (s *FakeProjectStor) GetProjectBySlug(slug string) (*mcmodel.Project, error) {
+func (s *InMemoryProjectStor) GetProjectBySlug(slug string) (*mcmodel.Project, error) {
 	for _, p := range s.projects {
 		if p.Slug == slug {
 			return &p, nil
@@ -36,7 +36,7 @@ func (s *FakeProjectStor) GetProjectBySlug(slug string) (*mcmodel.Project, error
 	return nil, fmt.Errorf("no such project: %s", slug)
 }
 
-func (s *FakeProjectStor) GetProjectsForUser(userID int) ([]mcmodel.Project, error) {
+func (s *InMemoryProjectStor) GetProjectsForUser(userID int) ([]mcmodel.Project, error) {
 	var projects []mcmodel.Project
 	for _, p := range s.projects {
 		if p.OwnerID == userID {
@@ -50,7 +50,7 @@ func (s *FakeProjectStor) GetProjectsForUser(userID int) ([]mcmodel.Project, err
 	return projects, nil
 }
 
-func (s *FakeProjectStor) UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error {
+func (s *InMemoryProjectStor) UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error {
 	for i, _ := range s.projects {
 		if s.projects[i].ID == projectID {
 			s.projects[i].Size = s.projects[i].Size + size
@@ -61,7 +61,7 @@ func (s *FakeProjectStor) UpdateProjectSizeAndFileCount(projectID int, size int6
 	return fmt.Errorf("no such project: %d", projectID)
 }
 
-func (s *FakeProjectStor) UpdateProjectDirectoryCount(projectID int, directoryCount int) error {
+func (s *InMemoryProjectStor) UpdateProjectDirectoryCount(projectID int, directoryCount int) error {
 	for i, _ := range s.projects {
 		if s.projects[i].ID == projectID {
 			s.projects[i].DirectoryCount = s.projects[i].DirectoryCount + directoryCount
@@ -71,6 +71,6 @@ func (s *FakeProjectStor) UpdateProjectDirectoryCount(projectID int, directoryCo
 	return fmt.Errorf("no such project: %d", projectID)
 }
 
-func (s *FakeProjectStor) UserCanAccessProject(userID, projectID int) bool {
+func (s *InMemoryProjectStor) UserCanAccessProject(userID, projectID int) bool {
 	return s.UserCanAccess
 }
