@@ -168,7 +168,7 @@ func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID in
 	return file, err
 }
 
-func (s *GormTransferRequestStor) ListDirectory(dir *mcmodel.File, transferRequest mcmodel.TransferRequest) ([]mcmodel.File, error) {
+func (s *GormTransferRequestStor) ListDirectory(dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) ([]mcmodel.File, error) {
 	var files []mcmodel.File
 
 	err := s.db.Where("directory_id = ?", dir.ID).
@@ -253,6 +253,18 @@ func (s *GormTransferRequestStor) GetFileByPath(path string, transferRequest mcm
 		First(&file).Error
 
 	return &file, err
+}
+
+func (s *GormTransferRequestStor) GetTransferRequestByProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error) {
+	var transferRequest mcmodel.TransferRequest
+	err := s.db.Where("project_id = ?", projectID).
+		Where("user_id = ?", userID).
+		First(&transferRequest).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &transferRequest, nil
 }
 
 func incrementProjectFileTypeCountAndFilesCount(db *gorm.DB, projectID int, fileTypeDescription string) error {

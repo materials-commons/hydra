@@ -138,7 +138,7 @@ func (n *Node) Readdir(_ context.Context) (fs.DirStream, syscall.Errno) {
 		return nil, syscall.ENOENT
 	}
 
-	files, err := transferRequestStore.ListDirectory(dir, transferRequest)
+	files, err := transferRequestStore.ListDirectory(dir, &transferRequest)
 	if err != nil {
 		return nil, syscall.ENOENT
 	}
