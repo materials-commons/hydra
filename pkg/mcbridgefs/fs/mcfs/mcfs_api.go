@@ -1,6 +1,7 @@
 package mcfs
 
 import (
+	"fmt"
 	"mime"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ type MCFSApi struct {
 	fileStor            stor.FileStor
 	transferRequestStor stor.TransferRequestStor
 	conversionStor      stor.ConversionStor
+	knownFilesTracker   *KnownFilesTracker
 	mcfsRoot            string
 }
 
@@ -77,13 +79,41 @@ func (fs *MCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 
 func (fs *MCFSApi) Create(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	f, err := fs.createNewFile(projPath.ProjectID, filepath.Dir(projPath.ProjectPath), filepath.Base(projPath.ProjectPath))
+	if file := fs.knownFilesTracker.GetFile(projPath.FullPath); file != nil {
+		// This should not happen - Create was called on a file that the file
+		// system is already tracking as opened.
+		return nil, fmt.Errorf("file found on create: %s", path)
+	}
+
+	f, err := fs.createNewFile(projPath)
+	fs.knownFilesTracker.Store(path, f)
 
 	return f, err
 }
 
-func (fs *MCFSApi) Open() {
+func (fs *MCFSApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile bool, err error) {
+	projPath := projectpath.NewProjectPath(path)
+	f = fs.knownFilesTracker.GetFile(path)
+	if f != nil {
+		// Existing file found
+		return f, false, nil
+	}
 
+	if isReadOnly {
+		// If we are here then this is a request to open a file for read. The file
+		// needs to exist.
+		f, err = fs.fileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+		return f, false, err
+	}
+
+	// If we are here then the file wasn't found in the list of already opened
+	// files. So we need to create the file.
+	f, err = fs.createNewFileVersion(projPath)
+	return f, true, err
+}
+
+func (fs *MCFSApi) Rename() {
+	// Not supported at the moment
 }
 
 // Release Move out of the file handle?
@@ -91,24 +121,66 @@ func (fs *MCFSApi) Release() {
 
 }
 
-func (fs *MCFSApi) createNewFile(projectID int, dirPath string, name string) (*mcmodel.File, error) {
-	dir, err := fs.fileStor.GetDirByPath(projectID, dirPath)
+func (fs *MCFSApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
+	dir, err := fs.fileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
+	tr, err := fs.transferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	name := filepath.Base(projPath.ProjectPath)
+
 	file := &mcmodel.File{
-		ProjectID:   projectID,
+		ProjectID:   projPath.ProjectID,
 		Name:        name,
 		DirectoryID: dir.ID,
 		Size:        0,
 		Checksum:    "",
 		MimeType:    determineMimeType(name),
-		OwnerID:     transferRequest.OwnerID,
+		OwnerID:     projPath.UserID,
 		Current:     false,
 	}
 
-	return fs.transferRequestStor.CreateNewFile(file, dir, transferRequest)
+	return fs.transferRequestStor.CreateNewFile(file, dir, tr)
+}
+
+func (fs *MCFSApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
+	var err error
+
+	name := filepath.Base(projPath.ProjectPath)
+
+	dir, err := fs.fileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	if err != nil {
+		return nil, err
+	}
+
+	tr, err := fs.transferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// There isn't an existing upload, so create a new one
+	f := &mcmodel.File{
+		ProjectID:   projPath.ProjectID,
+		Name:        name,
+		DirectoryID: dir.ID,
+		Size:        0,
+		Checksum:    "",
+		MimeType:    determineMimeType(name),
+		OwnerID:     projPath.UserID,
+		Current:     false,
+	}
+
+	f, err = fs.transferRequestStor.CreateNewFile(f, dir, tr)
+	if err != nil {
+		return nil, err
+	}
+
+	return f, nil
 }
 
 // determineMimeType ... Move this into a utility package.
