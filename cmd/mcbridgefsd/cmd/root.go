@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/apex/log"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -23,7 +25,6 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
-	"os"
 )
 
 var (
@@ -48,7 +49,7 @@ var rootCmd = &cobra.Command{
 		s := mcbridgefs.NewServer(g, db)
 
 		if err := s.Init(); err != nil {
-			log.Fatalf("Unable to initalize mcbridgefsd: %s", err)
+			log.Fatalf("Unable to initialize mcbridgefsd: %s", err)
 		}
 
 		if err := e.Start("localhost:1323"); err != nil {
