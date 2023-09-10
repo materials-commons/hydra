@@ -19,11 +19,17 @@ type MCFSApi struct {
 	transferRequestStor stor.TransferRequestStor
 	conversionStor      stor.ConversionStor
 	knownFilesTracker   *KnownFilesTracker
-	mcfsRoot            string
+	mcfsRoot            string // Is this needed?
 }
 
-func NewMCFSApi() *MCFSApi {
-	return nil
+func NewMCFSApi(fileStor stor.FileStor, requestStor stor.TransferRequestStor, conversionStor stor.ConversionStor, tracker *KnownFilesTracker) *MCFSApi {
+	return &MCFSApi{
+		fileStor:            fileStor,
+		transferRequestStor: requestStor,
+		conversionStor:      conversionStor,
+		knownFilesTracker:   tracker,
+		mcfsRoot:            "",
+	}
 }
 
 func (fs *MCFSApi) Readdir(path string) ([]mcmodel.File, error) {
