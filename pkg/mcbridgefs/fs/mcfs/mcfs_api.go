@@ -1,7 +1,9 @@
 package mcfs
 
 import (
+	"mime"
 	"path/filepath"
+	"strings"
 
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -73,8 +75,11 @@ func (fs *MCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 	return fs.fileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
-func (fs *MCFSApi) Create() {
+func (fs *MCFSApi) Create(path string) (*mcmodel.File, error) {
+	projPath := projectpath.NewProjectPath(path)
+	f, err := fs.createNewFile(projPath.ProjectID, filepath.Dir(projPath.ProjectPath), filepath.Base(projPath.ProjectPath))
 
+	return f, err
 }
 
 func (fs *MCFSApi) Open() {
@@ -84,4 +89,49 @@ func (fs *MCFSApi) Open() {
 // Release Move out of the file handle?
 func (fs *MCFSApi) Release() {
 
+}
+
+func (fs *MCFSApi) createNewFile(projectID int, dirPath string, name string) (*mcmodel.File, error) {
+	dir, err := fs.fileStor.GetDirByPath(projectID, dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	file := &mcmodel.File{
+		ProjectID:   projectID,
+		Name:        name,
+		DirectoryID: dir.ID,
+		Size:        0,
+		Checksum:    "",
+		MimeType:    determineMimeType(name),
+		OwnerID:     transferRequest.OwnerID,
+		Current:     false,
+	}
+
+	return fs.transferRequestStor.CreateNewFile(file, dir, transferRequest)
+}
+
+// determineMimeType ... Move this into a utility package.
+func determineMimeType(name string) string {
+	mimeType := mime.TypeByExtension(filepath.Ext(name))
+	if mimeType == "" {
+		return "unknown"
+	}
+
+	mediatype, _, err := mime.ParseMediaType(mimeType)
+	if err != nil {
+		// ParseMediaType returned an error, but TypeByExtension
+		// returned a mime string. As a fallback let's remove
+		// any parameters on the string (if there is a semicolon
+		// it will be after the semicolon), and return everything
+		// before the (optional) semicolon.
+		semicolon := strings.Index(mimeType, ";")
+		if semicolon == -1 {
+			return strings.TrimSpace(mimeType)
+		}
+
+		return strings.TrimSpace(mimeType[:semicolon])
+	}
+
+	return strings.TrimSpace(mediatype)
 }
