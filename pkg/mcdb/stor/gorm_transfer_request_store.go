@@ -86,7 +86,7 @@ func (s *GormTransferRequestStor) MarkFileAsOpen(file *mcmodel.File) error {
 	})
 }
 
-func (s *GormTransferRequestStor) CreateNewFile(file, dir *mcmodel.File, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error) {
+func (s *GormTransferRequestStor) CreateNewFile(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error) {
 	var err error
 	if file, err = s.addFileToDatabase(file, dir.ID, transferRequest, true); err != nil {
 		return file, err
@@ -102,7 +102,7 @@ func (s *GormTransferRequestStor) CreateNewFile(file, dir *mcmodel.File, transfe
 	return file, nil
 }
 
-func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error) {
+func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error) {
 	var err error
 	if file, err = s.addFileToDatabase(file, dir.ID, transferRequest, false); err != nil {
 		return file, err
@@ -121,7 +121,7 @@ func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, 
 // addFileToDatabase will add an mcmodel.File entry and an associated mcmodel.TransferRequestFile entry
 // to the database. The file parameter must be filled out, except for the UUID which will be generated
 // for the file. The TransferRequestFile will be created based on the file entry.
-func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID int, transferRequest mcmodel.TransferRequest, updateProject bool) (*mcmodel.File, error) {
+func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID int, transferRequest *mcmodel.TransferRequest, updateProject bool) (*mcmodel.File, error) {
 	var (
 		err                     error
 		transferFileRequestUUID string
@@ -214,7 +214,7 @@ func (s *GormTransferRequestStor) ListDirectory(dir *mcmodel.File, transferReque
 	return files, nil
 }
 
-func (s *GormTransferRequestStor) GetFileByPath(path string, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error) {
+func (s *GormTransferRequestStor) GetFileByPath(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error) {
 	// Get directory so we can use its id for lookups
 	dirPath := filepath.Dir(path)
 	fileName := filepath.Base(path)

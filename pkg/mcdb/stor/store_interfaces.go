@@ -40,10 +40,10 @@ type TransferRequestFileStor interface {
 type TransferRequestStor interface {
 	MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error
 	MarkFileAsOpen(file *mcmodel.File) error
-	CreateNewFile(file, dir *mcmodel.File, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error)
-	CreateNewFileVersion(file, dir *mcmodel.File, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error)
+	CreateNewFile(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
+	CreateNewFileVersion(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
 	ListDirectory(dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) ([]mcmodel.File, error)
-	GetFileByPath(path string, transferRequest mcmodel.TransferRequest) (*mcmodel.File, error)
+	GetFileByPath(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
 	GetTransferRequestByProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error)
 }
 
