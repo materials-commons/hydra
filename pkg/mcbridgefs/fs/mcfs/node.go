@@ -491,7 +491,7 @@ func (n *Node) createNewMCFile(name string) (*mcmodel.File, error) {
 	return transferRequestStore.CreateNewFile(file, dir, transferRequest)
 }
 
-// getMimeType will determine the type of a file from its extension. It strips out the extra information
+// getMimeType will determine the type of file from its extension. It strips out the extra information
 // such as the charset and just returns the underlying type. It returns "unknown" for the mime type if
 // the mime package is unable to determine the type.
 func getMimeType(name string) string {
