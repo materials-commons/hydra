@@ -122,15 +122,6 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 	return f, true, err
 }
 
-func (fs *MCApi) Rename() {
-	// Not supported at the moment
-}
-
-// Release Move out of the file handle?
-func (fs *MCApi) Release() {
-
-}
-
 // createNewFile will create a new mcmodel.File entry for the directory associated
 // with the Node. It will create the directory where the file can be written to.
 func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
