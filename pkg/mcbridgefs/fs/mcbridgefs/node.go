@@ -98,7 +98,7 @@ func (n *Node) Readdir(_ context.Context) (fs.DirStream, syscall.Errno) {
 		return nil, syscall.ENOENT
 	}
 
-	files, err := transferRequestStore.ListDirectory(dir, transferRequest)
+	files, err := transferRequestStore.ListDirectory(dir, &transferRequest)
 	if err != nil {
 		return nil, syscall.ENOENT
 	}
@@ -132,7 +132,7 @@ func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.
 
 // Getattr gets attributes about the file
 func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	//fmt.Println("Getattr:", n.Path(n.Root()), n.IsDir())
+	//fmt.Println("Getattr:", n.mcfsRoot(n.Root()), n.IsDir())
 
 	// Owner is always the process the bridge is running as
 	out.Uid = uid
@@ -407,7 +407,7 @@ func (n *Node) createNewMCFileVersion() (*mcmodel.File, error) {
 		Current:     false,
 	}
 
-	newFile, err = transferRequestStore.CreateNewFile(newFile, n.file.Directory, transferRequest)
+	newFile, err = transferRequestStore.CreateNewFile(newFile, n.file.Directory, &transferRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -443,10 +443,10 @@ func (n *Node) createNewMCFile(name string) (*mcmodel.File, error) {
 		Current:     false,
 	}
 
-	return transferRequestStore.CreateNewFile(file, dir, transferRequest)
+	return transferRequestStore.CreateNewFile(file, dir, &transferRequest)
 }
 
-// getMimeType will determine the type of a file from its extension. It strips out the extra information
+// getMimeType will determine the type of file from its extension. It strips out the extra information
 // such as the charset and just returns the underlying type. It returns "unknown" for the mime type if
 // the mime package is unable to determine the type.
 func getMimeType(name string) string {
@@ -527,7 +527,7 @@ func (n *Node) getMode(entry *mcmodel.File) uint32 {
 	return 0644 | uint32(syscall.S_IFREG)
 }
 
-// inodeHash creates a new inode id from the the file path.
+// inodeHash creates a new inode id from the file path.
 func (n *Node) inodeHash(entry *mcmodel.File) uint64 {
 	if entry == nil {
 		return 1

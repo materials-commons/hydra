@@ -20,7 +20,7 @@ func NewGormTransferRequestStor(db *gorm.DB, mcfsRoot string) *GormTransferReque
 	return &GormTransferRequestStor{db: db, mcfsRoot: mcfsRoot}
 }
 
-// MarkFileReleased should only called for files that were created or opened with the Write flag set.
+// MarkFileReleased should only be called for files that were created or opened with the Write flag set.
 func (s *GormTransferRequestStor) MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error {
 	finfo, err := os.Stat(file.ToUnderlyingFilePath(s.mcfsRoot))
 	if err != nil {
@@ -188,11 +188,7 @@ func (s *GormTransferRequestStor) ListDirectory(dir *mcmodel.File, transferReque
 		Find(&uploadedFiles)
 	uploadedFilesByName := make(map[string]mcmodel.File)
 	if results.Error == nil && len(uploadedFiles) != 0 {
-		// Convert the files into a hashtable by name. Since we don't have the underlying mcmodel.File
-		// we create one on the fly only filling in the entries that will be needed to return the
-		// data about the directory. In this case all that is needed are the Name and the Directory (only
-		// Path of the directory). So for directory we use the single entry dirToUse. See comment at
-		// start of Readdir that explains this.
+		// Convert the files into a hashtable by name.
 		for _, requestFile := range uploadedFiles {
 			uploadedFilesByName[requestFile.Name] = mcmodel.File{Name: requestFile.Name}
 		}

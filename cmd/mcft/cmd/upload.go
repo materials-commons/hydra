@@ -300,7 +300,7 @@ func mustReadApiKey() string {
 
 func init() {
 	rootCmd.AddCommand(uploadCmd)
-	uploadCmd.PersistentFlags().StringVarP(&uploadTo, "upload-to", "t", "", "Path to upload to in project")
+	uploadCmd.PersistentFlags().StringVarP(&uploadTo, "upload-to", "t", "", "mcfsRoot to upload to in project")
 	uploadCmd.PersistentFlags().IntVarP(&projectID, "project-id", "p", -1, "Project ID to upload to")
 	uploadCmd.PersistentFlags().StringVarP(&serverAddress, "server-address", "s", "materialscommons.org", "Server to connect to")
 }

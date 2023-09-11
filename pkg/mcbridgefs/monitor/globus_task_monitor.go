@@ -132,7 +132,7 @@ func (m *GlobusTaskMonitor) processTransfers(transfers *globus.TransferItems) {
 	//flAdd := model.AddFileLoadModel{
 	//	ProjectID:      globusUpload.ProjectID,
 	//	Owner:          globusUpload.Owner,
-	//	Path:           globusUpload.Path,
+	//	mcfsRoot:           globusUpload.mcfsRoot,
 	//	GlobusUploadID: globusUpload.ID,
 	//}
 

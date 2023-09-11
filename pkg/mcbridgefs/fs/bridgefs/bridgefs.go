@@ -142,8 +142,8 @@ func (n *BridgeNode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Er
 }
 
 //func (n *BridgeNode) path() string {
-//	path := n.Path(n.Root())
-//	return filepath.Join(n.RootData.Path, path)
+//	path := n.mcfsRoot(n.Root())
+//	return filepath.Join(n.RootData.mcfsRoot, path)
 //}
 
 func (n *BridgeNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
@@ -21,6 +22,7 @@ type LocalMonitoredFileHandle struct {
 	activityCounter     ActivityCounter
 	transferRequestStor stor.TransferRequestStor
 	conversionStor      stor.ConversionStor
+	knownFilesTracker   *KnownFilesTracker
 }
 
 var _ = (fs.FileHandle)((*LocalMonitoredFileHandle)(nil))
@@ -59,11 +61,16 @@ func (h *LocalMonitoredFileHandle) WithConversionStor(s stor.ConversionStor) *Lo
 	return h
 }
 
+func (h *LocalMonitoredFileHandle) WithKnownFilesTracker(tracker *KnownFilesTracker) *LocalMonitoredFileHandle {
+	h.knownFilesTracker = tracker
+	return h
+}
+
 func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int64) (uint32, syscall.Errno) {
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
 
-	knownFile := knownFilesTracker.Get(h.Path)
+	knownFile := h.knownFilesTracker.Get(h.Path)
 	if knownFile == nil {
 		slog.Error("Unknown file in LocalMonitoredFileHandle: %s", h.Path)
 		return 0, syscall.EIO
@@ -109,20 +116,33 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
 		size = attrs.Size
 	}
 
-	knownFile := knownFilesTracker.Get(h.Path)
+	knownFile := h.knownFilesTracker.Get(h.Path)
+	if knownFile == nil {
+		return syscall.ENOENT
+	}
+
+	projPath := projectpath.NewProjectPath(h.Path)
 
 	checksum = fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
 
-	errno := fs.ToErrno(transferRequestStore.MarkFileReleased(h.File, checksum, transferRequest.ProjectID, int64(size)))
+	errno := fs.ToErrno(h.transferRequestStor.MarkFileReleased(h.File, checksum, projPath.ProjectID, int64(size)))
 
 	// Add to convertible list after marking as released to prevent the condition where the
 	// file hasn't been released but is picked up for conversion. This is a very unlikely
 	// case, but easy to prevent by releasing then adding to conversions list.
 	if h.File.IsConvertible() {
-		if _, err := conversionStore.AddFileToConvert(h.File); err != nil {
+		if _, err := h.conversionStor.AddFileToConvert(h.File); err != nil {
 			slog.Error("Failed adding file to conversion: %d", h.File.ID)
 		}
 	}
 
 	return errno
+}
+
+func (h *LocalMonitoredFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, _ *fuse.AttrOut) syscall.Errno {
+	if sz, ok := in.GetSize(); ok {
+		return fs.ToErrno(syscall.Ftruncate(h.Fd, int64(sz)))
+	}
+
+	return fs.OK
 }
