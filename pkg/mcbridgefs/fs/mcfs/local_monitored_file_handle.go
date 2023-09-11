@@ -72,7 +72,7 @@ func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int
 
 	knownFile := h.knownFilesTracker.Get(h.Path)
 	if knownFile == nil {
-		slog.Error("Unknown file in LocalMonitoredFileHandle: %s", h.Path)
+		slog.Error("Unknown file in LocalMonitoredFileHandle", "path", h.Path)
 		return 0, syscall.EIO
 	}
 
@@ -132,7 +132,7 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
 	// case, but easy to prevent by releasing then adding to conversions list.
 	if h.File.IsConvertible() {
 		if _, err := h.conversionStor.AddFileToConvert(h.File); err != nil {
-			slog.Error("Failed adding file to conversion: %d", h.File.ID)
+			slog.Error("Failed adding file to conversion", "file.ID", h.File.ID)
 		}
 	}
 
