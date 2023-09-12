@@ -127,6 +127,11 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) sy
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	dirPath := filepath.Join("/", n.Path(n.Root()))
 	path := filepath.Join(dirPath, name)
+
+	if path == "/" {
+		// Root dir,
+	}
+
 	f, err := n.RootData.mcApi.Lookup(path)
 	if err != nil {
 		return nil, syscall.ENOENT

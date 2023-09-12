@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
@@ -15,36 +16,32 @@ import (
 // FUSE. It understands the Materials Commons calls to make to achieve certain file system
 // operations, and returns the results in a way that the node can pass back.
 type MCApi struct {
-	fileStor            stor.FileStor
-	transferRequestStor stor.TransferRequestStor
-	conversionStor      stor.ConversionStor
-	knownFilesTracker   *KnownFilesTracker
+	stors             *stor.Stors
+	knownFilesTracker *KnownFilesTracker
 }
 
-func NewMCApi(fileStor stor.FileStor, requestStor stor.TransferRequestStor, conversionStor stor.ConversionStor, tracker *KnownFilesTracker) *MCApi {
+func NewMCApi(stors *stor.Stors, tracker *KnownFilesTracker) *MCApi {
 	return &MCApi{
-		fileStor:            fileStor,
-		transferRequestStor: requestStor,
-		conversionStor:      conversionStor,
-		knownFilesTracker:   tracker,
+		stors:             stors,
+		knownFilesTracker: tracker,
 	}
 }
 
 func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 
-	dir, err := fs.fileStor.GetDirByPath(projPath.ProjectID, projPath.ProjectPath)
+	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, projPath.ProjectPath)
 	if err != nil {
 		return nil, err
 	}
 
-	transferRequest, err := fs.transferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	transferRequest, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Make list directory to a pointer for transferRequest?
-	dirEntries, err := fs.transferRequestStor.ListDirectory(dir, transferRequest)
+	dirEntries, err := fs.stors.TransferRequestStor.ListDirectory(dir, transferRequest)
 
 	inDir := &mcmodel.File{Path: projPath.ProjectPath}
 	for _, entry := range dirEntries {
@@ -62,7 +59,7 @@ func (fs *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err
 
 	// Didn't find a previously opened file, so look up file.
 	projPath := projectpath.NewProjectPath(path)
-	file, err := fs.fileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+	file, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 	if err != nil {
 		return "", err
 	}
@@ -71,20 +68,84 @@ func (fs *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err
 }
 
 func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
+	pathType, err := fs.pathType(path)
+	if err != nil {
+		return nil, err
+	}
+	switch pathType {
+	case RootBasePath:
+		// Return data on the root node
+		return nil, fmt.Errorf("root not supported")
+	case ProjectBasePath:
+		// 	Return data on the project
+	case UserBasePath:
+		// Return data on the user
+	default:
+		projPath := projectpath.NewProjectPath(path)
+		f, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+		return f, err
+	}
+
 	projPath := projectpath.NewProjectPath(path)
-	f, err := fs.fileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+	f, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 
 	return f, err
 }
 
+type pathTypeEnum int
+
+const (
+	RootBasePath     pathTypeEnum = 1
+	ProjectBasePath  pathTypeEnum = 2
+	UserBasePath     pathTypeEnum = 3
+	CompleteBasePath pathTypeEnum = 4
+	BadIDPath        pathTypeEnum = 5
+)
+
+func (fs *MCApi) pathType(path string) (pathTypeEnum, error) {
+	if path == "/" {
+		return RootBasePath, nil
+	}
+	pathParts := strings.Split(path, "/")
+	switch len(pathParts) {
+	case 2:
+		// Path looks something like /123, when split we have
+		// pathParts[0] = ""
+		// pathParts[1] = "123".
+		// This is a project based lookup
+		if _, err := strconv.Atoi(pathParts[1]); err != nil {
+			return BadIDPath, err
+		}
+		return ProjectBasePath, nil
+	case 3:
+		// There are two cases for the path, it could look like
+		// /123/ or /123/456. The first instance is a project
+		// based lookup, the second is a user based look up.
+		if pathParts[2] == "" {
+			if _, err := strconv.Atoi(pathParts[1]); err != nil {
+				return BadIDPath, err
+			}
+			return ProjectBasePath, nil
+		}
+		if _, err := strconv.Atoi(pathParts[2]); err != nil {
+			return BadIDPath, err
+		}
+
+		return UserBasePath, nil
+	default:
+		// Other cases can be parsed out by projectpath
+		return CompleteBasePath, nil
+	}
+}
+
 func (fs *MCApi) Mkdir(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	parentDir, err := fs.fileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	parentDir, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	return fs.fileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
+	return fs.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
 func (fs *MCApi) Create(path string) (*mcmodel.File, error) {
@@ -112,7 +173,7 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 	if isReadOnly {
 		// If we are here then this is a request to open a file for read. The file
 		// needs to exist.
-		f, err = fs.fileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+		f, err = fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, false, err
 	}
 
@@ -125,12 +186,12 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 // createNewFile will create a new mcmodel.File entry for the directory associated
 // with the Node. It will create the directory where the file can be written to.
 func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
-	dir, err := fs.fileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	tr, err := fs.transferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +209,7 @@ func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File
 		Current:     false,
 	}
 
-	return fs.transferRequestStor.CreateNewFile(file, dir, tr)
+	return fs.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
 }
 
 // createNewFileVersion creates a new file version if there isn't already a version of the file
@@ -161,12 +222,12 @@ func (fs *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmod
 
 	name := filepath.Base(projPath.ProjectPath)
 
-	dir, err := fs.fileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	tr, err := fs.transferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +244,7 @@ func (fs *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmod
 		Current:     false,
 	}
 
-	f, err = fs.transferRequestStor.CreateNewFile(f, dir, tr)
+	f, err = fs.stors.TransferRequestStor.CreateNewFile(f, dir, tr)
 	if err != nil {
 		return nil, err
 	}

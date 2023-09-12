@@ -1,6 +1,9 @@
 package stor
 
-import "github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+import (
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"gorm.io/gorm"
+)
 
 type ConversionStor interface {
 	AddFileToConvert(file *mcmodel.File) (*mcmodel.Conversion, error)
@@ -50,4 +53,24 @@ type TransferRequestStor interface {
 type UserStor interface {
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
+}
+
+type Stors struct {
+	ConversionStor          ConversionStor
+	FileStor                FileStor
+	ProjectStor             ProjectStor
+	TransferRequestFileStor TransferRequestFileStor
+	TransferRequestStor     TransferRequestStor
+	UserStor                UserStor
+}
+
+func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
+	return &Stors{
+		ConversionStor:          NewGormConversionStor(db),
+		FileStor:                NewGormFileStor(db, mcfsRoot),
+		ProjectStor:             NewGormProjectStor(db),
+		TransferRequestFileStor: NewGormTransferRequestFileStor(db),
+		TransferRequestStor:     NewGormTransferRequestStor(db, mcfsRoot),
+		UserStor:                NewGormUserStor(db),
+	}
 }
