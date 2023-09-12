@@ -49,10 +49,26 @@ func NewProjectPath(path string) *ProjectPath {
 	// pathParts[2] = user-id
 	// pathParts[3:] = path to use for project path
 
-	// The project root starts with a slash, so add a "/" into the list of
-	// path parts we are going to join.
-	pathPieces := append([]string{"/"}, pathParts[3:]...)
-	projectPath := filepath.Join(pathPieces...)
+	if len(pathParts) < 3 {
+		return &ProjectPath{
+			ProjectID:    -1,
+			UserID:       -1,
+			ProjectPath:  "/",
+			TransferBase: "/",
+			FullPath:     filepath.Clean(path),
+		}
+	}
+
+	// Default project path to "/" for the case where other file or directory path is
+	// included past the userid.
+	projectPath := "/"
+
+	if len(pathParts) > 3 {
+		// The project root starts with a slash, so add a "/" into the list of
+		// path parts we are going to join.
+		pathPieces := append([]string{"/"}, pathParts[3:]...)
+		projectPath = filepath.Join(pathPieces...)
+	}
 
 	transferBase := filepath.Join("/", pathParts[1], pathParts[2])
 

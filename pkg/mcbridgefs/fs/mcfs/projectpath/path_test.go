@@ -36,6 +36,41 @@ func TestProjectPath(t *testing.T) {
 			expectedProjectPath:  "/dir2",
 			expectedTransferBase: "/25/301",
 		},
+		{
+			path:                 "/25/301",
+			expectedProjectID:    25,
+			expectedUserID:       301,
+			expectedProjectPath:  "/",
+			expectedTransferBase: "/25/301",
+		},
+		{
+			path:                 "/25/301/",
+			expectedProjectID:    25,
+			expectedUserID:       301,
+			expectedProjectPath:  "/",
+			expectedTransferBase: "/25/301",
+		},
+		{
+			path:                 "/25",
+			expectedProjectID:    -1,
+			expectedUserID:       -1,
+			expectedProjectPath:  "/",
+			expectedTransferBase: "/",
+		},
+		{
+			path:                 "/not-a-number",
+			expectedProjectID:    -1,
+			expectedUserID:       -1,
+			expectedProjectPath:  "/",
+			expectedTransferBase: "/",
+		},
+		{
+			path:                 "/25/not-a-number",
+			expectedProjectID:    25,
+			expectedUserID:       -1,
+			expectedProjectPath:  "/",
+			expectedTransferBase: "/25/not-a-number",
+		},
 	}
 
 	for _, test := range tests {
