@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/apex/log v1.9.0
+	github.com/charmbracelet/ssh v0.0.0-20221117183211-483d43d97103
 	github.com/charmbracelet/wish v1.1.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/go-resty/resty/v2 v2.7.0
@@ -23,6 +24,7 @@ require (
 	golang.org/x/crypto v0.11.0
 	golang.org/x/sys v0.10.0
 	gorm.io/driver/mysql v1.5.1
+	gorm.io/driver/sqlite v1.5.3
 	gorm.io/gorm v1.25.4
 )
 
@@ -33,7 +35,6 @@ require (
 	github.com/charmbracelet/keygen v0.4.2 // indirect
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/charmbracelet/log v0.2.1 // indirect
-	github.com/charmbracelet/ssh v0.0.0-20221117183211-483d43d97103 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
@@ -52,6 +53,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.1 // indirect
@@ -64,7 +66,6 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	golang.org/x/net v0.12.0 // indirect
