@@ -20,6 +20,25 @@ func NewGormTransferRequestStor(db *gorm.DB, mcfsRoot string) *GormTransferReque
 	return &GormTransferRequestStor{db: db, mcfsRoot: mcfsRoot}
 }
 
+// CreateTransferRequest creates a new TransferRequest, filling in the ID and UUID for the transfer request
+// passed in.
+func (s *GormTransferRequestStor) CreateTransferRequest(tr *mcmodel.TransferRequest) (*mcmodel.TransferRequest, error) {
+	var err error
+
+	if tr.UUID, err = uuid.GenerateUUID(); err != nil {
+		return nil, err
+	}
+
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Create(tr).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return tr, nil
+}
+
 // MarkFileReleased should only be called for files that were created or opened with the Write flag set.
 func (s *GormTransferRequestStor) MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error {
 	finfo, err := os.Stat(file.ToUnderlyingFilePath(s.mcfsRoot))

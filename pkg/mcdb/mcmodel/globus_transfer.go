@@ -6,6 +6,7 @@ type GlobusTransfer struct {
 	ID                                int              `json:"id"`
 	UUID                              string           `json:"string"`
 	ProjectID                         int              `json:"project_id"`
+	Project                           *Project         `gorm:"foreignKey:ProjectID;references:ID"`
 	Name                              string           `json:"name"`
 	State                             string           `json:"state"`
 	OwnerID                           int              `json:"owner_id"`
