@@ -26,6 +26,7 @@ type FileStor interface {
 }
 
 type ProjectStor interface {
+	CreateProject(project *mcmodel.Project) (*mcmodel.Project, error)
 	GetProjectByID(projectID int) (*mcmodel.Project, error)
 	GetProjectBySlug(slug string) (*mcmodel.Project, error)
 	GetProjectsForUser(userID int) ([]mcmodel.Project, error)
@@ -56,6 +57,7 @@ type GlobusTransferStor interface {
 }
 
 type UserStor interface {
+	CreateUser(user *mcmodel.User) (*mcmodel.User, error)
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
 }
@@ -66,6 +68,7 @@ type Stors struct {
 	ProjectStor             ProjectStor
 	TransferRequestFileStor TransferRequestFileStor
 	TransferRequestStor     TransferRequestStor
+	GlobusTransferStor      GlobusTransferStor
 	UserStor                UserStor
 }
 
@@ -76,6 +79,7 @@ func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
 		ProjectStor:             NewGormProjectStor(db),
 		TransferRequestFileStor: NewGormTransferRequestFileStor(db),
 		TransferRequestStor:     NewGormTransferRequestStor(db, mcfsRoot),
+		GlobusTransferStor:      NewGormGlobusTransferStor(db),
 		UserStor:                NewGormUserStor(db),
 	}
 }

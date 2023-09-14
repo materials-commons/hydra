@@ -21,6 +21,8 @@ func MakeDSNFromEnv() string {
 		os.Getenv("DB_DATABASE"))
 }
 
+const SqliteInMemoryDSN = "file::memory:?cache=shared"
+
 const maxDBRetries = 5
 
 // MustConnectToDB will attempt to connect to the database maxDBRetries times. If it isn't successful
@@ -56,5 +58,5 @@ func MustConnectToDB() *gorm.DB {
 
 func RunMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(&mcmodel.File{}, &mcmodel.Project{}, &mcmodel.User{}, &mcmodel.Conversion{},
-		&mcmodel.TransferRequest{}, &mcmodel.TransferRequestFile{}, &mcmodel.GlobusTransfer{})
+		&mcmodel.TransferRequest{}, &mcmodel.TransferRequestFile{}, &mcmodel.GlobusTransfer{}, &mcmodel.Team{})
 }

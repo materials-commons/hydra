@@ -17,7 +17,7 @@ type File struct {
 	Name                 string    `json:"name"`
 	OwnerID              int       `json:"owner_id"`
 	Path                 string    `json:"path"`
-	DirectoryID          int       `json:"directory_id"`
+	DirectoryID          int       `json:"directory_id" gorm:"default:null"`
 	Size                 uint64    `json:"size"`
 	Checksum             string    `json:"checksum"`
 	MimeType             string    `json:"mime_type"`

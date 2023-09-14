@@ -1,6 +1,9 @@
 package stor
 
 import (
+	"fmt"
+
+	"github.com/hashicorp/go-uuid"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
 )
@@ -11,6 +14,68 @@ type GormProjectStor struct {
 
 func NewGormProjectStor(db *gorm.DB) *GormProjectStor {
 	return &GormProjectStor{db: db}
+}
+
+func (s *GormProjectStor) CreateProject(project *mcmodel.Project) (*mcmodel.Project, error) {
+	var (
+		err      error
+		rootUUID string
+		teamUUID string
+	)
+
+	if project.UUID, err = uuid.GenerateUUID(); err != nil {
+		return nil, err
+	}
+
+	if rootUUID, err = uuid.GenerateUUID(); err != nil {
+		return nil, err
+	}
+
+	if teamUUID, err = uuid.GenerateUUID(); err != nil {
+		return nil, err
+	}
+
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
+		team := &mcmodel.Team{
+			Name:    fmt.Sprintf("Team for %s", project.Name),
+			OwnerID: project.OwnerID,
+			UUID:    teamUUID,
+		}
+
+		// Create a team for the project and add the owner of the
+		// project as the admin for the team.
+		admin := mcmodel.User{ID: project.OwnerID}
+		team.Members = append(team.Members, admin)
+		if err = tx.Create(team).Error; err != nil {
+			return err
+		}
+
+		project.TeamID = team.ID
+
+		if err = tx.Create(project).Error; err != nil {
+			return err
+		}
+
+		// Create the root directory for the project.
+		rootDir := &mcmodel.File{
+			UUID:                 rootUUID,
+			ProjectID:            project.ID,
+			Name:                 "/",
+			Path:                 "/",
+			MimeType:             "directory",
+			MediaTypeDescription: "directory",
+			Current:              true,
+			OwnerID:              project.OwnerID,
+		}
+
+		return tx.Create(rootDir).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return project, nil
 }
 
 func (s *GormProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error) {

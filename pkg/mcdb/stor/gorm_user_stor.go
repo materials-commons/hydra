@@ -1,6 +1,7 @@
 package stor
 
 import (
+	"github.com/hashicorp/go-uuid"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
 )
@@ -11,6 +12,25 @@ type GormUserStor struct {
 
 func NewGormUserStor(db *gorm.DB) *GormUserStor {
 	return &GormUserStor{db: db}
+}
+
+// CreateUser creates a new user.
+func (s *GormUserStor) CreateUser(user *mcmodel.User) (*mcmodel.User, error) {
+	var err error
+
+	if user.UUID, err = uuid.GenerateUUID(); err != nil {
+		return nil, err
+	}
+
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Create(user).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (s *GormUserStor) GetUsersWithGlobusAccount() ([]mcmodel.User, error) {

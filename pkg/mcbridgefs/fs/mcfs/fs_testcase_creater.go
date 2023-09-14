@@ -3,11 +3,14 @@ package mcfs
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -15,13 +18,22 @@ import (
 
 type fsTestCase struct {
 	*testing.T
+
 	mcfsDir string
 	mntDir  string
 	db      *gorm.DB
+	stors   *stor.Stors
 
+	// fuse/fs
 	mcfs   fs.InodeEmbedder
 	rawFS  fuse.RawFileSystem
 	server *fuse.Server
+
+	// database objects
+	proj            *mcmodel.Project
+	user            *mcmodel.User
+	globusTransfer  *mcmodel.GlobusTransfer
+	transferRequest *mcmodel.TransferRequest
 }
 
 type fsTestOptions struct {
@@ -44,6 +56,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	require.NotEmptyf(t, opts.mcfsDir, "opts.mcfsDir is not set")
 	require.NotEmpty(t, opts.mntDir, "opts.mntDir is not set")
 
+	umount(opts.mntDir)
+
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	err = mcdb.RunMigrations(db)
@@ -55,6 +69,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		mcfsDir: opts.mcfsDir,
 		mntDir:  opts.mntDir,
 	}
+
+	tc.populateDatabase()
 
 	if err := os.MkdirAll(opts.mcfsDir, 0755); err != nil {
 		t.Fatal(err)
@@ -79,28 +95,56 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	return tc
 }
 
-func (tc *fsTestCase) populateDatabase() error {
+func (tc *fsTestCase) populateDatabase() {
 	// create users
-	// create projects and root dirs
+	// foreach user
+	//   create projects
 	// foreach project
 	//   create files and directories
-	
-	return nil
+
+	var err error
+
+	tc.stors = stor.NewGormStors(tc.db, tc.mcfsDir)
+
+	user := &mcmodel.User{Email: "user1@test.com"}
+
+	tc.user, err = tc.stors.UserStor.CreateUser(user)
+	require.NoErrorf(tc.T, err, "Failed creating user1: %s", err)
+
+	proj := &mcmodel.Project{Name: "Proj1", OwnerID: user.ID}
+
+	tc.proj, err = tc.stors.ProjectStor.CreateProject(proj)
+	require.NoErrorf(tc.T, err, "Failed creating proj1: %s", err)
+	transferRequest := &mcmodel.TransferRequest{
+		ProjectID: tc.proj.ID,
+		OwnerID:   tc.proj.OwnerID,
+		State:     "open",
+	}
+
+	tc.transferRequest, err = tc.stors.TransferRequestStor.CreateTransferRequest(transferRequest)
+	require.NoError(tc.T, err)
+
+	globusTransfer := &mcmodel.GlobusTransfer{
+		ProjectID:         0,
+		State:             "open",
+		OwnerID:           tc.proj.OwnerID,
+		TransferRequestID: transferRequest.ID,
+	}
+
+	tc.globusTransfer, err = tc.stors.GlobusTransferStor.CreateGlobusTransfer(globusTransfer)
+	require.NoError(tc.T, err)
 }
 
 func (tc *fsTestCase) unmount() {
-	fmt.Println("unmount called now no sleep")
 	if err := tc.server.Unmount(); err != nil {
 		fmt.Println("tc.server.Unmount failed:", err)
 		tc.Fatal(err)
 	}
+}
 
-	//time.Sleep(time.Second *1)
-	//fmt.Println("Calling umount")
-	//cmd := exec.Command("/usr/bin/umount", tc.mntDir)
-	//fmt.Println("Running command")
-	//if err := cmd.Run(); err != nil {
-	//	fmt.Println("unmount failed:", err)
-	//}
-	//fmt.Println("Run succeeded")
+func umount(path string) {
+	cmd := exec.Command("/usr/bin/umount", path)
+	if err := cmd.Run(); err != nil {
+		//fmt.Println("umount failed:", err)
+	}
 }

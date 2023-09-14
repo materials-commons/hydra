@@ -4,22 +4,18 @@ import (
 	"testing"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMCApi_Create(t *testing.T) {
-	files := []mcmodel.File{
-		{ID: 456, Path: "/data", ProjectID: 123, MimeType: "directory"},
-	}
-	transferRequests := []mcmodel.TransferRequest{
-		{ID: 234, ProjectID: 123, OwnerID: 301},
-	}
+	//files := []mcmodel.File{
+	//	{ID: 456, Path: "/data", ProjectID: 123, MimeType: "directory"},
+	//}
+	//transferRequests := []mcmodel.TransferRequest{
+	//	{ID: 234, ProjectID: 123, OwnerID: 301},
+	//}
 	knownFilesTracker := NewKnownFilesTracker()
-	mcapi := NewMCApi(stor.NewInMemoryFileStor(files),
-		stor.NewInMemoryTransferRequestStor(transferRequests),
-		stor.NewInMemoryConversionStor(),
-		knownFilesTracker)
+	mcapi := NewMCApi(nil, knownFilesTracker)
 
 	var tests = []struct {
 		name          string
