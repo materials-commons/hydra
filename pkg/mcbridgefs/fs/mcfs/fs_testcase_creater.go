@@ -79,6 +79,15 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	return tc
 }
 
+func (tc *fsTestCase) populateDatabase() error {
+	// create users
+	// create projects and root dirs
+	// foreach project
+	//   create files and directories
+	
+	return nil
+}
+
 func (tc *fsTestCase) unmount() {
 	fmt.Println("unmount called now no sleep")
 	if err := tc.server.Unmount(); err != nil {
