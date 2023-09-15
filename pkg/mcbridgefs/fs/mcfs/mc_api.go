@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mime"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
@@ -28,6 +27,74 @@ func NewMCApi(stors *stor.Stors, tracker *KnownFilesTracker) *MCApi {
 }
 
 func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
+	fmt.Printf("MCApi.Readdir: %q\n", path)
+
+	projPath := projectpath.NewProjectPath(path)
+
+	switch projPath.PathType {
+	case projectpath.BadIDPath:
+		return nil, fmt.Errorf("bad id path: %s", path)
+	case projectpath.RootBasePath:
+		// Return the list of projects that have transfer requests
+		fmt.Println("  Readdir RootBasePath")
+		return fs.listActiveProjects()
+	case projectpath.ProjectBasePath:
+		// Return the list of users that have transfer requests for this project
+		fmt.Println("  Readdir ProjectBasePath")
+		return fs.listActiveUsersForProject(path)
+	default:
+		// Return directory contents for that /project/user/rest/of/project/path
+		fmt.Println("  Readdir default")
+		return fs.listProjectDirectory(path)
+	}
+}
+
+func (fs *MCApi) listActiveProjects() ([]mcmodel.File, error) {
+	transferRequests, err := fs.stors.TransferRequestStor.ListTransferRequests()
+	if err != nil {
+		fmt.Println(" listActiveProject err:", err)
+		return nil, err
+	}
+
+	inDir := &mcmodel.File{Path: "/", MimeType: "directory"}
+	var dirEntries []mcmodel.File
+	for _, tr := range transferRequests {
+		entry := mcmodel.File{
+			Directory: inDir,
+			Name:      fmt.Sprintf("%d", tr.ProjectID),
+			Path:      fmt.Sprintf("/%d", tr.ProjectID),
+			MimeType:  "directory",
+		}
+		dirEntries = append(dirEntries, entry)
+	}
+	return dirEntries, nil
+}
+
+func (fs *MCApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) {
+	projPath := projectpath.NewProjectPath(path)
+	transferRequests, err := fs.stors.TransferRequestStor.ListTransferRequests()
+	if err != nil {
+		return nil, err
+	}
+
+	inDir := &mcmodel.File{Path: fmt.Sprintf("/%d", projPath.ProjectID), MimeType: "directory"}
+	var dirEntries []mcmodel.File
+
+	for _, tr := range transferRequests {
+		if tr.ProjectID == projPath.ProjectID {
+			entry := mcmodel.File{
+				Directory: inDir,
+				Name:      fmt.Sprintf("%d", tr.OwnerID),
+				Path:      fmt.Sprintf("/%d/%d", tr.ProjectID, tr.OwnerID),
+				MimeType:  "directory",
+			}
+			dirEntries = append(dirEntries, entry)
+		}
+	}
+	return dirEntries, nil
+}
+
+func (fs *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 
 	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, projPath.ProjectPath)
@@ -43,7 +110,7 @@ func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 	// Make list directory to a pointer for transferRequest?
 	dirEntries, err := fs.stors.TransferRequestStor.ListDirectory(dir, transferRequest)
 
-	inDir := &mcmodel.File{Path: projPath.ProjectPath}
+	inDir := &mcmodel.File{Path: projPath.ProjectPath, MimeType: "directory"}
 	for _, entry := range dirEntries {
 		entry.Directory = inDir
 	}
@@ -68,74 +135,54 @@ func (fs *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err
 }
 
 func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
-	pathType, err := fs.pathType(path)
-	if err != nil {
-		return nil, err
-	}
-	switch pathType {
-	case RootBasePath:
+	fmt.Printf("MCApi.Lookup: %q\n", path)
+	projPath := projectpath.NewProjectPath(path)
+
+	switch projPath.PathType {
+	case projectpath.BadIDPath:
+		return nil, fmt.Errorf("bad id path: %s", path)
+
+	case projectpath.RootBasePath:
 		// Return data on the root node
+		fmt.Println("  Lookup RootBasePath")
 		return nil, fmt.Errorf("root not supported")
-	case ProjectBasePath:
+
+	case projectpath.ProjectBasePath:
 		// 	Return data on the project
-	case UserBasePath:
+		fmt.Println("  Lookup ProjectBasePath")
+		return fs.lookupProject(path)
+
+	case projectpath.UserBasePath:
 		// Return data on the user
+		fmt.Println("  Lookup UserBasePath")
+		return fs.lookupUser(path)
+
 	default:
+		fmt.Println("  Lookup default")
 		projPath := projectpath.NewProjectPath(path)
 		f, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, err
 	}
-
-	projPath := projectpath.NewProjectPath(path)
-	f, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
-
-	return f, err
 }
 
-type pathTypeEnum int
-
-const (
-	RootBasePath     pathTypeEnum = 1
-	ProjectBasePath  pathTypeEnum = 2
-	UserBasePath     pathTypeEnum = 3
-	CompleteBasePath pathTypeEnum = 4
-	BadIDPath        pathTypeEnum = 5
-)
-
-func (fs *MCApi) pathType(path string) (pathTypeEnum, error) {
-	if path == "/" {
-		return RootBasePath, nil
+func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
+	projPath := projectpath.NewProjectPath(path)
+	proj, err := fs.stors.ProjectStor.GetProjectByID(projPath.ProjectID)
+	if err != nil {
+		return nil, err
 	}
-	pathParts := strings.Split(path, "/")
-	switch len(pathParts) {
-	case 2:
-		// Path looks something like /123, when split we have
-		// pathParts[0] = ""
-		// pathParts[1] = "123".
-		// This is a project based lookup
-		if _, err := strconv.Atoi(pathParts[1]); err != nil {
-			return BadIDPath, err
-		}
-		return ProjectBasePath, nil
-	case 3:
-		// There are two cases for the path, it could look like
-		// /123/ or /123/456. The first instance is a project
-		// based lookup, the second is a user based look up.
-		if pathParts[2] == "" {
-			if _, err := strconv.Atoi(pathParts[1]); err != nil {
-				return BadIDPath, err
-			}
-			return ProjectBasePath, nil
-		}
-		if _, err := strconv.Atoi(pathParts[2]); err != nil {
-			return BadIDPath, err
-		}
 
-		return UserBasePath, nil
-	default:
-		// Other cases can be parsed out by projectpath
-		return CompleteBasePath, nil
+	f := &mcmodel.File{
+		Name:      fmt.Sprintf("%d", proj.ID),
+		MimeType:  "directory",
+		Path:      fmt.Sprintf("/%d", proj.ID),
+		Directory: &mcmodel.File{Path: "/", Name: "/", MimeType: "directory"},
 	}
+	return f, nil
+}
+
+func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
+	return nil, nil
 }
 
 func (fs *MCApi) Mkdir(path string) (*mcmodel.File, error) {
