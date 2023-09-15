@@ -39,6 +39,19 @@ func (s *GormTransferRequestStor) CreateTransferRequest(tr *mcmodel.TransferRequ
 	return tr, nil
 }
 
+// ListTransferRequests returns the list of all active transfer requests. An active transfer
+// request has its state set to "open".
+func (s *GormTransferRequestStor) ListTransferRequests() ([]mcmodel.TransferRequest, error) {
+	var transferRequests []mcmodel.TransferRequest
+
+	err := s.db.Where("state = ?", "open").Find(&transferRequests).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return transferRequests, nil
+}
+
 // MarkFileReleased should only be called for files that were created or opened with the Write flag set.
 func (s *GormTransferRequestStor) MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error {
 	finfo, err := os.Stat(file.ToUnderlyingFilePath(s.mcfsRoot))

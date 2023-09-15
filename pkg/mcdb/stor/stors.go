@@ -43,6 +43,7 @@ type TransferRequestFileStor interface {
 
 type TransferRequestStor interface {
 	CreateTransferRequest(tr *mcmodel.TransferRequest) (*mcmodel.TransferRequest, error)
+	ListTransferRequests() ([]mcmodel.TransferRequest, error)
 	MarkFileReleased(file *mcmodel.File, checksum string, projectID int, totalBytes int64) error
 	MarkFileAsOpen(file *mcmodel.File) error
 	CreateNewFile(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
