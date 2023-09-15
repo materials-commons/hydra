@@ -80,7 +80,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 
-	tc.mcfs, err = CreateFS(opts.mcfsDir, nil, nil)
+	mcApi := NewMCApi(stor.NewGormStors(tc.db, tc.mcfsDir), NewKnownFilesTracker())
+	tc.mcfs, err = CreateFS(opts.mcfsDir, mcApi, nil)
 	tc.rawFS = fs.NewNodeFS(tc.mcfs, &fs.Options{})
 	tc.server, err = fuse.NewServer(tc.rawFS, opts.mntDir, &fuse.MountOptions{})
 	if err != nil {

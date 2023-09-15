@@ -14,5 +14,9 @@ func TestListingProjects(t *testing.T) {
 
 	entries, err := os.ReadDir("/tmp/mnt/mcfs")
 	require.NoError(t, err)
+	require.Len(t, entries, 1)
 	fmt.Println("entries len = ", len(entries))
+	entry := entries[0]
+	require.True(t, entry.IsDir())
+	require.Equal(t, "1", entry.Name())
 }
