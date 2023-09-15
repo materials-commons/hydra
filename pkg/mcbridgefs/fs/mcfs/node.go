@@ -62,6 +62,7 @@ func (n *Node) newNode() *Node {
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
+			fmt.Println("Readdir in recover")
 			ds = nil
 			errno = syscall.ENOENT
 		}
@@ -100,7 +101,12 @@ func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.
 }
 
 // Getattr gets attributes about the file
-func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			errno = syscall.ENOENT
+		}
+	}()
 	//fmt.Println("Getattr:", n.mcfsRoot(n.Root()), n.IsDir())
 
 	// Owner is always the process the bridge is running as
@@ -131,12 +137,23 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) sy
 }
 
 // Lookup will return information about the current entry.
-func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Lookup in recover")
+			inode = nil
+			errno = syscall.ENOENT
+		}
+	}()
+
 	dirPath := filepath.Join("/", n.Path(n.Root()))
 	path := filepath.Join(dirPath, name)
 
 	if path == "/" {
-		// Root dir,
+		// Root dir, send back a default entry
+		node := n.newNode()
+		mode := 0755 | uint32(syscall.S_IFDIR)
+		return n.NewInode(ctx, node, fs.StableAttr{Mode: mode}), fs.OK
 	}
 
 	f, err := n.RootData.mcApi.Lookup(path)
@@ -154,12 +171,19 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs
 	out.SetTimes(&now, &f.UpdatedAt, &now)
 
 	node := n.newNode()
-	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(f), Ino: n.inodeHash(dirPath, f)}), fs.OK
+	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(f)}), fs.OK
 }
 
 // Mkdir will create a new directory. If an attempt is made to create an existing directory then it will return
 // the existing directory rather than returning an error.
-func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			inode = nil
+			errno = syscall.EINVAL
+		}
+	}()
+
 	path := filepath.Join("/", n.Path(n.Root()), name)
 	dir, err := n.RootData.mcApi.Mkdir(path)
 	if err != nil {
@@ -173,7 +197,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 	out.SetTimes(&now, &now, &now)
 
 	node := n.newNode()
-	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(dir), Ino: n.inodeHash(path, dir)}), fs.OK
+	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(dir)}), fs.OK
 }
 
 func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
@@ -184,6 +208,14 @@ func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
 // Create will create a new file. At this point the file shouldn't exist. However, because multiple users could be
 // uploading files, there is a chance it does exist. If that happens then a new version of the file is created instead.
 func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (inode *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			inode = nil
+			fh = nil
+			fuseFlags = 0
+			errno = syscall.EIO
+		}
+	}()
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
 	f, err := n.RootData.mcApi.Create(fpath)
 	if err != nil {
@@ -208,12 +240,19 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	node := n.newNode()
 	out.FromStat(&statInfo)
 	fhandle := n.RootData.newFileHandle(fd, fpath, f)
-	stableAttr := fs.StableAttr{Mode: n.getMode(f), Ino: n.inodeHash(fpath, f)}
+	stableAttr := fs.StableAttr{Mode: n.getMode(f)}
 	return n.NewInode(ctx, node, stableAttr), fhandle, 0, fs.OK
 }
 
 // Open will open an existing file.
 func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			fh = nil
+			fuseFlags = 0
+			errno = syscall.EIO
+		}
+	}()
 	path := filepath.Join("/", n.Path(n.Root()))
 	omode := flags & syscall.O_ACCMODE
 	f, isNewFile, err := n.RootData.mcApi.Open(path, omode == syscall.O_RDONLY)
