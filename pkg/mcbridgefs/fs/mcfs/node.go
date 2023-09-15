@@ -59,7 +59,14 @@ func (n *Node) newNode() *Node {
 }
 
 // Readdir reads the corresponding directory and returns its entries
-func (n *Node) Readdir(_ context.Context) (fs.DirStream, syscall.Errno) {
+func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			ds = nil
+			errno = syscall.ENOENT
+		}
+	}()
+
 	dirPath := filepath.Join("/", n.Path(n.Root()))
 	files, err := n.RootData.mcApi.Readdir(dirPath)
 	if err != nil {
