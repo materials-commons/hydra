@@ -66,9 +66,15 @@ func (h *LocalMonitoredFileHandle) WithKnownFilesTracker(tracker *KnownFilesTrac
 	return h
 }
 
-func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int64) (uint32, syscall.Errno) {
+func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
 	h.Mu.Lock()
-	defer h.Mu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			bytesWritten = 0
+			errno = syscall.EIO
+		}
+		h.Mu.Unlock()
+	}()
 
 	knownFile := h.knownFilesTracker.Get(h.Path)
 	if knownFile == nil {
@@ -89,7 +95,13 @@ func (h *LocalMonitoredFileHandle) Write(_ context.Context, data []byte, off int
 
 func (h *LocalMonitoredFileHandle) Read(_ context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	h.Mu.Lock()
-	defer h.Mu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			res = nil
+			errno = syscall.EIO
+		}
+		h.Mu.Unlock()
+	}()
 
 	h.activityCounter.IncrementActivityCount()
 
@@ -101,7 +113,13 @@ func (h *LocalMonitoredFileHandle) Flush(_ context.Context) syscall.Errno {
 	return fs.OK
 }
 
-func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
+func (h *LocalMonitoredFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			errno = syscall.ENOENT
+		}
+	}()
+
 	if err := h.BaseLocalFileHandle.Release(ctx); err != fs.OK {
 		return err
 	}
@@ -125,7 +143,7 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) syscall.Errno {
 
 	checksum = fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
 
-	errno := fs.ToErrno(h.transferRequestStor.MarkFileReleased(h.File, checksum, projPath.ProjectID, int64(size)))
+	errno = fs.ToErrno(h.transferRequestStor.MarkFileReleased(h.File, checksum, projPath.ProjectID, int64(size)))
 
 	// Add to convertible list after marking as released to prevent the condition where the
 	// file hasn't been released but is picked up for conversion. This is a very unlikely
