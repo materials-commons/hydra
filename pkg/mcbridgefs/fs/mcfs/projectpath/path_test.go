@@ -14,6 +14,7 @@ func TestProjectPath(t *testing.T) {
 		expectedUserID       int
 		expectedProjectPath  string
 		expectedTransferBase string
+		expectPathType       pathTypeEnum
 	}{
 		{
 			path:                 "/25/301/dir1",
@@ -21,6 +22,7 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       301,
 			expectedProjectPath:  "/dir1",
 			expectedTransferBase: "/25/301",
+			expectPathType:       CompleteBasePath,
 		},
 		{
 			path:                 "/25/301/dir1/dir2/dir3",
@@ -28,6 +30,7 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       301,
 			expectedProjectPath:  "/dir1/dir2/dir3",
 			expectedTransferBase: "/25/301",
+			expectPathType:       CompleteBasePath,
 		},
 		{
 			path:                 "/25/301/dir1/../dir2",
@@ -35,6 +38,7 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       301,
 			expectedProjectPath:  "/dir2",
 			expectedTransferBase: "/25/301",
+			expectPathType:       CompleteBasePath,
 		},
 		{
 			path:                 "/25/301",
@@ -42,6 +46,7 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       301,
 			expectedProjectPath:  "/",
 			expectedTransferBase: "/25/301",
+			expectPathType:       UserBasePath,
 		},
 		{
 			path:                 "/25/301/",
@@ -49,13 +54,15 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       301,
 			expectedProjectPath:  "/",
 			expectedTransferBase: "/25/301",
+			expectPathType:       UserBasePath,
 		},
 		{
 			path:                 "/25",
-			expectedProjectID:    -1,
+			expectedProjectID:    25,
 			expectedUserID:       -1,
 			expectedProjectPath:  "/",
 			expectedTransferBase: "/",
+			expectPathType:       ProjectBasePath,
 		},
 		{
 			path:                 "/not-a-number",
@@ -63,13 +70,15 @@ func TestProjectPath(t *testing.T) {
 			expectedUserID:       -1,
 			expectedProjectPath:  "/",
 			expectedTransferBase: "/",
+			expectPathType:       BadIDPath,
 		},
 		{
 			path:                 "/25/not-a-number",
 			expectedProjectID:    25,
 			expectedUserID:       -1,
 			expectedProjectPath:  "/",
-			expectedTransferBase: "/25/not-a-number",
+			expectedTransferBase: "/",
+			expectPathType:       BadIDPath,
 		},
 	}
 
@@ -80,6 +89,7 @@ func TestProjectPath(t *testing.T) {
 			require.Equal(t, test.expectedUserID, p.UserID)
 			require.Equal(t, test.expectedProjectPath, p.ProjectPath)
 			require.Equal(t, test.expectedTransferBase, p.TransferBase)
+			require.Equal(t, test.expectPathType, p.PathType)
 			require.Equal(t, filepath.Clean(test.path), p.FullPath)
 		})
 	}
