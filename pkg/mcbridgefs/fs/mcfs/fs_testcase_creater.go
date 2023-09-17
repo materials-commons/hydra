@@ -53,9 +53,15 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	}
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 
-	require.NotEmptyf(t, opts.mcfsDir, "opts.mcfsDir is not set")
-	require.NotEmpty(t, opts.mntDir, "opts.mntDir is not set")
+	if opts.mcfsDir == "" {
+		opts.mcfsDir = "/tmp/mcfs"
+	}
 
+	if opts.mntDir == "" {
+		opts.mntDir = "/tmp/mnt/mcfs"
+	}
+
+	fmt.Printf("opts = %+v\n", opts)
 	umount(opts.mntDir)
 
 	require.NoError(t, err)
