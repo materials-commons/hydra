@@ -91,6 +91,11 @@ func (fs *MCApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) 
 			dirEntries = append(dirEntries, entry)
 		}
 	}
+
+	if len(dirEntries) == 0 {
+		return nil, fmt.Errorf("no such project: %d", projPath.ProjectID)
+	}
+
 	return dirEntries, nil
 }
 
