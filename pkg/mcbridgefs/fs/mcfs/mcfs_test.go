@@ -138,3 +138,31 @@ func TestMkdir(t *testing.T) {
 		})
 	}
 }
+
+func TestCreate(t *testing.T) {
+	var tests = []struct {
+		name        string
+		path        string
+		errExpected bool
+	}{
+		{name: "Can create file in existing transfer", path: "/tmp/mnt/mcfs/1/1/create.txt", errExpected: false},
+		//{name: "Should creating a file when transfer path is invalid", path: "/tmp/mnt/mcfs/1/2/fail.txt", errExpected: true},
+	}
+
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fh, err := os.Create(test.path)
+			defer fh.Close()
+
+			if test.errExpected {
+				require.Errorf(t, err, "Expected error for path %s", test.path)
+			} else {
+				require.NoErrorf(t, err, "Expected no error, got %s for path %s", err, test.path)
+			}
+		})
+	}
+
+}
