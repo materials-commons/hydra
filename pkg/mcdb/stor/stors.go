@@ -50,7 +50,8 @@ type TransferRequestStor interface {
 	CreateNewFileVersion(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
 	ListDirectory(dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) ([]mcmodel.File, error)
 	GetFileByPath(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
-	GetTransferRequestByProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error)
+	GetTransferRequestForProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error)
+	GetTransferRequestsForProject(projectID int) ([]mcmodel.TransferRequest, error)
 }
 
 type GlobusTransferStor interface {

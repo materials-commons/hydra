@@ -283,16 +283,26 @@ func (s *GormTransferRequestStor) GetFileByPath(path string, transferRequest *mc
 	return &file, err
 }
 
-func (s *GormTransferRequestStor) GetTransferRequestByProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error) {
+func (s *GormTransferRequestStor) GetTransferRequestForProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error) {
 	var transferRequest mcmodel.TransferRequest
 	err := s.db.Where("project_id = ?", projectID).
-		Where("user_id = ?", userID).
+		Where("owner_id = ?", userID).
 		First(&transferRequest).Error
 	if err != nil {
 		return nil, err
 	}
 
 	return &transferRequest, nil
+}
+func (s *GormTransferRequestStor) GetTransferRequestsForProject(projectID int) ([]mcmodel.TransferRequest, error) {
+	var transferRequests []mcmodel.TransferRequest
+
+	err := s.db.Where("project_id = ?", projectID).Find(&transferRequests).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return transferRequests, nil
 }
 
 func incrementProjectFileTypeCountAndFilesCount(db *gorm.DB, projectID int, fileTypeDescription string) error {

@@ -129,7 +129,7 @@ func findDirByPath(db *gorm.DB, projectID int, path string) (*mcmodel.File, erro
 func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
 	var dir mcmodel.File
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
-		err := tx.Where("path = ", path).
+		err := tx.Where("path = ?", path).
 			Where("deleted_at IS NULL").
 			Where("dataset_id IS NULL").
 			Where("project_id = ?", projectID).

@@ -107,7 +107,7 @@ func (fs *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
 		return nil, err
 	}
 
-	transferRequest, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	transferRequest, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,31 +172,62 @@ func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
 
 func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	proj, err := fs.stors.ProjectStor.GetProjectByID(projPath.ProjectID)
+
+	transferRequests, err := fs.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID)
+	switch {
+	case err != nil:
+		return nil, err
+
+	case len(transferRequests) == 0:
+		return nil, fmt.Errorf("no such path: %s", path)
+
+	default:
+		// Found at least one transfer request for the project
+		f := &mcmodel.File{
+			Name:      fmt.Sprintf("%d", projPath.ProjectID),
+			MimeType:  "directory",
+			Path:      fmt.Sprintf("/%d", projPath.ProjectID),
+			Directory: &mcmodel.File{Path: "/", Name: "/", MimeType: "directory"},
+		}
+		return f, nil
+	}
+}
+
+func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
+	projPath := projectpath.NewProjectPath(path)
+
+	// If we are here then the project has been verified, so we need to make sure that the
+	// user exists
+	_, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
 
 	f := &mcmodel.File{
-		Name:      fmt.Sprintf("%d", proj.ID),
-		MimeType:  "directory",
-		Path:      fmt.Sprintf("/%d", proj.ID),
-		Directory: &mcmodel.File{Path: "/", Name: "/", MimeType: "directory"},
+		Name:     fmt.Sprintf("%d", projPath.UserID),
+		MimeType: "directory",
+		Path:     fmt.Sprintf("/%d/%d", projPath.ProjectID, projPath.UserID),
+		Directory: &mcmodel.File{
+			Path:     fmt.Sprintf("/%d", projPath.ProjectID),
+			Name:     fmt.Sprintf("%d", projPath.ProjectID),
+			MimeType: "directory",
+		},
 	}
+
 	return f, nil
 }
 
-func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
-	return nil, nil
-}
-
 func (fs *MCApi) Mkdir(path string) (*mcmodel.File, error) {
+	fmt.Println("MCApi.Mkdir path =", path)
 	projPath := projectpath.NewProjectPath(path)
 	parentDir, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
+		fmt.Println("GetFileByPath failed looking for", filepath.Dir(projPath.ProjectPath))
 		return nil, err
 	}
 
+	fmt.Printf("  Calling CreateDirectory(%d, %d, %d, %s, %s)\n",
+		parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 	return fs.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
@@ -243,7 +274,7 @@ func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File
 		return nil, err
 	}
 
-	tr, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +310,7 @@ func (fs *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmod
 		return nil, err
 	}
 
-	tr, err := fs.stors.TransferRequestStor.GetTransferRequestByProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}

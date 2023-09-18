@@ -184,6 +184,8 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 		}
 	}()
 
+	fmt.Printf("node.Mkdir %s\n", name)
+
 	path := filepath.Join("/", n.Path(n.Root()), name)
 	dir, err := n.RootData.mcApi.Mkdir(path)
 	if err != nil {

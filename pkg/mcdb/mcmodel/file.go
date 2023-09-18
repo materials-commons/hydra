@@ -9,23 +9,23 @@ import (
 )
 
 type File struct {
-	ID                   int    `json:"id"`
-	UUID                 string `json:"uuid"`
-	UsesUUID             string `json:"uses_uuid"`
-	UsesID               int    `json:"uses_id"`
-	ProjectID            int    `json:"project_id"`
-	Name                 string `json:"name"`
-	OwnerID              int    `json:"owner_id"`
-	Path                 string `json:"path"`
-	DirectoryID          int    `json:"directory_id" gorm:"default:null"`
-	DatasetID            int    `json:"dataset_id"`
-	Size                 uint64 `json:"size"`
-	Checksum             string `json:"checksum"`
-	MimeType             string `json:"mime_type"`
-	MediaTypeDescription string `json:"media_type_description"`
-	Current              bool   `json:"current"`
-	Directory            *File  `json:"directory" gorm:"foreignKey:DirectoryID;references:ID"`
-	DeletedAt            time.Time
+	ID                   int       `json:"id"`
+	UUID                 string    `json:"uuid"`
+	UsesUUID             string    `json:"uses_uuid"`
+	UsesID               int       `json:"uses_id"`
+	ProjectID            int       `json:"project_id"`
+	Name                 string    `json:"name"`
+	OwnerID              int       `json:"owner_id"`
+	Path                 string    `json:"path"`
+	DirectoryID          int       `json:"directory_id" gorm:"default:null"`
+	DatasetID            int       `json:"dataset_id" gorm:"default:null"`
+	Size                 uint64    `json:"size"`
+	Checksum             string    `json:"checksum"`
+	MimeType             string    `json:"mime_type"`
+	MediaTypeDescription string    `json:"media_type_description"`
+	Current              bool      `json:"current"`
+	Directory            *File     `json:"directory" gorm:"foreignKey:DirectoryID;references:ID"`
+	DeletedAt            time.Time `gorm:"default:null"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
