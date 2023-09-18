@@ -23,6 +23,10 @@ func (s *GormProjectStor) CreateProject(project *mcmodel.Project) (*mcmodel.Proj
 		teamUUID string
 	)
 
+	if project.FileTypes == "" {
+		project.FileTypes = "{}"
+	}
+
 	if project.UUID, err = uuid.GenerateUUID(); err != nil {
 		return nil, err
 	}
