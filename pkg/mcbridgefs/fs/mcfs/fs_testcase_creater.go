@@ -64,6 +64,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	fmt.Printf("opts = %+v\n", opts)
 	umount(opts.mntDir)
 
+	_ = os.RemoveAll(opts.mcfsDir)
+
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	err = mcdb.RunMigrations(db)
@@ -86,8 +88,16 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 
-	mcApi := NewMCApi(stor.NewGormStors(tc.db, tc.mcfsDir), NewKnownFilesTracker())
-	tc.mcfs, err = CreateFS(opts.mcfsDir, mcApi, nil)
+	knownFilesTracker := NewKnownFilesTracker()
+	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
+	newHandleFactory := NewLocalFileHandlerFactory(stors.ConversionStor, stors.TransferRequestStor)
+	mcApi := NewMCApi(stors, knownFilesTracker)
+
+	newFileHandleFunc := func(fd int, path string, file *mcmodel.File) fs.FileHandle {
+		return newHandleFactory.NewFileHandle(fd, path, file)
+	}
+
+	tc.mcfs, err = CreateFS(opts.mcfsDir, mcApi, newFileHandleFunc)
 	tc.rawFS = fs.NewNodeFS(tc.mcfs, &fs.Options{})
 	tc.server, err = fuse.NewServer(tc.rawFS, opts.mntDir, &fuse.MountOptions{})
 	if err != nil {
