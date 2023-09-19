@@ -62,7 +62,6 @@ func (n *Node) newNode() *Node {
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Readdir in recover")
 			ds = nil
 			errno = syscall.ENOENT
 		}
@@ -107,7 +106,6 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (e
 			errno = syscall.ENOENT
 		}
 	}()
-	//fmt.Println("Getattr:", n.mcfsRoot(n.Root()), n.IsDir())
 
 	// Owner is always the process the bridge is running as
 	out.Uid = n.RootData.uid
@@ -140,7 +138,6 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (e
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Lookup in recover")
 			inode = nil
 			errno = syscall.ENOENT
 		}
@@ -218,6 +215,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 			errno = syscall.EIO
 		}
 	}()
+
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
 	f, err := n.RootData.mcApi.Create(fpath)
 	if err != nil {

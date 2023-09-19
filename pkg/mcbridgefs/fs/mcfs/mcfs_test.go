@@ -1,9 +1,15 @@
 package mcfs
 
 import (
+	"crypto/md5"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -143,10 +149,24 @@ func TestCreate(t *testing.T) {
 	var tests = []struct {
 		name        string
 		path        string
+		projectID   int
+		projectPath string
 		errExpected bool
 	}{
-		{name: "Can create file in existing transfer", path: "/tmp/mnt/mcfs/1/1/create.txt", errExpected: false},
-		//{name: "Should creating a file when transfer path is invalid", path: "/tmp/mnt/mcfs/1/2/fail.txt", errExpected: true},
+		{
+			name:        "Can create file in existing transfer",
+			path:        "/tmp/mnt/mcfs/1/1/create.txt",
+			projectPath: "/create.txt",
+			projectID:   1,
+			errExpected: false,
+		},
+		{
+			name:        "Should creating a file when transfer path is invalid",
+			path:        "/tmp/mnt/mcfs/1/2/fail.txt",
+			projectPath: "/fail.txt",
+			projectID:   1,
+			errExpected: true,
+		},
 	}
 
 	tc := newTestCase(t, &fsTestOptions{})
@@ -155,14 +175,122 @@ func TestCreate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fh, err := os.Create(test.path)
-			defer fh.Close()
 
 			if test.errExpected {
 				require.Errorf(t, err, "Expected error for path %s", test.path)
 			} else {
 				require.NoErrorf(t, err, "Expected no error, got %s for path %s", err, test.path)
+
+				numBytes, err := io.WriteString(fh, test.path)
+				fh.Close()
+				// Give the file system time to call and finish Release on the file
+				time.Sleep(time.Second * 1)
+
+				require.Equalf(t, numBytes, len(test.path), "Wrong length expected %d, got %d", numBytes, len(test.path))
+				// Assume all paths are written to the root
+				f, err := tc.stors.FileStor.GetFileByPath(test.projectID, test.projectPath)
+				require.NoErrorf(t, err, "Failed getting file")
+				require.True(t, f.Current)
+				hasher := md5.New()
+				_, _ = io.Copy(hasher, strings.NewReader(test.path))
+				checksum := fmt.Sprintf("%x", hasher.Sum(nil))
+				require.Equal(t, checksum, f.Checksum)
+				require.Equal(t, len(test.path), int(f.Size))
+				require.NotEmpty(t, f.MimeType)
 			}
 		})
 	}
+}
 
+func TestOpen(t *testing.T) {
+	var tests = []struct {
+		name        string
+		path        string
+		openFlags   int
+		projectID   int
+		projectPath string
+		errExpected bool
+	}{
+		{
+			name:        "test open read/write",
+			path:        "/tmp/mnt/mcfs/1/1/readwrite.txt",
+			openFlags:   os.O_RDWR | os.O_CREATE,
+			projectID:   1,
+			projectPath: "/readwrite.txt",
+			errExpected: false,
+		},
+		{
+			name:        "test open read - open for read readwrite.txt",
+			path:        "/tmp/mnt/mcfs/1/1/readwrite.txt",
+			openFlags:   os.O_RDONLY,
+			projectID:   1,
+			projectPath: "/readwrite.txt",
+			errExpected: false,
+		},
+		//{
+		//	name:        "test open write",
+		//	path:        "/tmp/mnt/mcfs/1/1/write.txt",
+		//	openFlags:   os.O_WRONLY | os.O_CREATE,
+		//	projectID:   1,
+		//	projectPath: "/readwrite.txt",
+		//	errExpected: false,
+		//},
+		//{
+		//	name:        "test re-open write - re-open for write write.txt",
+		//	path:        "/tmp/mnt/mcfs/1/1/write.txt",
+		//	openFlags:   os.O_WRONLY,
+		//	projectID:   1,
+		//	projectPath: "/readwrite.txt",
+		//	errExpected: false,
+		//},
+	}
+
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.errExpected {
+
+			} else {
+				fh, err := os.OpenFile(test.path, test.openFlags, 0755)
+				require.NoErrorf(t, err, "Unexpected error on open %s, for path %s", err, test.path)
+				omode := test.openFlags & syscall.O_ACCMODE
+
+				if omode == os.O_RDONLY {
+					contents := make([]byte, 1024)
+					n, err := fh.Read(contents)
+					fh.Close()
+					require.NoErrorf(t, err, "Got error on read %s", err)
+					fmt.Printf("!!!On Read read %d\n", n)
+					fmt.Printf("file contents = %q\n", string(contents[:n]))
+				} else {
+					n, err := io.WriteString(fh, test.path)
+					require.NoErrorf(t, err, "Got error writing to file %s", err)
+					fmt.Printf("!!!Wrote %d\n", n)
+					fh.Close()
+					// Give the file system time to call and finish Release on the file
+					time.Sleep(time.Second * 2)
+					fmt.Println("done sleeping")
+				}
+				//	numBytes, err := io.WriteString(fh, test.path)
+				//	fh.Close()
+				//	// Give the file system time to call and finish Release on the file
+				//	time.Sleep(time.Second * 1)
+				//
+				//	require.Equalf(t, numBytes, len(test.path), "Wrong length expected %d, got %d", numBytes, len(test.path))
+				//	// Assume all paths are written to the root
+				//	f, err := tc.stors.FileStor.GetFileByPath(test.projectID, test.projectPath)
+				//	require.NoErrorf(t, err, "Failed getting file")
+				//	require.True(t, f.Current)
+				//	hasher := md5.New()
+				//	_, _ = io.Copy(hasher, strings.NewReader(test.path))
+				//	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
+				//	require.Equal(t, checksum, f.Checksum)
+				//	require.Equal(t, len(test.path), int(f.Size))
+				//	require.NotEmpty(t, f.MimeType)
+				//}
+			}
+		})
+	}
 }

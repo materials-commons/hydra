@@ -30,10 +30,11 @@ type fsTestCase struct {
 	server *fuse.Server
 
 	// database objects
-	proj            *mcmodel.Project
-	user            *mcmodel.User
-	globusTransfer  *mcmodel.GlobusTransfer
-	transferRequest *mcmodel.TransferRequest
+	proj              *mcmodel.Project
+	user              *mcmodel.User
+	globusTransfer    *mcmodel.GlobusTransfer
+	transferRequest   *mcmodel.TransferRequest
+	knownFilesTracker *KnownFilesTracker
 }
 
 type fsTestOptions struct {
@@ -50,8 +51,16 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	dsn := "file::memory:?cache=shared"
 	if opts.dsn != "" {
 		dsn = opts.dsn
+		_ = os.Remove(opts.dsn)
+		fh, err := os.Create(opts.dsn)
+		require.NoErrorf(t, err, "Failed opening %s, got %s", opts.dsn, err)
+		fh.Close()
 	}
+
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
+	sqlitedb, err := db.DB()
+	sqlitedb.SetMaxOpenConns(1)
 
 	if opts.mcfsDir == "" {
 		opts.mcfsDir = "/tmp/mcfs"
@@ -88,10 +97,10 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 
-	knownFilesTracker := NewKnownFilesTracker()
+	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	newHandleFactory := NewLocalFileHandlerFactory(stors.ConversionStor, stors.TransferRequestStor)
-	mcApi := NewMCApi(stors, knownFilesTracker)
+	newHandleFactory := NewLocalFileHandlerFactory(stors.ConversionStor, stors.TransferRequestStor, tc.knownFilesTracker)
+	mcApi := NewMCApi(stors, tc.knownFilesTracker)
 
 	newFileHandleFunc := func(fd int, path string, file *mcmodel.File) fs.FileHandle {
 		return newHandleFactory.NewFileHandle(fd, path, file)

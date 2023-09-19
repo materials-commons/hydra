@@ -52,7 +52,6 @@ func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 func (fs *MCApi) listActiveProjects() ([]mcmodel.File, error) {
 	transferRequests, err := fs.stors.TransferRequestStor.ListTransferRequests()
 	if err != nil {
-		fmt.Println(" listActiveProject err:", err)
 		return nil, err
 	}
 
@@ -222,12 +221,9 @@ func (fs *MCApi) Mkdir(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 	parentDir, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
-		fmt.Println("GetFileByPath failed looking for", filepath.Dir(projPath.ProjectPath))
 		return nil, err
 	}
 
-	fmt.Printf("  Calling CreateDirectory(%d, %d, %d, %s, %s)\n",
-		parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 	return fs.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
@@ -246,6 +242,7 @@ func (fs *MCApi) Create(path string) (*mcmodel.File, error) {
 }
 
 func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile bool, err error) {
+	fmt.Printf("MCApi Open %s\n", path)
 	projPath := projectpath.NewProjectPath(path)
 	f = fs.knownFilesTracker.GetFile(path)
 	if f != nil {
@@ -263,6 +260,10 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 	// If we are here then the file wasn't found in the list of already opened
 	// files, so we need to create the file.
 	f, err = fs.createNewFileVersion(projPath)
+	if err != nil {
+		fs.knownFilesTracker.Store(path, f)
+	}
+
 	return f, true, err
 }
 
