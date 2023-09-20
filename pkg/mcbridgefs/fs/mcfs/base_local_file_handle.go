@@ -6,6 +6,7 @@ package mcfs
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"syscall"
 
@@ -20,13 +21,14 @@ import (
 // operations are implemented. When using the Fd from a *os.File, call
 // syscall.Dup() on the Fd, to avoid os.File's finalizer from closing
 // the file descriptor.
-func NewBaseLocalFileHandle(fd int) fs.FileHandle {
-	return &BaseLocalFileHandle{Fd: fd}
+func NewBaseLocalFileHandle(fd, flags int) fs.FileHandle {
+	return &BaseLocalFileHandle{Fd: fd, Flags: flags}
 }
 
 type BaseLocalFileHandle struct {
-	Mu sync.Mutex
-	Fd int
+	Mu    sync.Mutex
+	Fd    int
+	Flags int
 }
 
 var _ = (fs.FileHandle)((*BaseLocalFileHandle)(nil))
@@ -152,7 +154,7 @@ func (f *BaseLocalFileHandle) setLock(ctx context.Context, owner uint64, lk *fus
 }
 
 func (f *BaseLocalFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	log.Debug("BaseLocalFileHandle Setattr")
+	fmt.Println("Setattr called")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -161,6 +163,7 @@ func (f *BaseLocalFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, o
 }
 
 func (f *BaseLocalFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscall.Errno {
+	fmt.Println("setAttr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	var errno syscall.Errno
@@ -220,6 +223,10 @@ func (f *BaseLocalFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) sysc
 	log.Debug("BaseLocalFileHandle Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
+	return f.getattr(ctx, a)
+}
+
+func (f *BaseLocalFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
 	st := syscall.Stat_t{}
 	err := syscall.Fstat(f.Fd, &st)
 	if err != nil {

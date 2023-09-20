@@ -5,6 +5,7 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -241,7 +242,7 @@ func (fs *MCApi) Create(path string) (*mcmodel.File, error) {
 	return f, err
 }
 
-func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile bool, err error) {
+func (fs *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	fmt.Printf("MCApi Open %s\n", path)
 	projPath := projectpath.NewProjectPath(path)
 	f = fs.knownFilesTracker.GetFile(path)
@@ -250,8 +251,8 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 		return f, false, nil
 	}
 
-	if isReadOnly {
-		// If we are here then this is a request to open a file for read. The file
+	if flagSet(flags, syscall.O_RDONLY) {
+		// If we are here then this is a request to **ONLY** open file for read. The file
 		// needs to exist.
 		f, err = fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, false, err
@@ -265,6 +266,10 @@ func (fs *MCApi) Open(path string, isReadOnly bool) (f *mcmodel.File, isNewFile 
 	}
 
 	return f, true, err
+}
+
+func flagSet(flags, flagToCheck int) bool {
+	return flags&flagToCheck == flagToCheck
 }
 
 // createNewFile will create a new mcmodel.File entry for the directory associated

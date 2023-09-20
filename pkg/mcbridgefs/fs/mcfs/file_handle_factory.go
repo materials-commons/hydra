@@ -8,7 +8,7 @@ import (
 )
 
 type FileHandleFactory interface {
-	NewFileHandle(fd int, path string, file *mcmodel.File) fs.FileHandle
+	NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle
 }
 
 type LocalFileHandlerFactory struct {
@@ -27,10 +27,10 @@ func NewLocalFileHandlerFactory(conversionStor stor.ConversionStor, transferRequ
 	}
 }
 
-func (f *LocalFileHandlerFactory) NewFileHandle(fd int, path string, file *mcmodel.File) *LocalMonitoredFileHandle {
+func (f *LocalFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 	projPath := projectpath.NewProjectPath(path)
 	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(projPath.TransferBase)
-	return NewLocalMonitoredFileHandle(fd).
+	return NewLocalMonitoredFileHandle(fd, flags).
 		WithPath(path).
 		WithFile(file).
 		WithActivityCounter(activityCounter).

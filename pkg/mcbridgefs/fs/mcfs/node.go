@@ -17,7 +17,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-type NewFileHandleFN func(fd int, path string, file *mcmodel.File) fs.FileHandle
+type NewFileHandleFN func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle
 
 type RootData struct {
 	mcfsRoot      string
@@ -217,6 +217,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	}()
 
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
+	fmt.Printf("Node.Create %s, flags = %d\n", fpath, flags)
 	f, err := n.RootData.mcApi.Create(fpath)
 	if err != nil {
 		log.Errorf("Create - failed creating new file (%s): %s", name, err)
@@ -239,7 +240,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 
 	node := n.newNode()
 	out.FromStat(&statInfo)
-	fhandle := n.RootData.newFileHandle(fd, fpath, f)
+	fhandle := n.RootData.newFileHandle(fd, int(flags), fpath, f)
 	stableAttr := fs.StableAttr{Mode: n.getMode(f)}
 	return n.NewInode(ctx, node, stableAttr), fhandle, 0, fs.OK
 }
@@ -253,9 +254,37 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 			errno = syscall.EIO
 		}
 	}()
+
 	path := filepath.Join("/", n.Path(n.Root()))
 	omode := flags & syscall.O_ACCMODE
-	f, isNewFile, err := n.RootData.mcApi.Open(path, omode == syscall.O_RDONLY)
+	fmt.Printf("OMODE = %d\n", omode)
+
+	fmt.Printf("Node.Open %s, flags = %d\n", path, flags)
+	if flagSet(int(omode), syscall.O_TRUNC) {
+		fmt.Println("O_TRUNC is set")
+	}
+
+	if flagSet(int(omode), syscall.O_APPEND) {
+		fmt.Println("O_APPEND is set")
+	}
+
+	if flagSet(int(omode), syscall.O_CREAT) {
+		fmt.Println("O_CREAT is set")
+	}
+
+	if flagSet(int(omode), syscall.O_WRONLY) {
+		fmt.Println("O_WRONLY is set")
+	}
+
+	if flagSet(int(omode), syscall.O_RDWR) {
+		fmt.Println("O_RDWR is set")
+	}
+
+	if flagSet(int(omode), syscall.O_RDONLY) {
+		fmt.Println("O_RDONLY is set")
+	}
+
+	f, isNewFile, err := n.RootData.mcApi.Open(path, int(flags))
 	if err != nil {
 		return nil, 0, syscall.EIO
 	}
@@ -264,21 +293,36 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 		if isNewFile {
 			flags = flags &^ syscall.O_CREAT
 		} else {
-			flags = flags &^ syscall.O_APPEND
+			//flags = flags &^ syscall.O_APPEND
 		}
 	}
 
+	fmt.Println("isNewFile = ", isNewFile)
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
-	fd, err := syscall.Open(filePath, int(flags), 0)
+	fmt.Printf("!!!Calling syscall.Open path = %s, flags = %d", filePath, flags)
+	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
+		fmt.Printf("syscall.Open %s failed with err %s\n", filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
 
-	fhandle := n.RootData.newFileHandle(fd, path, f)
+	fhandle := n.RootData.newFileHandle(fd, int(flags), path, f)
+	fmt.Printf("   Returning a file handle\n")
 	return fhandle, 0, fs.OK
 }
 
+func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	fmt.Println("Node.Setattr")
+	fops, ok := f.(fs.FileSetattrer)
+	if !ok {
+		fmt.Println(" Setattr cast Not Ok")
+		return syscall.ENOTSUP
+	}
+	return fops.Setattr(ctx, in, out)
+}
+
 func (n *Node) Rename(_ context.Context, name string, newParent fs.InodeEmbedder, newName string, _ uint32) syscall.Errno {
+	fmt.Println("Rename called")
 	return syscall.EPERM
 }
 

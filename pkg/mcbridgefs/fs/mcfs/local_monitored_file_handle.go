@@ -29,10 +29,11 @@ var _ = (fs.FileHandle)((*LocalMonitoredFileHandle)(nil))
 var _ = (fs.FileWriter)((*LocalMonitoredFileHandle)(nil))
 var _ = (fs.FileReader)((*LocalMonitoredFileHandle)(nil))
 var _ = (fs.FileFlusher)((*LocalMonitoredFileHandle)(nil))
+var _ = (fs.FileSetattrer)((*LocalMonitoredFileHandle)(nil))
 
-func NewLocalMonitoredFileHandle(fd int) *LocalMonitoredFileHandle {
+func NewLocalMonitoredFileHandle(fd, flags int) *LocalMonitoredFileHandle {
 	return &LocalMonitoredFileHandle{
-		BaseLocalFileHandle: NewBaseLocalFileHandle(fd).(*BaseLocalFileHandle),
+		BaseLocalFileHandle: NewBaseLocalFileHandle(fd, flags).(*BaseLocalFileHandle),
 	}
 }
 
@@ -114,14 +115,33 @@ func (h *LocalMonitoredFileHandle) Flush(_ context.Context) syscall.Errno {
 }
 
 func (h *LocalMonitoredFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
+	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
-			errno = syscall.ENOENT
+			fmt.Println("Relase panicked")
+			errno = syscall.EBADF
 		}
+		h.Mu.Unlock()
 	}()
 
-	if err := h.BaseLocalFileHandle.Release(ctx); err != fs.OK {
-		return err
+	if h.Fd == -1 {
+		fmt.Println("Release h.Fd == -1")
+		return syscall.EBADF
+	}
+
+	err := syscall.Close(h.Fd)
+	fmt.Println("syscall.Close err =", err)
+	h.Fd = -1
+	if err != nil {
+		fmt.Println("syscall.Close gave error")
+		return fs.ToErrno(err)
+	}
+
+	// if file was opened readonly then there is no need to do any updates to the database
+	omode := h.Flags & syscall.O_ACCMODE
+	if omode == syscall.O_RDONLY {
+		fmt.Println("is readonly")
+		return fs.OK
 	}
 
 	var (
@@ -130,12 +150,13 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) (errno syscall.E
 		checksum string
 	)
 
-	if err := h.BaseLocalFileHandle.Getattr(ctx, &attrs); err == fs.OK {
+	if err := h.BaseLocalFileHandle.getattr(ctx, &attrs); err == fs.OK {
 		size = attrs.Size
 	}
 
 	knownFile := h.knownFilesTracker.Get(h.Path)
 	if knownFile == nil {
+		fmt.Println("knownFilesTracker didn't find file")
 		return syscall.ENOENT
 	}
 
@@ -154,10 +175,20 @@ func (h *LocalMonitoredFileHandle) Release(ctx context.Context) (errno syscall.E
 		}
 	}
 
+	fmt.Println("Got through release errno = ", errno)
 	return errno
 }
 
-func (h *LocalMonitoredFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, _ *fuse.AttrOut) syscall.Errno {
+func (h *LocalMonitoredFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, _ *fuse.AttrOut) (errno syscall.Errno) {
+	fmt.Println("LocalMonitoredFileHandle.Setattr called")
+	h.Mu.Lock()
+	defer func() {
+		if r := recover(); r != nil {
+			errno = syscall.EIO
+		}
+		h.Mu.Unlock()
+	}()
+
 	if sz, ok := in.GetSize(); ok {
 		return fs.ToErrno(syscall.Ftruncate(h.Fd, int64(sz)))
 	}

@@ -18,8 +18,9 @@ type KnownFilesTracker struct {
 }
 
 type KnownFile struct {
-	file   *mcmodel.File
-	hasher hash.Hash
+	file                 *mcmodel.File
+	hasher               hash.Hash
+	hashNeedsRecomputing bool
 }
 
 func NewKnownFilesTracker() *KnownFilesTracker {

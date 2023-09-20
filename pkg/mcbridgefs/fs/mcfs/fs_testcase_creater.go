@@ -102,8 +102,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	newHandleFactory := NewLocalFileHandlerFactory(stors.ConversionStor, stors.TransferRequestStor, tc.knownFilesTracker)
 	mcApi := NewMCApi(stors, tc.knownFilesTracker)
 
-	newFileHandleFunc := func(fd int, path string, file *mcmodel.File) fs.FileHandle {
-		return newHandleFactory.NewFileHandle(fd, path, file)
+	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
+		return newHandleFactory.NewFileHandle(fd, flags, path, file)
 	}
 
 	tc.mcfs, err = CreateFS(opts.mcfsDir, mcApi, newFileHandleFunc)
