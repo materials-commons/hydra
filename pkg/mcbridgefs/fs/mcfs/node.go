@@ -299,7 +299,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 
 	fmt.Println("isNewFile = ", isNewFile)
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
-	fmt.Printf("!!!Calling syscall.Open path = %s, flags = %d", filePath, flags)
+	fmt.Printf("!!!Calling syscall.Open path = %s, flags = %d\n", filePath, flags)
 	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
 		fmt.Printf("syscall.Open %s failed with err %s\n", filePath, err)
@@ -307,18 +307,24 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	}
 
 	fhandle := n.RootData.newFileHandle(fd, int(flags), path, f)
-	fmt.Printf("   Returning a file handle\n")
+	fmt.Printf("   Returning a file handle %#v\n with f = %#v\n", fhandle, f)
 	return fhandle, 0, fs.OK
 }
 
 func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	fmt.Println("Node.Setattr")
-	fops, ok := f.(fs.FileSetattrer)
-	if !ok {
+	path := filepath.Join("/", n.Path(n.Root()))
+	fmt.Println("Node.Setattr", path)
+
+	fmt.Printf("f = %#v\n", f)
+
+	if fops, ok := f.(fs.FileSetattrer); ok {
 		fmt.Println(" Setattr cast Not Ok")
-		return syscall.ENOTSUP
+		return fops.Setattr(ctx, in, out)
 	}
-	return fops.Setattr(ctx, in, out)
+
+	_ = n.RootData.mcApi.FTruncate(path)
+
+	return syscall.ENOTSUP
 }
 
 func (n *Node) Rename(_ context.Context, name string, newParent fs.InodeEmbedder, newName string, _ uint32) syscall.Errno {

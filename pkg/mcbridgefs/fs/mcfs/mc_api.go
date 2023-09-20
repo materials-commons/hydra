@@ -242,6 +242,16 @@ func (fs *MCApi) Create(path string) (*mcmodel.File, error) {
 	return f, err
 }
 
+func (fs *MCApi) FTruncate(path string) error {
+	f := fs.knownFilesTracker.GetFile(path)
+	if f == nil {
+		fmt.Println("FTruncate - Unknown file", path)
+	} else {
+		fmt.Printf("FTruncate - Found file %s: %#v\n", path, f)
+	}
+	return nil
+}
+
 func (fs *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	fmt.Printf("MCApi Open %s\n", path)
 	projPath := projectpath.NewProjectPath(path)
