@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
@@ -28,7 +29,7 @@ func NewMCApi(stors *stor.Stors, tracker *KnownFilesTracker) *MCApi {
 	}
 }
 
-func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
+func (mcapi *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 	fmt.Printf("MCApi.Readdir: %q\n", path)
 
 	projPath := projectpath.NewProjectPath(path)
@@ -39,20 +40,20 @@ func (fs *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 	case projectpath.RootBasePath:
 		// Return the list of projects that have transfer requests
 		fmt.Println("  Readdir RootBasePath")
-		return fs.listActiveProjects()
+		return mcapi.listActiveProjects()
 	case projectpath.ProjectBasePath:
 		// Return the list of users that have transfer requests for this project
 		fmt.Println("  Readdir ProjectBasePath")
-		return fs.listActiveUsersForProject(path)
+		return mcapi.listActiveUsersForProject(path)
 	default:
 		// Return directory contents for that /project/user/rest/of/project/path
 		fmt.Println("  Readdir default")
-		return fs.listProjectDirectory(path)
+		return mcapi.listProjectDirectory(path)
 	}
 }
 
-func (fs *MCApi) listActiveProjects() ([]mcmodel.File, error) {
-	transferRequests, err := fs.stors.TransferRequestStor.ListTransferRequests()
+func (mcapi *MCApi) listActiveProjects() ([]mcmodel.File, error) {
+	transferRequests, err := mcapi.stors.TransferRequestStor.ListTransferRequests()
 	if err != nil {
 		return nil, err
 	}
@@ -71,9 +72,9 @@ func (fs *MCApi) listActiveProjects() ([]mcmodel.File, error) {
 	return dirEntries, nil
 }
 
-func (fs *MCApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) {
+func (mcapi *MCApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	transferRequests, err := fs.stors.TransferRequestStor.ListTransferRequests()
+	transferRequests, err := mcapi.stors.TransferRequestStor.ListTransferRequests()
 	if err != nil {
 		return nil, err
 	}
@@ -100,21 +101,21 @@ func (fs *MCApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) 
 	return dirEntries, nil
 }
 
-func (fs *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
+func (mcapi *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 
-	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, projPath.ProjectPath)
+	dir, err := mcapi.stors.FileStor.GetDirByPath(projPath.ProjectID, projPath.ProjectPath)
 	if err != nil {
 		return nil, err
 	}
 
-	transferRequest, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
+	transferRequest, err := mcapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Make list directory to a pointer for transferRequest?
-	dirEntries, err := fs.stors.TransferRequestStor.ListDirectory(dir, transferRequest)
+	dirEntries, err := mcapi.stors.TransferRequestStor.ListDirectory(dir, transferRequest)
 
 	inDir := &mcmodel.File{Path: projPath.ProjectPath, MimeType: "directory"}
 	for _, entry := range dirEntries {
@@ -124,15 +125,15 @@ func (fs *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
 	return dirEntries, nil
 }
 
-func (fs *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err error) {
-	if file := fs.knownFilesTracker.GetFile(path); file != nil {
+func (mcapi *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err error) {
+	if file := mcapi.knownFilesTracker.GetFile(path); file != nil {
 		// Found known file, so return it's real path
 		return file.ToUnderlyingDirPath(mcfsRoot), nil
 	}
 
 	// Didn't find a previously opened file, so look up file.
 	projPath := projectpath.NewProjectPath(path)
-	file, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+	file, err := mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 	if err != nil {
 		return "", err
 	}
@@ -140,7 +141,7 @@ func (fs *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err
 	return file.ToUnderlyingFilePath(mcfsRoot), nil
 }
 
-func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
+func (mcapi *MCApi) Lookup(path string) (*mcmodel.File, error) {
 	fmt.Printf("MCApi.Lookup: %q\n", path)
 	projPath := projectpath.NewProjectPath(path)
 
@@ -156,26 +157,26 @@ func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
 	case projectpath.ProjectBasePath:
 		// 	Return data on the project
 		fmt.Println("  Lookup ProjectBasePath")
-		return fs.lookupProject(path)
+		return mcapi.lookupProject(path)
 
 	case projectpath.UserBasePath:
 		// Return data on the user
 		fmt.Println("  Lookup UserBasePath")
-		return fs.lookupUser(path)
+		return mcapi.lookupUser(path)
 
 	default:
 		fmt.Println("  Lookup default")
 		projPath := projectpath.NewProjectPath(path)
-		f, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+		f, err := mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, err
 	}
 }
 
-func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
+func (mcapi *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 	fmt.Println("lookupProject", path)
 
-	transferRequests, err := fs.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID)
+	transferRequests, err := mcapi.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID)
 	switch {
 	case err != nil:
 		return nil, err
@@ -196,12 +197,12 @@ func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 	}
 }
 
-func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
+func (mcapi *MCApi) lookupUser(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
 
 	// If we are here then the project has been verified, so we need to make sure that the
 	// user exists
-	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := mcapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,45 +225,63 @@ func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
 	return f, nil
 }
 
-func (fs *MCApi) Mkdir(path string) (*mcmodel.File, error) {
+func (mcapi *MCApi) Mkdir(path string) (*mcmodel.File, error) {
 	fmt.Println("MCApi.Mkdir path =", path)
 	projPath := projectpath.NewProjectPath(path)
-	parentDir, err := fs.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	parentDir, err := mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	return fs.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
+	return mcapi.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
-func (fs *MCApi) Create(path string) (*mcmodel.File, error) {
+func (mcapi *MCApi) Create(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	if file := fs.knownFilesTracker.GetFile(projPath.FullPath); file != nil {
+	if file := mcapi.knownFilesTracker.GetFile(projPath.FullPath); file != nil {
 		// This should not happen - Create was called on a file that the file
 		// system is already tracking as opened.
 		return nil, fmt.Errorf("file found on create: %s", path)
 	}
 
-	f, err := fs.createNewFile(projPath)
-	fs.knownFilesTracker.Store(path, f)
+	f, err := mcapi.createNewFile(projPath)
+	mcapi.knownFilesTracker.Store(path, f)
 
 	return f, err
 }
 
-func (fs *MCApi) FTruncate(path string) error {
-	f := fs.knownFilesTracker.GetFile(path)
-	if f == nil {
-		fmt.Println("FTruncate - Unknown file", path)
-	} else {
-		fmt.Printf("FTruncate - Found file %s: %#v\n", path, f)
+func (mcapi *MCApi) GetKnownFileRealPath(path, mcfsRoot string) (string, error) {
+	f := mcapi.knownFilesTracker.GetFile(path)
+	if f != nil {
+		return f.ToUnderlyingFilePath(mcfsRoot), nil
 	}
-	return nil
+
+	return "", fmt.Errorf("unknown file: %s", path)
 }
 
-func (fs *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
+func (mcapi *MCApi) FTruncate(path, mcfsRoot string, size uint64) (error, *syscall.Stat_t) {
+	f := mcapi.knownFilesTracker.GetFile(path)
+	if f == nil {
+		fmt.Println("FTruncate - Unknown file", path)
+		return syscall.ENOENT, nil
+	}
+
+	if err := syscall.Truncate(f.ToUnderlyingFilePath(mcfsRoot), int64(size)); err != nil {
+		return fs.ToErrno(err), nil
+	}
+
+	st := syscall.Stat_t{}
+	if err := syscall.Lstat(f.ToUnderlyingFilePath(mcfsRoot), &st); err != nil {
+		return fs.ToErrno(err), nil
+	}
+
+	return nil, &st
+}
+
+func (mcapi *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	fmt.Printf("MCApi Open %s\n", path)
 	projPath := projectpath.NewProjectPath(path)
-	f = fs.knownFilesTracker.GetFile(path)
+	f = mcapi.knownFilesTracker.GetFile(path)
 	if f != nil {
 		// Existing file found
 		return f, false, nil
@@ -271,35 +290,35 @@ func (fs *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, 
 	if flagSet(flags, syscall.O_RDONLY) {
 		// If we are here then this is a request to **ONLY** open file for read. The file
 		// needs to exist.
-		f, err = fs.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
+		f, err = mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, false, err
 	}
 
 	// If we are here then the file wasn't found in the list of already opened
 	// files, so we need to create the file.
-	f, err = fs.createNewFileVersion(projPath)
+	f, err = mcapi.createNewFileVersion(projPath)
 	if err != nil {
-		fs.knownFilesTracker.Store(path, f)
+		mcapi.knownFilesTracker.Store(path, f)
 	}
 
 	return f, true, err
 }
 
-func (fs *MCApi) Release(path string, size uint64) error {
-	knownFile := fs.knownFilesTracker.Get(path)
+func (mcapi *MCApi) Release(path string, size uint64) error {
+	knownFile := mcapi.knownFilesTracker.Get(path)
 	if knownFile == nil {
 		return syscall.ENOENT
 	}
 
 	projPath := projectpath.NewProjectPath(path)
 	checksum := fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
-	err := fs.stors.TransferRequestStor.MarkFileReleased(knownFile.file, checksum, projPath.ProjectID, int64(size))
+	err := mcapi.stors.TransferRequestStor.MarkFileReleased(knownFile.file, checksum, projPath.ProjectID, int64(size))
 
 	// Add to convertible list after marking as released to prevent the condition where the
 	// file hasn't been released but is picked up for conversion. This is a very unlikely
 	// case, but easy to prevent by releasing then adding to conversions list.
 	if knownFile.file.IsConvertible() {
-		if _, err := fs.stors.ConversionStor.AddFileToConvert(knownFile.file); err != nil {
+		if _, err := mcapi.stors.ConversionStor.AddFileToConvert(knownFile.file); err != nil {
 			slog.Error("Failed adding file to conversion", "file.ID", knownFile.file.ID)
 		}
 	}
@@ -313,13 +332,13 @@ func flagSet(flags, flagToCheck int) bool {
 
 // createNewFile will create a new mcmodel.File entry for the directory associated
 // with the Node. It will create the directory where the file can be written to.
-func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
-	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+func (mcapi *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
+	dir, err := mcapi.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := mcapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +356,7 @@ func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File
 		Current:     false,
 	}
 
-	return fs.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
+	return mcapi.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
 }
 
 // createNewFileVersion creates a new file version if there isn't already a version of the file
@@ -345,17 +364,17 @@ func (fs *MCApi) createNewFile(projPath *projectpath.ProjectPath) (*mcmodel.File
 // if a new version has already been created. If a new version was already created then it will return
 // that version. Otherwise, it will create a new version and add it to the OpenedFilesTracker. In
 // addition, when a new version is created, the associated on disk directory is created.
-func (fs *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
+func (mcapi *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmodel.File, error) {
 	var err error
 
 	name := filepath.Base(projPath.ProjectPath)
 
-	dir, err := fs.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
+	dir, err := mcapi.stors.FileStor.GetDirByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
 		return nil, err
 	}
 
-	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := mcapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +391,7 @@ func (fs *MCApi) createNewFileVersion(projPath *projectpath.ProjectPath) (*mcmod
 		Current:     false,
 	}
 
-	f, err = fs.stors.TransferRequestStor.CreateNewFile(f, dir, tr)
+	f, err = mcapi.stors.TransferRequestStor.CreateNewFile(f, dir, tr)
 	if err != nil {
 		return nil, err
 	}

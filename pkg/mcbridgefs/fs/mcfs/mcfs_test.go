@@ -232,21 +232,27 @@ func TestOpen(t *testing.T) {
 	require.Equal(t, f.ID, f2.ID)
 }
 
-//func TestHowTruncWorks(t *testing.T) {
-//	// When a file is opened for truncation what is the flow?
-//	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
-//	require.NotNil(t, tc)
-//
-//	// Write then read to make sure we get the same results
-//	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
-//	fh, _ := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
-//	what := "will truncate content"
-//	_, _ = io.WriteString(fh, what)
-//	err := fh.Close()
-//	fmt.Println("fh.Close err = ", err)
-//
-//	fh2, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC, 0755)
-//	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
-//	//_, _ = io.WriteString(fh2, "Truncated!")
-//	_ = fh2.Close()
-//}
+func TestFileTruncation(t *testing.T) {
+	// When a file is opened for truncation what is the flow?
+	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
+	require.NotNil(t, tc)
+
+	// Write then read to make sure we get the same results
+	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
+	fh, _ := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	what := "will truncate content"
+	n, err := io.WriteString(fh, what)
+	require.NoErrorf(t, err, "Got error on io.WriteString: %s", err)
+	require.Equal(t, len(what), n)
+	err = fh.Close()
+	require.NoError(t, err)
+
+	fh2, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+	what = "Truncated!"
+	n, err = io.WriteString(fh2, what)
+	require.NoErrorf(t, err, "Got error on io.WriteString: %s", err)
+	require.Equal(t, len(what), n)
+	err = fh2.Close()
+	require.NoError(t, err)
+}

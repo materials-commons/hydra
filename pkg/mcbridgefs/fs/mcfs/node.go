@@ -283,7 +283,14 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	return fhandle, 0, fs.OK
 }
 
-func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			// If there is a panic then for now say that we don't support this call
+			errno = syscall.ENOTSUP
+		}
+	}()
+
 	path := filepath.Join("/", n.Path(n.Root()))
 	fmt.Println("Node.Setattr", path)
 
@@ -294,7 +301,24 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 		return fops.Setattr(ctx, in, out)
 	}
 
-	_ = n.RootData.mcApi.FTruncate(path)
+	realPath, err := n.RootData.mcApi.GetKnownFileRealPath(path, n.RootData.mcfsRoot)
+	if err != nil {
+		return syscall.ENOENT
+	}
+
+	if sz, ok := in.GetSize(); ok {
+		if err := syscall.Truncate(realPath, int64(sz)); err != nil {
+			return fs.ToErrno(err)
+		}
+
+		st := syscall.Stat_t{}
+		if err := syscall.Lstat(realPath, &st); err != nil {
+			return fs.ToErrno(err)
+		}
+
+		out.FromStat(&st)
+		return fs.OK
+	}
 
 	return syscall.ENOTSUP
 }
