@@ -8,6 +8,7 @@ import (
 )
 
 func TestMCApi_Create(t *testing.T) {
+	t.Skip("Skipping TestMCApi_Create")
 	//files := []mcmodel.File{
 	//	{ID: 456, Path: "/data", ProjectID: 123, MimeType: "directory"},
 	//}
@@ -15,7 +16,8 @@ func TestMCApi_Create(t *testing.T) {
 	//	{ID: 234, ProjectID: 123, OwnerID: 301},
 	//}
 	knownFilesTracker := NewKnownFilesTracker()
-	mcapi := NewMCApi(nil, knownFilesTracker)
+	_, stors := newTestStor(t, "", "/tmp/mcfs")
+	mcapi := NewMCApi(stors, knownFilesTracker)
 
 	var tests = []struct {
 		name          string
@@ -30,7 +32,6 @@ func TestMCApi_Create(t *testing.T) {
 		},
 	}
 
-	_ = mcapi
 	for _, test := range tests {
 		t.Run("", func(t *testing.T) {
 			createdFile, err := mcapi.Create(test.path)

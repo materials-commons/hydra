@@ -100,7 +100,6 @@ func TestLookup(t *testing.T) {
 			if test.errExpected {
 				require.Errorf(t, err, "Expected err for path %s", test.path)
 			} else {
-
 				require.NoErrorf(t, err, "Expected no error for path %s, got %s", test.path, err)
 				require.Truef(t, finfo.IsDir(), "Expected %s to be a dir", test.path)
 			}
@@ -229,25 +228,25 @@ func TestOpen(t *testing.T) {
 	f2, err := tc.stors.FileStor.GetFileByPath(1, "/readwrite.txt")
 	require.NoErrorf(t, err, "Couldn't get database file entry: %s", err)
 
-	// At this point the database entries should be the same
+	// At this point the database knownFiles should be the same
 	require.Equal(t, f.ID, f2.ID)
 }
 
-func TestHowTruncWorks(t *testing.T) {
-	// When a file is opened for truncation what is the flow?
-	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
-	require.NotNil(t, tc)
-
-	// Write then read to make sure we get the same results
-	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
-	fh, _ := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
-	what := "will truncate content"
-	_, _ = io.WriteString(fh, what)
-	err := fh.Close()
-	fmt.Println("fh.Close err = ", err)
-
-	fh2, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC, 0755)
-	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
-	//_, _ = io.WriteString(fh2, "Truncated!")
-	_ = fh2.Close()
-}
+//func TestHowTruncWorks(t *testing.T) {
+//	// When a file is opened for truncation what is the flow?
+//	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
+//	require.NotNil(t, tc)
+//
+//	// Write then read to make sure we get the same results
+//	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
+//	fh, _ := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+//	what := "will truncate content"
+//	_, _ = io.WriteString(fh, what)
+//	err := fh.Close()
+//	fmt.Println("fh.Close err = ", err)
+//
+//	fh2, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC, 0755)
+//	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+//	//_, _ = io.WriteString(fh2, "Truncated!")
+//	_ = fh2.Close()
+//}

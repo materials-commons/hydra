@@ -2,6 +2,7 @@ package mcfs
 
 import (
 	"fmt"
+	"log/slog"
 	"mime"
 	"path/filepath"
 	"strings"
@@ -172,6 +173,7 @@ func (fs *MCApi) Lookup(path string) (*mcmodel.File, error) {
 
 func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
+	fmt.Println("lookupProject", path)
 
 	transferRequests, err := fs.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID)
 	switch {
@@ -182,6 +184,7 @@ func (fs *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 		return nil, fmt.Errorf("no such path: %s", path)
 
 	default:
+		fmt.Printf("   found transferRequests %#v", transferRequests)
 		// Found at least one transfer request for the project
 		f := &mcmodel.File{
 			Name:      fmt.Sprintf("%d", projPath.ProjectID),
@@ -198,9 +201,13 @@ func (fs *MCApi) lookupUser(path string) (*mcmodel.File, error) {
 
 	// If we are here then the project has been verified, so we need to make sure that the
 	// user exists
-	_, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
+	tr, err := fs.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(projPath.ProjectID, projPath.UserID)
 	if err != nil {
 		return nil, err
+	}
+
+	if tr == nil {
+		return nil, fmt.Errorf("no such active user %d for project %d", projPath.UserID, projPath.ProjectID)
 	}
 
 	f := &mcmodel.File{
@@ -276,6 +283,28 @@ func (fs *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, 
 	}
 
 	return f, true, err
+}
+
+func (fs *MCApi) Release(path string, size uint64) error {
+	knownFile := fs.knownFilesTracker.Get(path)
+	if knownFile == nil {
+		return syscall.ENOENT
+	}
+
+	projPath := projectpath.NewProjectPath(path)
+	checksum := fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
+	err := fs.stors.TransferRequestStor.MarkFileReleased(knownFile.file, checksum, projPath.ProjectID, int64(size))
+
+	// Add to convertible list after marking as released to prevent the condition where the
+	// file hasn't been released but is picked up for conversion. This is a very unlikely
+	// case, but easy to prevent by releasing then adding to conversions list.
+	if knownFile.file.IsConvertible() {
+		if _, err := fs.stors.ConversionStor.AddFileToConvert(knownFile.file); err != nil {
+			slog.Error("Failed adding file to conversion", "file.ID", knownFile.file.ID)
+		}
+	}
+
+	return err
 }
 
 func flagSet(flags, flagToCheck int) bool {

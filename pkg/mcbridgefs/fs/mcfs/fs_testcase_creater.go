@@ -47,6 +47,35 @@ type fsTestOptions struct {
 	mntDir        string
 }
 
+func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors) {
+	dsn := mcdb.SqliteInMemoryDSN
+	if dsnToUse != "" {
+		dsn = dsnToUse
+		_ = os.Remove(dsnToUse)
+		fh, err := os.Create(dsnToUse)
+		require.NoErrorf(t, err, "Failed opening %s, got %s", dsnToUse, err)
+		fh.Close()
+	}
+
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
+	sqlitedb, err := db.DB()
+	sqlitedb.SetMaxOpenConns(1)
+	err = mcdb.RunMigrations(db)
+	require.NoErrorf(t, err, "Migration failed with: %s", err)
+
+	tc := &fsTestCase{
+		T:       t,
+		db:      db,
+		mcfsDir: mcfsDir,
+		mntDir:  "",
+	}
+
+	tc.populateDatabase()
+
+	return db, tc.stors
+}
+
 func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	dsn := "file::memory:?cache=shared"
 	if opts.dsn != "" {
@@ -99,14 +128,14 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	newHandleFactory := NewLocalFileHandlerFactory(stors.ConversionStor, stors.TransferRequestStor, tc.knownFilesTracker)
-	mcApi := NewMCApi(stors, tc.knownFilesTracker)
+	mcapi := NewMCApi(stors, tc.knownFilesTracker)
+	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker)
 
 	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 		return newHandleFactory.NewFileHandle(fd, flags, path, file)
 	}
 
-	tc.mcfs, err = CreateFS(opts.mcfsDir, mcApi, newFileHandleFunc)
+	tc.mcfs, err = CreateFS(opts.mcfsDir, mcapi, newFileHandleFunc)
 	tc.rawFS = fs.NewNodeFS(tc.mcfs, &fs.Options{})
 	tc.server, err = fuse.NewServer(tc.rawFS, opts.mntDir, &fuse.MountOptions{})
 	if err != nil {
@@ -118,6 +147,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 	t.Cleanup(tc.unmount)
+	t.Cleanup(tc.closeDB)
 	return tc
 }
 
@@ -136,11 +166,13 @@ func (tc *fsTestCase) populateDatabase() {
 
 	tc.user, err = tc.stors.UserStor.CreateUser(user)
 	require.NoErrorf(tc.T, err, "Failed creating user1: %s", err)
+	fmt.Printf(" populateDatabase created user %#v\n", tc.user)
 
 	proj := &mcmodel.Project{Name: "Proj1", OwnerID: user.ID}
 
 	tc.proj, err = tc.stors.ProjectStor.CreateProject(proj)
-	require.NoErrorf(tc.T, err, "Failed creating proj1: %s", err)
+	require.NoErrorf(tc.T, err, "Failed creating proj: %s", err)
+	fmt.Printf("  populateDatabase created project %#v\n", tc.proj)
 	transferRequest := &mcmodel.TransferRequest{
 		ProjectID: tc.proj.ID,
 		OwnerID:   tc.proj.OwnerID,
@@ -166,6 +198,26 @@ func (tc *fsTestCase) unmount() {
 		fmt.Println("tc.server.Unmount failed:", err)
 		tc.Fatal(err)
 	}
+}
+
+// closeDB is run after a test completes to close the underlying database. This
+// ensures that the database is closed and for in memory sqlite databases that
+// it can't be reused. This is important, because the in memory database ends
+// up getting reused between tests, which creates multiple instances of the
+// projects, users, etc... that populateDatabase is adding. Tests assume that
+// there is only a single entry of these items and thus the test will fail.
+func (tc *fsTestCase) closeDB() {
+	sqlDB, err := tc.db.DB()
+
+	if err != nil {
+		return
+	}
+
+	if sqlDB == nil {
+		return
+	}
+
+	sqlDB.Close()
 }
 
 func umount(path string) {

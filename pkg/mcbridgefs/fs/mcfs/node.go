@@ -58,7 +58,7 @@ func (n *Node) newNode() *Node {
 	}
 }
 
-// Readdir reads the corresponding directory and returns its entries
+// Readdir reads the corresponding directory and returns its knownFiles
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -257,32 +257,6 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 
 	path := filepath.Join("/", n.Path(n.Root()))
 	omode := flags & syscall.O_ACCMODE
-	fmt.Printf("OMODE = %d\n", omode)
-
-	fmt.Printf("Node.Open %s, flags = %d\n", path, flags)
-	if flagSet(int(omode), syscall.O_TRUNC) {
-		fmt.Println("O_TRUNC is set")
-	}
-
-	if flagSet(int(omode), syscall.O_APPEND) {
-		fmt.Println("O_APPEND is set")
-	}
-
-	if flagSet(int(omode), syscall.O_CREAT) {
-		fmt.Println("O_CREAT is set")
-	}
-
-	if flagSet(int(omode), syscall.O_WRONLY) {
-		fmt.Println("O_WRONLY is set")
-	}
-
-	if flagSet(int(omode), syscall.O_RDWR) {
-		fmt.Println("O_RDWR is set")
-	}
-
-	if flagSet(int(omode), syscall.O_RDONLY) {
-		fmt.Println("O_RDONLY is set")
-	}
 
 	f, isNewFile, err := n.RootData.mcApi.Open(path, int(flags))
 	if err != nil {
@@ -293,21 +267,19 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 		if isNewFile {
 			flags = flags &^ syscall.O_CREAT
 		} else {
-			//flags = flags &^ syscall.O_APPEND
+			if !flagSet(int(omode), syscall.O_TRUNC) {
+				flags = flags &^ syscall.O_APPEND
+			}
 		}
 	}
 
-	fmt.Println("isNewFile = ", isNewFile)
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
-	fmt.Printf("!!!Calling syscall.Open path = %s, flags = %d\n", filePath, flags)
 	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
-		fmt.Printf("syscall.Open %s failed with err %s\n", filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
 
 	fhandle := n.RootData.newFileHandle(fd, int(flags), path, f)
-	fmt.Printf("   Returning a file handle %#v\n with f = %#v\n", fhandle, f)
 	return fhandle, 0, fs.OK
 }
 
