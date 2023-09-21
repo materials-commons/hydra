@@ -301,6 +301,8 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 		return fops.Setattr(ctx, in, out)
 	}
 
+	// If we are then the file handle is null, so we have to do this by
+	// getting paths. This will fail if the file is not known.
 	realPath, err := n.RootData.mcApi.GetKnownFileRealPath(path, n.RootData.mcfsRoot)
 	if err != nil {
 		return syscall.ENOENT
