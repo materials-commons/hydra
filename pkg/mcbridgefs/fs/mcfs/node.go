@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -126,18 +126,19 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	// If we are here then f was nil, so we have to do lookups based on the path
 	path := filepath.Join("/", n.Path(n.Root()))
+	fmt.Println("path =", path)
 	realPath, err := n.RootData.mcApi.GetRealPath(path, n.RootData.mcfsRoot)
 	if err != nil {
 		return syscall.ENOENT
 	}
 
+	fmt.Println("realPath =", realPath)
 	st := syscall.Stat_t{}
 	if err := syscall.Lstat(realPath, &st); err != nil {
-		log.Errorf("Getattr: Lstat failed (%s): %s\n", realPath, err)
+		slog.Error("Getattr: Lstat failed", "path", realPath, "error", err)
 		return fs.ToErrno(err)
 	}
 
-	fmt.Println("syscall.LStat")
 	out.FromStat(&st)
 
 	return fs.OK
@@ -229,14 +230,14 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	fmt.Printf("Node.Create %s, flags = %d\n", fpath, flags)
 	f, err := n.RootData.mcApi.Create(fpath)
 	if err != nil {
-		log.Errorf("Create - failed creating new file (%s): %s", name, err)
+		slog.Error("Create - failed creating new file", "file", name, "error", err)
 		return nil, nil, 0, syscall.EIO
 	}
 
 	flags = flags &^ syscall.O_APPEND
 	fd, err := syscall.Open(f.ToUnderlyingFilePath(n.RootData.mcfsRoot), int(flags)|os.O_CREATE, mode)
 	if err != nil {
-		log.Errorf("    Create - syscall.Open failed:", err)
+		slog.Error("Create - syscall.Open failed", "error", err)
 		return nil, nil, 0, syscall.EIO
 	}
 
