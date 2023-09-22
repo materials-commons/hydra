@@ -235,7 +235,7 @@ func TestOpen(t *testing.T) {
 
 func TestFileTruncation(t *testing.T) {
 	// When a file is opened for truncation what is the flow?
-	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
+	tc := newTestCase(t, &fsTestOptions{})
 	require.NotNil(t, tc)
 
 	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
@@ -272,4 +272,33 @@ func TestFileTruncation(t *testing.T) {
 	require.Equal(t, int64(0), st.Size)
 	err = fh.Close()
 	require.NoError(t, err)
+}
+
+func TestStatfs(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	st := syscall.Statfs_t{}
+	err := syscall.Statfs("/tmp/mnt/mcfs", &st)
+	require.NoError(t, err)
+}
+
+func TestStat(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+
+	what := "will truncate content"
+	n, err := io.WriteString(fh, what)
+	require.NoErrorf(t, err, "Got error on io.WriteString: %s", err)
+	require.Equal(t, len(what), n)
+	err = fh.Close()
+	require.NoError(t, err)
+
+	finfo, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, int64(n), finfo.Size())
 }
