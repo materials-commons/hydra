@@ -137,7 +137,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.mcfs, err = CreateFS(opts.mcfsDir, mcapi, newFileHandleFunc)
 	tc.rawFS = fs.NewNodeFS(tc.mcfs, &fs.Options{})
-	tc.server, err = fuse.NewServer(tc.rawFS, opts.mntDir, &fuse.MountOptions{})
+	tc.server, err = fuse.NewServer(tc.rawFS, opts.mntDir, &fuse.MountOptions{Name: "mcfs"})
 	if err != nil {
 		t.Fatal(err)
 	}

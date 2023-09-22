@@ -344,6 +344,26 @@ func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
 	return syscall.EPERM
 }
 
+func (n *Node) Statfs(_ context.Context, out *fuse.StatfsOut) (errno syscall.Errno) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Node.Statfs panicked")
+			// If there is a panic then for now just return success
+			errno = fs.OK
+		}
+	}()
+
+	fmt.Println("Statfs called")
+	s := syscall.Statfs_t{}
+	if err := syscall.Statfs(n.RootData.mcfsRoot, &s); err != nil {
+		return fs.ToErrno(err)
+	}
+
+	out.FromStatfsT(&s)
+
+	return fs.OK
+}
+
 // getMode returns the mode for the file. It checks if the underlying mcmodel.File is
 // a file or directory entry.
 func (n *Node) getMode(entry *mcmodel.File) uint32 {
