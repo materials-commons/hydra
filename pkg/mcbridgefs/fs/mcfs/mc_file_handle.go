@@ -148,7 +148,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	return fs.ToErrno(h.mcapi.Release(h.Path, size))
 }
 
-func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, _ *fuse.AttrOut) (errno syscall.Errno) {
+func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
 	fmt.Println("MCFileHandle.Setattr called")
 	h.Mu.Lock()
 	defer func() {
@@ -159,7 +159,15 @@ func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, _ *fuse.At
 	}()
 
 	if sz, ok := in.GetSize(); ok {
-		return fs.ToErrno(syscall.Ftruncate(h.Fd, int64(sz)))
+		if err := syscall.Ftruncate(h.Fd, int64(sz)); err != nil {
+			return fs.ToErrno(err)
+		}
+
+		st := syscall.Stat_t{}
+		if err := syscall.Fstat(h.Fd, &st); err != nil {
+			return fs.ToErrno(err)
+		}
+		out.FromStat(&st)
 	}
 
 	return fs.OK

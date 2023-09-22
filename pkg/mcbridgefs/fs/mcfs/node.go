@@ -100,9 +100,11 @@ func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.
 }
 
 // Getattr gets attributes about the file
-func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (errno syscall.Errno) {
+func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) (errno syscall.Errno) {
+	fmt.Println("Getattr called")
 	defer func() {
 		if r := recover(); r != nil {
+			fmt.Println("Getattr panicked")
 			errno = syscall.ENOENT
 		}
 	}()
@@ -117,6 +119,12 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (e
 		return fs.OK
 	}
 
+	if fops, ok := f.(fs.FileGetattrer); ok {
+		fmt.Println(" calling fops.Getattr")
+		return fops.Getattr(ctx, out)
+	}
+
+	// If we are here then f was nil, so we have to do lookups based on the path
 	path := filepath.Join("/", n.Path(n.Root()))
 	realPath, err := n.RootData.mcApi.GetRealPath(path, n.RootData.mcfsRoot)
 	if err != nil {
@@ -129,6 +137,7 @@ func (n *Node) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) (e
 		return fs.ToErrno(err)
 	}
 
+	fmt.Println("syscall.LStat")
 	out.FromStat(&st)
 
 	return fs.OK
@@ -297,7 +306,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 	fmt.Printf("f = %#v\n", f)
 
 	if fops, ok := f.(fs.FileSetattrer); ok {
-		fmt.Println(" Setattr cast Not Ok")
+		fmt.Println(" calling fops.Setattr")
 		return fops.Setattr(ctx, in, out)
 	}
 

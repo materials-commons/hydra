@@ -10,7 +10,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -220,18 +219,20 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 }
 
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
-	log.Debug("BaseFileHandle Getattr")
+	fmt.Println("BaseFileHandle Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
 }
 
 func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
+	fmt.Println("  BaseFileHandle getattr")
 	st := syscall.Stat_t{}
 	err := syscall.Fstat(f.Fd, &st)
 	if err != nil {
 		return fs.ToErrno(err)
 	}
+	fmt.Println("getattr st.Size =", st.Size)
 	a.FromStat(&st)
 
 	return fs.OK

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -237,9 +238,12 @@ func TestFileTruncation(t *testing.T) {
 	tc := newTestCase(t, &fsTestOptions{dsn: "/tmp/mcfs.db"})
 	require.NotNil(t, tc)
 
-	// Write then read to make sure we get the same results
 	path := "/tmp/mnt/mcfs/1/1/trunctest.txt"
-	fh, _ := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+
+	// Test Open with O_TRUNC
+	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+
 	what := "will truncate content"
 	n, err := io.WriteString(fh, what)
 	require.NoErrorf(t, err, "Got error on io.WriteString: %s", err)
@@ -254,5 +258,18 @@ func TestFileTruncation(t *testing.T) {
 	require.NoErrorf(t, err, "Got error on io.WriteString: %s", err)
 	require.Equal(t, len(what), n)
 	err = fh2.Close()
+	require.NoError(t, err)
+
+	// Test Using FTruncate
+	fh, err = os.OpenFile(path, os.O_RDWR, 0755)
+	require.NoError(t, err)
+	fd := fh.Fd()
+	err = syscall.Ftruncate(int(fd), 0)
+	require.NoError(t, err)
+	st := syscall.Stat_t{}
+	err = syscall.Fstat(int(fd), &st)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), st.Size)
+	err = fh.Close()
 	require.NoError(t, err)
 }
