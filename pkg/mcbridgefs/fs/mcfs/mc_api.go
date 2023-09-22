@@ -128,7 +128,7 @@ func (mcapi *MCApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
 func (mcapi *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, err error) {
 	if file := mcapi.knownFilesTracker.GetFile(path); file != nil {
 		// Found known file, so return it's real path
-		return file.ToUnderlyingDirPath(mcfsRoot), nil
+		return file.ToUnderlyingFilePath(mcfsRoot), nil
 	}
 
 	// Didn't find a previously opened file, so look up file.
