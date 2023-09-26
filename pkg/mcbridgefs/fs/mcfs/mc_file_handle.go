@@ -17,7 +17,7 @@ type MCFileHandle struct {
 	*BaseFileHandle
 	Path              string
 	File              *mcmodel.File
-	activityCounter   ActivityCounter
+	activityCounter   *ActivityCounter
 	mcapi             *MCApi
 	knownFilesTracker *KnownFilesTracker
 }
@@ -44,7 +44,7 @@ func (h *MCFileHandle) WithFile(f *mcmodel.File) *MCFileHandle {
 	return h
 }
 
-func (h *MCFileHandle) WithActivityCounter(activityCounter ActivityCounter) *MCFileHandle {
+func (h *MCFileHandle) WithActivityCounter(activityCounter *ActivityCounter) *MCFileHandle {
 	h.activityCounter = activityCounter
 	return h
 }
@@ -110,29 +110,26 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Relase panicked")
 			errno = syscall.EBADF
 		}
 		h.Mu.Unlock()
 	}()
 
 	if h.Fd == -1 {
-		fmt.Println("Release h.Fd == -1")
+		fmt.Printf("h.Fd == -1 for %s\n", h.Path)
 		return syscall.EBADF
 	}
 
 	err := syscall.Close(h.Fd)
-	fmt.Println("syscall.Close err =", err)
 	h.Fd = -1
 	if err != nil {
-		fmt.Println("syscall.Close gave error")
+		fmt.Printf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
 		return fs.ToErrno(err)
 	}
 
 	// if file was opened readonly then there is no need to do any updates to the database
 	omode := h.Flags & syscall.O_ACCMODE
 	if omode == syscall.O_RDONLY {
-		fmt.Println("is readonly")
 		return fs.OK
 	}
 
@@ -149,7 +146,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 }
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
-	fmt.Println("MCFileHandle.Setattr called")
+	slog.Debug("MCFileHandle.Setattr")
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {

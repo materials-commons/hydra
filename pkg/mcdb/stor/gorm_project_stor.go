@@ -82,6 +82,34 @@ func (s *GormProjectStor) CreateProject(project *mcmodel.Project) (*mcmodel.Proj
 	return project, nil
 }
 
+func (s *GormProjectStor) AddMemberToProject(project *mcmodel.Project, user *mcmodel.User) error {
+	var team mcmodel.Team
+
+	if err := s.db.Where("id = ?", project.TeamID).Find(&team).Error; err != nil {
+		return err
+	}
+
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Model(&team).Association("Members").Append(user)
+	})
+
+	return err
+}
+
+func (s *GormProjectStor) AddAdminToProject(project *mcmodel.Project, user *mcmodel.User) error {
+	var team mcmodel.Team
+
+	if err := s.db.Where("id = ?", project.TeamID).Find(&team).Error; err != nil {
+		return err
+	}
+
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Model(&team).Association("Admins").Append(user)
+	})
+
+	return err
+}
+
 func (s *GormProjectStor) GetProjectByID(projectID int) (*mcmodel.Project, error) {
 	var project mcmodel.Project
 	err := s.db.Find(&project, projectID).Error

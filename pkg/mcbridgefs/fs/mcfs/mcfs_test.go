@@ -2,14 +2,19 @@ package mcfs
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -301,4 +306,188 @@ func TestStat(t *testing.T) {
 	finfo, err := os.Stat(path)
 	require.NoError(t, err)
 	require.Equal(t, int64(n), finfo.Size())
+}
+
+func TestParallelReadWrite(t *testing.T) {
+	var lines [3]string = [3]string{"abc", "def", "ghi"}
+	expected := "abcdefghi"
+
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	var wg sync.WaitGroup
+
+	fn := func(testNumber int) {
+		defer wg.Done()
+		path := fmt.Sprintf("/tmp/mnt/mcfs/1/1/file%d.txt", testNumber)
+		fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+		assert.NoError(t, err)
+		for _, line := range lines {
+			n, err := io.WriteString(fh, line)
+			assert.NoError(t, err)
+			assert.Equal(t, n, len(line))
+		}
+		n, err := io.WriteString(fh, path)
+		assert.NoError(t, err)
+		assert.Equal(t, n, len(path))
+		err = fh.Close()
+		assert.NoError(t, err)
+		fh, err = os.OpenFile(path, os.O_RDONLY, 0755)
+		assert.NoError(t, err)
+		contents, err := os.ReadFile(path)
+		assert.NoError(t, err)
+		texpected := expected + path
+		assert.Equal(t, texpected, string(contents))
+		assert.NoError(t, fh.Close())
+	}
+
+	for i := 0; i < 100; i++ {
+		testNumber := i
+		wg.Add(1)
+		go fn(testNumber)
+	}
+	wg.Wait()
+}
+
+func TestParallelMkdirSameUser(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	dirToCreate := "/tmp/mnt/mcfs/1/1/dir1"
+	var wg sync.WaitGroup
+	fn := func() {
+		defer wg.Done()
+		if err := os.Mkdir(dirToCreate, 0755); err != nil {
+			assert.True(t, errors.Is(err, os.ErrExist))
+		}
+	}
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go fn()
+	}
+	wg.Wait()
+
+	var count int64
+	err := tc.db.Model(&mcmodel.File{}).Where("name", "dir1").Count(&count).Error
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
+
+func TestParallelMkdirDifferentUser(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	// Create a second transfer request and user, so we can do
+	// multiple mkdirs across the users
+	var err error
+	user := &mcmodel.User{Email: "user2@test.com"}
+	user, err = tc.stors.UserStor.CreateUser(user)
+	require.NoError(t, err)
+
+	err = tc.stors.ProjectStor.AddMemberToProject(tc.proj, user)
+	require.NoError(t, err)
+
+	transferRequest := &mcmodel.TransferRequest{
+		ProjectID: tc.proj.ID,
+		OwnerID:   user.ID,
+		State:     "open",
+	}
+
+	transferRequest, err = tc.stors.TransferRequestStor.CreateTransferRequest(transferRequest)
+	require.NoError(t, err)
+
+	globusTransfer := &mcmodel.GlobusTransfer{
+		ProjectID:         tc.proj.ID,
+		State:             "open",
+		OwnerID:           user.ID,
+		TransferRequestID: transferRequest.ID,
+	}
+
+	_, err = tc.stors.GlobusTransferStor.CreateGlobusTransfer(globusTransfer)
+	require.NoError(t, err)
+
+	// Now run the test
+
+	var wg sync.WaitGroup
+	fnUser1 := func() {
+		defer wg.Done()
+		dirToCreate := "/tmp/mnt/mcfs/1/1/dir1"
+		if err := os.Mkdir(dirToCreate, 0755); err != nil {
+			assert.True(t, errors.Is(err, os.ErrExist))
+		}
+	}
+
+	fnUser2 := func() {
+		defer wg.Done()
+		dirToCreate := "/tmp/mnt/mcfs/1/2/dir1"
+		if err := os.Mkdir(dirToCreate, 0755); err != nil {
+			assert.True(t, errors.Is(err, os.ErrExist))
+		}
+	}
+
+	for i := 0; i < 1000; i++ {
+		// Add to waitgroup twice, once for each func
+		wg.Add(1)
+		wg.Add(1)
+		go fnUser1()
+		go fnUser2()
+	}
+	wg.Wait()
+
+	var count int64
+	err = tc.db.Model(&mcmodel.File{}).Where("name", "dir1").Count(&count).Error
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
+
+func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	// Test that write will increment the activity counter
+	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+
+	_, err = io.WriteString(fh, "hello ")
+	require.NoError(t, err)
+
+	// Stored by project/user path, eg /1/1
+	activityCounter, found := tc.factory.activityCounterFactory.activityCounters["/1/1"]
+	require.True(t, found)
+
+	count := atomic.LoadInt64(&(activityCounter.activityCount))
+	require.Equal(t, int64(1), count)
+
+	_, _ = io.WriteString(fh, "world")
+	count = atomic.LoadInt64(&(activityCounter.activityCount))
+	require.Equal(t, int64(2), count)
+	require.NoError(t, fh.Close())
+
+	_, err = os.ReadFile(path)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+	count = atomic.LoadInt64(&(activityCounter.activityCount))
+	require.Equal(t, int64(3), count)
+}
+
+func TestMonitorHandlesInactivityDeadline(t *testing.T) {
+	// Test the function to determine if inactivity time has passed
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	// Test that write will increment the activity counter
+	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+	require.NoError(t, fh.Close())
+
+	//time.Sleep(time.Second * 4)
+	//// Check if expired by seeing if time is ahead of write by seconds
+	//now := time.Now()
+	//
+	//activityCounter, found := tc.factory.activityCounterFactory.activityCounters["/1/1"]
+	//require.True(t, found)
+	//
+	//require.True(t, now.After(activityCounter.LastChanged))
+
 }

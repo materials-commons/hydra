@@ -1,10 +1,10 @@
 package mcfs
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type fsTestCase struct {
@@ -29,12 +30,13 @@ type fsTestCase struct {
 	rawFS  fuse.RawFileSystem
 	server *fuse.Server
 
-	// database objects
+	// services and db objects
 	proj              *mcmodel.Project
 	user              *mcmodel.User
 	globusTransfer    *mcmodel.GlobusTransfer
 	transferRequest   *mcmodel.TransferRequest
 	knownFilesTracker *KnownFilesTracker
+	factory           *MCFileHandlerFactory
 }
 
 type fsTestOptions struct {
@@ -47,6 +49,13 @@ type fsTestOptions struct {
 	mntDir        string
 }
 
+type NullLogger struct{}
+
+func (l *NullLogger) Printf(_ string, _ ...interface{}) {
+	//fmt.Println("Null logger called")
+	// do nothing
+}
+
 func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors) {
 	dsn := mcdb.SqliteInMemoryDSN
 	if dsnToUse != "" {
@@ -57,7 +66,15 @@ func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors)
 		fh.Close()
 	}
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	gormLogger := logger.New(&NullLogger{},
+		logger.Config{
+			SlowThreshold:             time.Second * 5,
+			LogLevel:                  logger.Silent,
+			IgnoreRecordNotFoundError: true,
+			ParameterizedQueries:      true,
+			Colorful:                  false,
+		})
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: gormLogger})
 	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
 	sqlitedb, err := db.DB()
 	sqlitedb.SetMaxOpenConns(1)
@@ -86,7 +103,15 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		fh.Close()
 	}
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	gormLogger := logger.New(&NullLogger{},
+		logger.Config{
+			SlowThreshold:             time.Second * 5,
+			LogLevel:                  logger.Silent,
+			IgnoreRecordNotFoundError: true,
+			ParameterizedQueries:      true,
+			Colorful:                  false,
+		})
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: gormLogger})
 	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
 	sqlitedb, err := db.DB()
 	sqlitedb.SetMaxOpenConns(1)
@@ -99,7 +124,6 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		opts.mntDir = "/tmp/mnt/mcfs"
 	}
 
-	fmt.Printf("opts = %+v\n", opts)
 	umount(opts.mntDir)
 
 	_ = os.RemoveAll(opts.mcfsDir)
@@ -129,7 +153,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
 	mcapi := NewMCApi(stors, tc.knownFilesTracker)
-	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker)
+	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, time.Second*2)
+	tc.factory = newHandleFactory
 
 	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 		return newHandleFactory.NewFileHandle(fd, flags, path, file)
@@ -166,13 +191,12 @@ func (tc *fsTestCase) populateDatabase() {
 
 	tc.user, err = tc.stors.UserStor.CreateUser(user)
 	require.NoErrorf(tc.T, err, "Failed creating user1: %s", err)
-	fmt.Printf(" populateDatabase created user %#v\n", tc.user)
 
 	proj := &mcmodel.Project{Name: "Proj1", OwnerID: user.ID}
 
 	tc.proj, err = tc.stors.ProjectStor.CreateProject(proj)
 	require.NoErrorf(tc.T, err, "Failed creating proj: %s", err)
-	fmt.Printf("  populateDatabase created project %#v\n", tc.proj)
+
 	transferRequest := &mcmodel.TransferRequest{
 		ProjectID: tc.proj.ID,
 		OwnerID:   tc.proj.OwnerID,
@@ -183,7 +207,7 @@ func (tc *fsTestCase) populateDatabase() {
 	require.NoError(tc.T, err)
 
 	globusTransfer := &mcmodel.GlobusTransfer{
-		ProjectID:         0,
+		ProjectID:         tc.proj.ID,
 		State:             "open",
 		OwnerID:           tc.proj.OwnerID,
 		TransferRequestID: transferRequest.ID,
@@ -195,7 +219,6 @@ func (tc *fsTestCase) populateDatabase() {
 
 func (tc *fsTestCase) unmount() {
 	if err := tc.server.Unmount(); err != nil {
-		fmt.Println("tc.server.Unmount failed:", err)
 		tc.Fatal(err)
 	}
 }
@@ -222,7 +245,5 @@ func (tc *fsTestCase) closeDB() {
 
 func umount(path string) {
 	cmd := exec.Command("/usr/bin/umount", path)
-	if err := cmd.Run(); err != nil {
-		//fmt.Println("umount failed:", err)
-	}
+	_ = cmd.Run()
 }

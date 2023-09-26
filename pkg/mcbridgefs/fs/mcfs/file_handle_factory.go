@@ -1,6 +1,8 @@
 package mcfs
 
 import (
+	"time"
+
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -12,14 +14,14 @@ type FileHandleFactory interface {
 
 type MCFileHandlerFactory struct {
 	mcapi                  *MCApi
-	activityCounterFactory *PathBasedActivityCounterFactory
+	activityCounterFactory *ActivityCounterMonitor
 	knownFilesTracker      *KnownFilesTracker
 }
 
-func NewMCFileHandlerFactory(mcapi *MCApi, knownFilesTracker *KnownFilesTracker) *MCFileHandlerFactory {
+func NewMCFileHandlerFactory(mcapi *MCApi, knownFilesTracker *KnownFilesTracker, inactivity time.Duration) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcapi:                  mcapi,
-		activityCounterFactory: NewPathBasedActivityCounterFactory(),
+		activityCounterFactory: NewActivityCounterMonitor(inactivity),
 		knownFilesTracker:      knownFilesTracker,
 	}
 }

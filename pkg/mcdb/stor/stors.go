@@ -33,6 +33,8 @@ type ProjectStor interface {
 	UpdateProjectSizeAndFileCount(projectID int, size int64, fileCount int) error
 	UpdateProjectDirectoryCount(projectID int, directoryCount int) error
 	UserCanAccessProject(userID, projectID int) bool
+	AddMemberToProject(project *mcmodel.Project, user *mcmodel.User) error
+	AddAdminToProject(project *mcmodel.Project, user *mcmodel.User) error
 }
 
 type TransferRequestFileStor interface {

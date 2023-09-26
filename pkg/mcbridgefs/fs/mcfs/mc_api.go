@@ -30,7 +30,7 @@ func NewMCApi(stors *stor.Stors, tracker *KnownFilesTracker) *MCApi {
 }
 
 func (mcapi *MCApi) Readdir(path string) ([]mcmodel.File, error) {
-	fmt.Printf("MCApi.Readdir: %q\n", path)
+	slog.Debug("MCApi.Readdir", "path", path)
 
 	projPath := projectpath.NewProjectPath(path)
 
@@ -39,15 +39,12 @@ func (mcapi *MCApi) Readdir(path string) ([]mcmodel.File, error) {
 		return nil, fmt.Errorf("bad id path: %s", path)
 	case projectpath.RootBasePath:
 		// Return the list of projects that have transfer requests
-		fmt.Println("  Readdir RootBasePath")
 		return mcapi.listActiveProjects()
 	case projectpath.ProjectBasePath:
 		// Return the list of users that have transfer requests for this project
-		fmt.Println("  Readdir ProjectBasePath")
 		return mcapi.listActiveUsersForProject(path)
 	default:
 		// Return directory contents for that /project/user/rest/of/project/path
-		fmt.Println("  Readdir default")
 		return mcapi.listProjectDirectory(path)
 	}
 }
@@ -142,7 +139,7 @@ func (mcapi *MCApi) GetRealPath(path string, mcfsRoot string) (realpath string, 
 }
 
 func (mcapi *MCApi) Lookup(path string) (*mcmodel.File, error) {
-	fmt.Printf("MCApi.Lookup: %q\n", path)
+	slog.Debug("MCApi.Lookup", "path", path)
 	projPath := projectpath.NewProjectPath(path)
 
 	switch projPath.PathType {
@@ -151,21 +148,17 @@ func (mcapi *MCApi) Lookup(path string) (*mcmodel.File, error) {
 
 	case projectpath.RootBasePath:
 		// Return data on the root node
-		fmt.Println("  Lookup RootBasePath")
 		return nil, fmt.Errorf("root not supported")
 
 	case projectpath.ProjectBasePath:
 		// 	Return data on the project
-		fmt.Println("  Lookup ProjectBasePath")
 		return mcapi.lookupProject(path)
 
 	case projectpath.UserBasePath:
 		// Return data on the user
-		fmt.Println("  Lookup UserBasePath")
 		return mcapi.lookupUser(path)
 
 	default:
-		fmt.Println("  Lookup default")
 		projPath := projectpath.NewProjectPath(path)
 		f, err := mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, projPath.ProjectPath)
 		return f, err
@@ -174,7 +167,6 @@ func (mcapi *MCApi) Lookup(path string) (*mcmodel.File, error) {
 
 func (mcapi *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 	projPath := projectpath.NewProjectPath(path)
-	fmt.Println("lookupProject", path)
 
 	transferRequests, err := mcapi.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID)
 	switch {
@@ -185,7 +177,6 @@ func (mcapi *MCApi) lookupProject(path string) (*mcmodel.File, error) {
 		return nil, fmt.Errorf("no such path: %s", path)
 
 	default:
-		fmt.Printf("   found transferRequests %#v", transferRequests)
 		// Found at least one transfer request for the project
 		f := &mcmodel.File{
 			Name:      fmt.Sprintf("%d", projPath.ProjectID),
@@ -226,7 +217,7 @@ func (mcapi *MCApi) lookupUser(path string) (*mcmodel.File, error) {
 }
 
 func (mcapi *MCApi) Mkdir(path string) (*mcmodel.File, error) {
-	fmt.Println("MCApi.Mkdir path =", path)
+	slog.Debug("MCApi.Mkdir", "path", path)
 	projPath := projectpath.NewProjectPath(path)
 	parentDir, err := mcapi.stors.FileStor.GetFileByPath(projPath.ProjectID, filepath.Dir(projPath.ProjectPath))
 	if err != nil {
@@ -262,7 +253,6 @@ func (mcapi *MCApi) GetKnownFileRealPath(path, mcfsRoot string) (string, error) 
 func (mcapi *MCApi) FTruncate(path, mcfsRoot string, size uint64) (error, *syscall.Stat_t) {
 	f := mcapi.knownFilesTracker.GetFile(path)
 	if f == nil {
-		fmt.Println("FTruncate - Unknown file", path)
 		return syscall.ENOENT, nil
 	}
 
@@ -279,7 +269,7 @@ func (mcapi *MCApi) FTruncate(path, mcfsRoot string, size uint64) (error, *sysca
 }
 
 func (mcapi *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
-	fmt.Printf("MCApi Open %s\n", path)
+	slog.Debug("MCApi Open", "path", path)
 	projPath := projectpath.NewProjectPath(path)
 	f = mcapi.knownFilesTracker.GetFile(path)
 	if f != nil {
@@ -307,6 +297,7 @@ func (mcapi *MCApi) Open(path string, flags int) (f *mcmodel.File, isNewFile boo
 func (mcapi *MCApi) Release(path string, size uint64) error {
 	knownFile := mcapi.knownFilesTracker.Get(path)
 	if knownFile == nil {
+		fmt.Printf("MCApi.Release knownFile is nil for %s\n", path)
 		return syscall.ENOENT
 	}
 
@@ -323,6 +314,9 @@ func (mcapi *MCApi) Release(path string, size uint64) error {
 		}
 	}
 
+	if err != nil {
+		fmt.Printf("MCApi.Release MarkFileReleased failed with err %s\n", err)
+	}
 	return err
 }
 

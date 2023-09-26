@@ -6,7 +6,7 @@ package mcfs
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 	"syscall"
 
@@ -153,7 +153,7 @@ func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.Fil
 }
 
 func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	fmt.Println("Setattr called")
+	slog.Debug("BaseFileHandle.Setattr")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -162,7 +162,7 @@ func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *f
 }
 
 func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscall.Errno {
-	fmt.Println("setAttr")
+	slog.Debug("BaseFileHandle.setAttr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	var errno syscall.Errno
@@ -219,20 +219,19 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 }
 
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
-	fmt.Println("BaseFileHandle Getattr")
+	slog.Debug("BaseFileHandle.Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
 }
 
 func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
-	fmt.Println("  BaseFileHandle getattr")
+	slog.Debug("  BaseFileHandle.getattr")
 	st := syscall.Stat_t{}
-	err := syscall.Fstat(f.Fd, &st)
-	if err != nil {
+	if err := syscall.Fstat(f.Fd, &st); err != nil {
 		return fs.ToErrno(err)
 	}
-	fmt.Println("getattr st.Size =", st.Size)
+
 	a.FromStat(&st)
 
 	return fs.OK
