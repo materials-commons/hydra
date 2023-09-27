@@ -185,7 +185,7 @@ func TestCreate(t *testing.T) {
 				require.NoErrorf(t, err, "Expected no error, got %s for path %s", err, test.path)
 
 				numBytes, err := io.WriteString(fh, test.path)
-				fh.Close()
+				require.NoError(t, fh.Close())
 
 				require.Equalf(t, numBytes, len(test.path), "Wrong length expected %d, got %d", numBytes, len(test.path))
 				// Assume all paths are written to the root
@@ -216,7 +216,7 @@ func TestOpen(t *testing.T) {
 	n, err := io.WriteString(fh, what)
 	require.NoErrorf(t, err, "Got unexpected error on write: %s", err)
 	require.Equal(t, len(what), n)
-	fh.Close()
+	require.NoError(t, fh.Close())
 	f, err := tc.stors.FileStor.GetFileByPath(1, "/readwrite.txt")
 	require.NoErrorf(t, err, "Couldn't get database file entry: %s", err)
 
@@ -230,7 +230,7 @@ func TestOpen(t *testing.T) {
 	require.NoErrorf(t, err, "Got error on read %s", err)
 	require.Equal(t, len(what), n)
 	require.Equal(t, what, string(contents[:n]))
-	fh.Close()
+	require.NoError(t, fh.Close())
 	f2, err := tc.stors.FileStor.GetFileByPath(1, "/readwrite.txt")
 	require.NoErrorf(t, err, "Couldn't get database file entry: %s", err)
 
@@ -467,6 +467,30 @@ func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
 	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
 	count = atomic.LoadInt64(&(activityCounter.activityCount))
 	require.Equal(t, int64(3), count)
+}
+
+func TestFileSeek(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+
+	// Test that write will increment the activity counter
+	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+
+	_, err = io.WriteString(fh, "hello")
+	require.NoError(t, err)
+	offset, err := fh.Seek(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), offset)
+	_, err = io.WriteString(fh, "world")
+	require.NoError(t, err)
+	err = fh.Close()
+	require.NoError(t, err)
+
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "world", string(contents))
 }
 
 func TestMonitorHandlesInactivityDeadline(t *testing.T) {

@@ -230,6 +230,7 @@ func (tc *fsTestCase) unmount() {
 // projects, users, etc... that populateDatabase is adding. Tests assume that
 // there is only a single entry of these items and thus the test will fail.
 func (tc *fsTestCase) closeDB() {
+	time.Sleep(time.Millisecond)
 	sqlDB, err := tc.db.DB()
 
 	if err != nil {
