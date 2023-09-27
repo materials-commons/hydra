@@ -190,7 +190,10 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 			inode = nil
 			errno = syscall.EINVAL
 		}
+		n.RootData.mu.Unlock()
 	}()
+
+	n.RootData.mu.Lock()
 
 	slog.Debug("Node.Mkdir", "name", name)
 
