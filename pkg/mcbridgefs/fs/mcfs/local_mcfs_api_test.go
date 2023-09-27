@@ -17,7 +17,7 @@ func TestMCApi_Create(t *testing.T) {
 	//}
 	knownFilesTracker := NewKnownFilesTracker()
 	_, stors := newTestStor(t, "", "/tmp/mcfs")
-	mcapi := NewMCApi(stors, knownFilesTracker)
+	mcapi := NewLocalMCFSApi(stors, knownFilesTracker)
 
 	var tests = []struct {
 		name          string

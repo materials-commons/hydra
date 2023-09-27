@@ -13,12 +13,12 @@ type FileHandleFactory interface {
 }
 
 type MCFileHandlerFactory struct {
-	mcapi                  *MCApi
+	mcapi                  *LocalMCFSApi
 	activityCounterFactory *ActivityCounterMonitor
 	knownFilesTracker      *KnownFilesTracker
 }
 
-func NewMCFileHandlerFactory(mcapi *MCApi, knownFilesTracker *KnownFilesTracker, inactivity time.Duration) *MCFileHandlerFactory {
+func NewMCFileHandlerFactory(mcapi *LocalMCFSApi, knownFilesTracker *KnownFilesTracker, inactivity time.Duration) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcapi:                  mcapi,
 		activityCounterFactory: NewActivityCounterMonitor(inactivity),
@@ -34,5 +34,5 @@ func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *m
 		WithFile(file).
 		WithActivityCounter(activityCounter).
 		WithKnownFilesTracker(f.knownFilesTracker).
-		WithMCApi(f.mcapi)
+		WithMCFSApi(f.mcapi)
 }

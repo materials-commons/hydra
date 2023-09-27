@@ -22,7 +22,7 @@ type NewFileHandleFN func(fd, flags int, path string, file *mcmodel.File) fs.Fil
 
 type RootData struct {
 	mcfsRoot      string
-	mcApi         *MCApi
+	mcfsapi       MCFSApi
 	uid           uint32
 	gid           uint32
 	newFileHandle NewFileHandleFN
@@ -34,7 +34,7 @@ type Node struct {
 	RootData *RootData
 }
 
-func CreateFS(fsRoot string, mcfsApi *MCApi, fn NewFileHandleFN) (*Node, error) {
+func CreateFS(fsRoot string, mcfsapi MCFSApi, fn NewFileHandleFN) (*Node, error) {
 	u, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func CreateFS(fsRoot string, mcfsApi *MCApi, fn NewFileHandleFN) (*Node, error) 
 		mcfsRoot:      fsRoot,
 		uid:           uint32(uid32),
 		gid:           uint32(gid32),
-		mcApi:         mcfsApi,
+		mcfsapi:       mcfsapi,
 		newFileHandle: fn,
 	}
 
@@ -70,7 +70,7 @@ func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno)
 	}()
 
 	dirPath := filepath.Join("/", n.Path(n.Root()))
-	files, err := n.RootData.mcApi.Readdir(dirPath)
+	files, err := n.RootData.mcfsapi.Readdir(dirPath)
 	if err != nil {
 		return nil, syscall.ENOENT
 	}
@@ -126,7 +126,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	// If we are here then f was nil, so we have to do lookups based on the path
 	path := filepath.Join("/", n.Path(n.Root()))
-	realPath, err := n.RootData.mcApi.GetRealPath(path, n.RootData.mcfsRoot)
+	realPath, err := n.RootData.mcfsapi.GetRealPath(path, n.RootData.mcfsRoot)
 	if err != nil {
 		return syscall.ENOENT
 	}
@@ -163,7 +163,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 		return n.NewInode(ctx, node, fs.StableAttr{Mode: mode}), fs.OK
 	}
 
-	f, err := n.RootData.mcApi.Lookup(path)
+	f, err := n.RootData.mcfsapi.Lookup(path)
 	if err != nil {
 		fmt.Printf("Lookup failed %s: %s\n", path, err)
 		return nil, syscall.ENOENT
@@ -195,7 +195,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 	slog.Debug("Node.Mkdir", "name", name)
 
 	path := filepath.Join("/", n.Path(n.Root()), name)
-	dir, err := n.RootData.mcApi.Mkdir(path)
+	dir, err := n.RootData.mcfsapi.Mkdir(path)
 	if err != nil {
 		return nil, syscall.EINVAL
 	}
@@ -228,7 +228,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	}()
 
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
-	f, err := n.RootData.mcApi.Create(fpath)
+	f, err := n.RootData.mcfsapi.Create(fpath)
 	if err != nil {
 		slog.Error("Node.Create - failed creating new file", "file", fpath, "error", err)
 		fmt.Printf("Node.Create - failed creating new file %s: %s\n", fpath, err)
@@ -272,7 +272,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	fmt.Println("Node.Open", path)
 	omode := flags & syscall.O_ACCMODE
 
-	f, isNewFile, err := n.RootData.mcApi.Open(path, int(flags))
+	f, isNewFile, err := n.RootData.mcfsapi.Open(path, int(flags))
 	if err != nil {
 		return nil, 0, syscall.EIO
 	}
@@ -315,7 +315,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 
 	// If we are then the file handle is null, so we have to do this by
 	// getting paths. This will fail if the file is not known.
-	realPath, err := n.RootData.mcApi.GetKnownFileRealPath(path, n.RootData.mcfsRoot)
+	realPath, err := n.RootData.mcfsapi.GetKnownFileRealPath(path, n.RootData.mcfsRoot)
 	if err != nil {
 		return syscall.ENOENT
 	}
@@ -337,7 +337,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 	return syscall.ENOTSUP
 }
 
-func (n *Node) Rename(_ context.Context, name string, newParent fs.InodeEmbedder, newName string, _ uint32) syscall.Errno {
+func (n *Node) Rename(_ context.Context, _ string, _ fs.InodeEmbedder, _ string, _ uint32) syscall.Errno {
 	slog.Error("Node.Rename")
 	return syscall.EPERM
 }

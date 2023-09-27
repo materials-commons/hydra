@@ -63,7 +63,7 @@ func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors)
 		_ = os.Remove(dsnToUse)
 		fh, err := os.Create(dsnToUse)
 		require.NoErrorf(t, err, "Failed opening %s, got %s", dsnToUse, err)
-		fh.Close()
+		_ = fh.Close()
 	}
 
 	gormLogger := logger.New(&NullLogger{},
@@ -100,7 +100,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		_ = os.Remove(opts.dsn)
 		fh, err := os.Create(opts.dsn)
 		require.NoErrorf(t, err, "Failed opening %s, got %s", opts.dsn, err)
-		fh.Close()
+		_ = fh.Close()
 	}
 
 	gormLogger := logger.New(&NullLogger{},
@@ -152,7 +152,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	mcapi := NewMCApi(stors, tc.knownFilesTracker)
+	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker)
 	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, time.Second*2)
 	tc.factory = newHandleFactory
 
@@ -240,7 +240,7 @@ func (tc *fsTestCase) closeDB() {
 		return
 	}
 
-	sqlDB.Close()
+	_ = sqlDB.Close()
 }
 
 func umount(path string) {

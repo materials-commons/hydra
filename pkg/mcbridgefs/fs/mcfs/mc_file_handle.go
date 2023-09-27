@@ -18,7 +18,7 @@ type MCFileHandle struct {
 	Path              string
 	File              *mcmodel.File
 	activityCounter   *ActivityCounter
-	mcapi             *MCApi
+	mcfsapi           MCFSApi
 	knownFilesTracker *KnownFilesTracker
 }
 
@@ -49,8 +49,8 @@ func (h *MCFileHandle) WithActivityCounter(activityCounter *ActivityCounter) *MC
 	return h
 }
 
-func (h *MCFileHandle) WithMCApi(mcapi *MCApi) *MCFileHandle {
-	h.mcapi = mcapi
+func (h *MCFileHandle) WithMCFSApi(mcfsapi MCFSApi) *MCFileHandle {
+	h.mcfsapi = mcfsapi
 	return h
 }
 
@@ -142,7 +142,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 		size = attrs.Size
 	}
 
-	return fs.ToErrno(h.mcapi.Release(h.Path, size))
+	return fs.ToErrno(h.mcfsapi.Release(h.Path, size))
 }
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
