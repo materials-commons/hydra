@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -25,6 +26,7 @@ type RootData struct {
 	uid           uint32
 	gid           uint32
 	newFileHandle NewFileHandleFN
+	mu            sync.Mutex
 }
 
 type Node struct {
@@ -142,11 +144,13 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 // Lookup will return information about the current entry.
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
+	n.RootData.mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
 			inode = nil
 			errno = syscall.ENOENT
 		}
+		n.RootData.mu.Unlock()
 	}()
 
 	dirPath := filepath.Join("/", n.Path(n.Root()))

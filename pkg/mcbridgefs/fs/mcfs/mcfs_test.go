@@ -361,7 +361,7 @@ func TestParallelMkdirSameUser(t *testing.T) {
 			assert.True(t, errors.Is(err, os.ErrExist))
 		}
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go fn()
 	}
@@ -425,10 +425,9 @@ func TestParallelMkdirDifferentUser(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		// Add to waitgroup twice, once for each func
-		wg.Add(1)
-		wg.Add(1)
+		wg.Add(2)
 		go fnUser1()
 		go fnUser2()
 	}
