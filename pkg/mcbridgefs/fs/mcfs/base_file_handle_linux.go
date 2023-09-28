@@ -6,6 +6,7 @@ package mcfs
 
 import (
 	"context"
+	"fmt"
 	"syscall"
 	"time"
 	"unsafe"
@@ -18,6 +19,7 @@ import (
 func (f *BaseFileHandle) Allocate(ctx context.Context, off uint64, sz uint64, mode uint32) syscall.Errno {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
+	fmt.Println("BaseFileHandle.Allocate")
 	err := syscall.Fallocate(f.Fd, mode, int64(off), int64(sz))
 	if err != nil {
 		return fs.ToErrno(err)

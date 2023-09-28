@@ -19,9 +19,10 @@ type KnownFilesTracker struct {
 }
 
 type KnownFile struct {
-	file                 *mcmodel.File
-	hasher               hash.Hash
-	hashNeedsRecomputing bool
+	file        *mcmodel.File
+	hasher      hash.Hash
+	hashInvalid bool
+	sequence    int
 }
 
 func NewKnownFilesTracker() *KnownFilesTracker {
@@ -39,13 +40,13 @@ type LoadOrStoreFN func(knownFile *KnownFile) (*mcmodel.File, error)
 // will happen.
 //
 // This function exists so that a set of operations can be completed before loading
-// a known file. It prevents a race condition where other file system calls are made
-// that don't complete before the known files tracker is loaded.
-func (t *KnownFilesTracker) LoadOrStore(path string, fn LoadOrStoreFN) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+// a known file. It prevents a race condition where other file system calls made
+// don't complete before the known files tracker is loaded.
+func (tracker *KnownFilesTracker) LoadOrStore(path string, fn LoadOrStoreFN) error {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
 
-	knownFile := t.knownFiles[path]
+	knownFile := tracker.knownFiles[path]
 	potentialNewFile, err := fn(knownFile)
 	switch {
 	case err != nil:
@@ -59,25 +60,40 @@ func (t *KnownFilesTracker) LoadOrStore(path string, fn LoadOrStoreFN) error {
 			file:   potentialNewFile,
 			hasher: md5.New(),
 		}
-		t.knownFiles[path] = newKnownFile
+		tracker.knownFiles[path] = newKnownFile
 		return nil
 	}
 }
 
-func (t *KnownFilesTracker) Store(path string, file *mcmodel.File) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (tracker *KnownFilesTracker) WithLockHeld(path string, fn func(knownFile *KnownFile)) bool {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+
+	knownFileEntry := tracker.knownFiles[path]
+	if knownFileEntry == nil {
+		// File not found
+		return false
+	}
+
+	// Found a known file
+	fn(knownFileEntry)
+	return true
+}
+
+func (tracker *KnownFilesTracker) Store(path string, file *mcmodel.File) {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
 
 	knownFile := &KnownFile{
 		file:   file,
 		hasher: md5.New(),
 	}
 
-	t.knownFiles[path] = knownFile
+	tracker.knownFiles[path] = knownFile
 }
 
-func (t *KnownFilesTracker) GetFile(path string) *mcmodel.File {
-	knownFileEntry := t.Get(path)
+func (tracker *KnownFilesTracker) GetFile(path string) *mcmodel.File {
+	knownFileEntry := tracker.Get(path)
 	if knownFileEntry != nil {
 		return knownFileEntry.file
 	}
@@ -85,20 +101,20 @@ func (t *KnownFilesTracker) GetFile(path string) *mcmodel.File {
 	return nil
 }
 
-func (t *KnownFilesTracker) Get(path string) *KnownFile {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (tracker *KnownFilesTracker) Get(path string) *KnownFile {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
 
-	knownFileEntry := t.knownFiles[path]
+	knownFileEntry := tracker.knownFiles[path]
 	if knownFileEntry != nil {
 		return knownFileEntry
 	}
 	return nil
 }
 
-func (t *KnownFilesTracker) Delete(path string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (tracker *KnownFilesTracker) Delete(path string) {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
 
-	delete(t.knownFiles, path)
+	delete(tracker.knownFiles, path)
 }

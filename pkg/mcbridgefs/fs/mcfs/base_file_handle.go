@@ -6,6 +6,7 @@ package mcfs
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"syscall"
@@ -154,6 +155,7 @@ func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.Fil
 
 func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	slog.Debug("BaseFileHandle.Setattr")
+	fmt.Println("BaseFileHandle.Setattr")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -220,6 +222,7 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
 	slog.Debug("BaseFileHandle.Getattr")
+	fmt.Println("BaseFileHandle.Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
@@ -240,6 +243,7 @@ func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Err
 func (f *BaseFileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
+	fmt.Println("BaseFileHandle.Lseek")
 	n, err := unix.Seek(f.Fd, int64(off), int(whence))
 	return uint64(n), fs.ToErrno(err)
 }

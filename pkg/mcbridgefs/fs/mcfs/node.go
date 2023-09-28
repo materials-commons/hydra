@@ -283,11 +283,11 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	if omode == syscall.O_WRONLY || omode == syscall.O_RDWR {
 		if isNewFile {
 			flags = flags &^ syscall.O_CREAT
-		} else {
-			if !flagSet(int(omode), syscall.O_TRUNC) {
-				flags = flags &^ syscall.O_APPEND
-			}
 		}
+	}
+
+	if flagSet(int(flags), syscall.O_APPEND) {
+		fmt.Println("In open O_APPEND Set")
 	}
 
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
@@ -296,6 +296,12 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 		fmt.Printf("syscall.Open (%s) %s: %s\n", path, filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
+
+	st := syscall.Stat_t{}
+	if err := syscall.Fstat(fd, &st); err != nil {
+		fmt.Println("Open Fstat failed with", err)
+	}
+	fmt.Println("Open file size =", st.Size)
 
 	fhandle := n.RootData.newFileHandle(fd, int(flags), path, f)
 	return fhandle, 0, fs.OK
@@ -311,6 +317,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 
 	path := filepath.Join("/", n.Path(n.Root()))
 	slog.Debug("Node.Setattr", "path", path)
+	fmt.Println("Node.Setattr")
 
 	if fops, ok := f.(fs.FileSetattrer); ok {
 		return fops.Setattr(ctx, in, out)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"syscall"
 
 	"github.com/hanwen/go-fuse/v2/fs"
@@ -15,6 +16,7 @@ import (
 
 type MCFileHandle struct {
 	*BaseFileHandle
+	expectedOffset    int64
 	Path              string
 	File              *mcmodel.File
 	activityCounter   *ActivityCounter
@@ -61,6 +63,7 @@ func (h *MCFileHandle) WithKnownFilesTracker(tracker *KnownFilesTracker) *MCFile
 
 func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
 	h.Mu.Lock()
+	fmt.Printf("MCFileHandle.Write %s:%d\n", string(data), off)
 	defer func() {
 		if r := recover(); r != nil {
 			bytesWritten = 0
@@ -75,19 +78,35 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 		return 0, syscall.EIO
 	}
 
+	if !flagSet(h.Flags, os.O_APPEND) {
+		// If the O_APPEND flag is not set then we need to track
+		// the offset. If it was set, then each write will automatically
+		// be done to the end of the file.
+		if !knownFile.hashInvalid {
+			if h.expectedOffset != off {
+				knownFile.hashInvalid = true
+			}
+		}
+	}
+
 	h.activityCounter.IncrementActivityCount()
 	n, err := syscall.Pwrite(h.Fd, data, off)
 	if err != nil {
 		return uint32(n), fs.ToErrno(err)
 	}
 
-	_, _ = io.Copy(knownFile.hasher, bytes.NewBuffer(data[:n]))
+	h.expectedOffset = h.expectedOffset + int64(n)
+
+	if !knownFile.hashInvalid {
+		_, _ = io.Copy(knownFile.hasher, bytes.NewBuffer(data[:n]))
+	}
 
 	return uint32(n), fs.OK
 }
 
 func (h *MCFileHandle) Read(_ context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	h.Mu.Lock()
+	fmt.Println("MCFileHandle.Read")
 	defer func() {
 		if r := recover(); r != nil {
 			res = nil
@@ -147,6 +166,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
 	slog.Debug("MCFileHandle.Setattr")
+	fmt.Println("MCFileHandle.Setattr")
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
