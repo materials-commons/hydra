@@ -6,7 +6,6 @@ package mcfs
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 	"syscall"
@@ -17,18 +16,26 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// BaseFileHandle implements the basic operations to a file. It is heavily copied from
+// github.com/hanwen/go-fuse/fs/files.go. It implements an interface to an existing
+// file in a linux file system.
+type BaseFileHandle struct {
+	// Mu is used to lock operations on the file
+	Mu sync.Mutex
+
+	// The file descriptor to the file the BaseFileHandle is connected to
+	Fd int
+
+	// The flags used to open the file.
+	Flags int
+}
+
 // NewBaseFileHandle creates a FileHandle out of a file descriptor. All
 // operations are implemented. When using the Fd from a *os.File, call
 // syscall.Dup() on the Fd, to avoid os.File's finalizer from closing
 // the file descriptor.
 func NewBaseFileHandle(fd, flags int) fs.FileHandle {
 	return &BaseFileHandle{Fd: fd, Flags: flags}
-}
-
-type BaseFileHandle struct {
-	Mu    sync.Mutex
-	Fd    int
-	Flags int
 }
 
 var _ = (fs.FileHandle)((*BaseFileHandle)(nil))
@@ -45,6 +52,7 @@ var _ = (fs.FileFsyncer)((*BaseFileHandle)(nil))
 var _ = (fs.FileSetattrer)((*BaseFileHandle)(nil))
 var _ = (fs.FileAllocater)((*BaseFileHandle)(nil))
 
+// Read reads a from the file descriptor.
 func (f *BaseFileHandle) Read(ctx context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	//log.Debug("BaseFileHandle Read")
 	f.Mu.Lock()
@@ -53,6 +61,7 @@ func (f *BaseFileHandle) Read(ctx context.Context, buf []byte, off int64) (res f
 	return r, fs.OK
 }
 
+// Write writes to the file descriptor.
 func (f *BaseFileHandle) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
 	//log.Debug("BaseFileHandle Write")
 	f.Mu.Lock()
@@ -61,6 +70,7 @@ func (f *BaseFileHandle) Write(ctx context.Context, data []byte, off int64) (uin
 	return uint32(n), fs.ToErrno(err)
 }
 
+// Release handles the close operation.
 func (f *BaseFileHandle) Release(ctx context.Context) syscall.Errno {
 	//log.Debug("BaseFileHandle Release")
 	f.Mu.Lock()
@@ -73,6 +83,7 @@ func (f *BaseFileHandle) Release(ctx context.Context) syscall.Errno {
 	return syscall.EBADF
 }
 
+// Flush handles flushing the file buffer.
 func (f *BaseFileHandle) Flush(ctx context.Context) syscall.Errno {
 	//log.Debug("BaseFileHandle Flush")
 	f.Mu.Lock()
@@ -89,6 +100,7 @@ func (f *BaseFileHandle) Flush(ctx context.Context) syscall.Errno {
 	return fs.ToErrno(err)
 }
 
+// Fsync handles the fsync call to flush to disk.
 func (f *BaseFileHandle) Fsync(ctx context.Context, flags uint32) (errno syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
@@ -103,6 +115,7 @@ const (
 	_OFD_SETLKW = 38
 )
 
+// Getlk implements getting file lock status
 func (f *BaseFileHandle) Getlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32, out *fuse.FileLock) (errno syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
@@ -113,14 +126,17 @@ func (f *BaseFileHandle) Getlk(ctx context.Context, owner uint64, lk *fuse.FileL
 	return
 }
 
+// Setlk implements file locking
 func (f *BaseFileHandle) Setlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) (errno syscall.Errno) {
 	return f.setLock(ctx, owner, lk, flags, false)
 }
 
+// Setlkw implements file locking with waiting
 func (f *BaseFileHandle) Setlkw(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) (errno syscall.Errno) {
 	return f.setLock(ctx, owner, lk, flags, true)
 }
 
+// setLock is the actual implementation of file locking.
 func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32, blocking bool) (errno syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
@@ -153,9 +169,9 @@ func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.Fil
 	}
 }
 
+// Setattr implements the FUSE Setattr call for setting attributes on a file
 func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	slog.Debug("BaseFileHandle.Setattr")
-	fmt.Println("BaseFileHandle.Setattr")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -163,6 +179,7 @@ func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *f
 	return f.Getattr(ctx, out)
 }
 
+// setAttr sets the actual file attributes, it doesn't grab the mutex
 func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscall.Errno {
 	slog.Debug("BaseFileHandle.setAttr")
 	f.Mu.Lock()
@@ -220,14 +237,15 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 	return fs.OK
 }
 
+// Getattr implements getting attributes about a file (different from stat)
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
 	slog.Debug("BaseFileHandle.Getattr")
-	fmt.Println("BaseFileHandle.Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
 }
 
+// getattr gets the file attributes, no mutex is used
 func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
 	slog.Debug("  BaseFileHandle.getattr")
 	st := syscall.Stat_t{}
@@ -240,10 +258,11 @@ func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Err
 	return fs.OK
 }
 
+// Lseek implements file seeking
 func (f *BaseFileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	fmt.Println("BaseFileHandle.Lseek")
+	slog.Debug("BaseFileHandle.Lseek")
 	n, err := unix.Seek(f.Fd, int64(off), int(whence))
 	return uint64(n), fs.ToErrno(err)
 }

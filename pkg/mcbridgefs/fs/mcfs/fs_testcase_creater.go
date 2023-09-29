@@ -17,13 +17,22 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// fsTestCase represents a file system test case. It takes care of creating and mounting the file system
+// populating the database, and unmounting the file system when the test is done.
 type fsTestCase struct {
 	*testing.T
 
+	// mcfsDir is the directory where the files are stored
 	mcfsDir string
-	mntDir  string
-	db      *gorm.DB
-	stors   *stor.Stors
+
+	// mntDir is the directory that MCFS is mounted to
+	mntDir string
+
+	// The database connection
+	db *gorm.DB
+
+	// The stors that fsTestCase instantiates with db
+	stors *stor.Stors
 
 	// fuse/fs
 	mcfs   fs.InodeEmbedder
@@ -31,12 +40,24 @@ type fsTestCase struct {
 	server *fuse.Server
 
 	// services and db objects
-	proj              *mcmodel.Project
-	user              *mcmodel.User
-	globusTransfer    *mcmodel.GlobusTransfer
-	transferRequest   *mcmodel.TransferRequest
+
+	// The project created by the test case
+	proj *mcmodel.Project
+
+	// The user created by the test case
+	user *mcmodel.User
+
+	// The globus transfer created by the test case
+	globusTransfer *mcmodel.GlobusTransfer
+
+	// The transfer request created by the test case
+	transferRequest *mcmodel.TransferRequest
+
+	// The knownFilesTracker used in the test case
 	knownFilesTracker *KnownFilesTracker
-	factory           *MCFileHandlerFactory
+
+	// The factory for creating new MCFileHandles
+	factory *MCFileHandlerFactory
 }
 
 type fsTestOptions struct {
@@ -44,18 +65,23 @@ type fsTestOptions struct {
 	enableLocks   bool
 	attrCache     bool
 	suppressDebug bool
-	dsn           string
-	mcfsDir       string
-	mntDir        string
+
+	// The dsn for the database. If blank it uses mcdb.SqliteInMemoryDSN
+	dsn string
+
+	// The directory to store files in. If blank it is set to /tmp/mcfs
+	mcfsDir string
+
+	// The directory to mount the file system to. If blank it is set to /tmp/mnt/mcfs
+	mntDir string
 }
 
 type NullLogger struct{}
 
 func (l *NullLogger) Printf(_ string, _ ...interface{}) {
-	//fmt.Println("Null logger called")
-	// do nothing
 }
 
+// newTestStor creates a new Stor and DB does not create a file system. Populates the database.
 func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors) {
 	dsn := mcdb.SqliteInMemoryDSN
 	if dsnToUse != "" {
@@ -93,6 +119,10 @@ func newTestStor(t *testing.T, dsnToUse, mcfsDir string) (*gorm.DB, *stor.Stors)
 	return db, tc.stors
 }
 
+// newTestCase creates a new file system test. It mounts the file system, populates the
+// database and sets up handlers for unmount when the test case ends. newTestCase also
+// does state clean up at the start of test, by clearing out the mcfsDir, creating needed
+// directories, attempting to unmount the mntDir in case the file system didn't unmount, etc...
 func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	dsn := "file::memory:?cache=shared"
 	if opts.dsn != "" {
@@ -114,6 +144,9 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: gormLogger})
 	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
 	sqlitedb, err := db.DB()
+
+	// Set the sqlite db to 1 connection. This gets around table lock issues from
+	// multiple threads.
 	sqlitedb.SetMaxOpenConns(1)
 
 	if opts.mcfsDir == "" {
@@ -176,13 +209,10 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	return tc
 }
 
+// populateDatabase is called from newTestCase and newTestStor. It populates the database
+// with a project, user, globus transfer and transfer request. It saves these created items
+// into the fsTestCase.
 func (tc *fsTestCase) populateDatabase() {
-	// create users
-	// foreach user
-	//   create projects
-	// foreach project
-	//   create files and directories
-
 	var err error
 
 	tc.stors = stor.NewGormStors(tc.db, tc.mcfsDir)
@@ -217,6 +247,8 @@ func (tc *fsTestCase) populateDatabase() {
 	require.NoError(tc.T, err)
 }
 
+// unmount is set as a test Cleanup callback to unmount the file system at the
+// end of a test.
 func (tc *fsTestCase) unmount() {
 	if err := tc.server.Unmount(); err != nil {
 		tc.Fatal(err)
@@ -244,6 +276,9 @@ func (tc *fsTestCase) closeDB() {
 	_ = sqlDB.Close()
 }
 
+// umount is called at the beginning of a test to unmount previous runs. The two
+// different unmount methods are used to handle consistent failure of one of the
+// ways to unmount.
 func umount(path string) {
 	cmd := exec.Command("/usr/bin/umount", path)
 	_ = cmd.Run()

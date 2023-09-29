@@ -6,7 +6,7 @@ package mcfs
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"syscall"
 	"time"
 	"unsafe"
@@ -16,10 +16,11 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
+// Allocate implements pre-allocating blocks for a file
 func (f *BaseFileHandle) Allocate(ctx context.Context, off uint64, sz uint64, mode uint32) syscall.Errno {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	fmt.Println("BaseFileHandle.Allocate")
+	slog.Debug("BaseFileHandle.Allocate")
 	err := syscall.Fallocate(f.Fd, mode, int64(off), int64(sz))
 	if err != nil {
 		return fs.ToErrno(err)
