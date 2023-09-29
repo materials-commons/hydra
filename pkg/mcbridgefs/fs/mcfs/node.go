@@ -126,7 +126,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	// If we are here then f was nil, so we have to do lookups based on the path
 	path := filepath.Join("/", n.Path(n.Root()))
-	realPath, err := n.RootData.mcfsapi.GetRealPath(path, n.RootData.mcfsRoot)
+	realPath, err := n.RootData.mcfsapi.GetRealPath(path)
 	if err != nil {
 		return syscall.ENOENT
 	}
@@ -325,7 +325,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 
 	// If we are then the file handle is null, so we have to do this by
 	// getting paths. This will fail if the file is not known.
-	realPath, err := n.RootData.mcfsapi.GetKnownFileRealPath(path, n.RootData.mcfsRoot)
+	realPath, err := n.RootData.mcfsapi.GetKnownFileRealPath(path)
 	if err != nil {
 		return syscall.ENOENT
 	}

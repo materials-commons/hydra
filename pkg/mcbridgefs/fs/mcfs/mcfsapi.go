@@ -13,7 +13,7 @@ type MCFSApi interface {
 	Lookup(path string) (*mcmodel.File, error)
 	Readdir(path string) ([]mcmodel.File, error)
 	Mkdir(path string) (*mcmodel.File, error)
-	GetRealPath(path string, mcfsRoot string) (realpath string, err error)
-	GetKnownFileRealPath(path, mcfsRoot string) (string, error)
-	FTruncate(path, mcfsRoot string, size uint64) (error, *syscall.Stat_t)
+	GetRealPath(path string) (realpath string, err error)
+	GetKnownFileRealPath(path string) (string, error)
+	FTruncate(path string, size uint64) (error, *syscall.Stat_t)
 }

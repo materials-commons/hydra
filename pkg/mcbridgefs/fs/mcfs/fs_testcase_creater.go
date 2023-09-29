@@ -152,7 +152,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker)
+	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, opts.mcfsDir)
 	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, time.Second*2)
 	tc.factory = newHandleFactory
 

@@ -18,19 +18,20 @@ import (
 )
 
 // LocalMCFSApi is the file system interface into Materials Commons. It has little knowledge of
-// FUSE. It understands the Materials Commons calls to make to achieve certain file system
+// FUSE. It understands the Materials Commons calls to make to achieve FUSE file system
 // operations, and returns the results in a way that the node can pass back.
 type LocalMCFSApi struct {
+	//
 	stors             *stor.Stors
 	knownFilesTracker *KnownFilesTracker
 	mcfsRoot          string
 }
 
-func NewLocalMCFSApi(stors *stor.Stors, tracker *KnownFilesTracker) *LocalMCFSApi {
+func NewLocalMCFSApi(stors *stor.Stors, tracker *KnownFilesTracker, mcfsRoot string) *LocalMCFSApi {
 	return &LocalMCFSApi{
 		stors:             stors,
 		knownFilesTracker: tracker,
-		mcfsRoot:          "",
+		mcfsRoot:          mcfsRoot,
 	}
 }
 
@@ -389,10 +390,10 @@ func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 	return fsapi.stors.FileStor.CreateDirectory(parentDir.ID, projPath.ProjectID, projPath.UserID, projPath.ProjectPath, filepath.Base(projPath.ProjectPath))
 }
 
-func (fsapi *LocalMCFSApi) GetRealPath(path string, mcfsRoot string) (realpath string, err error) {
+func (fsapi *LocalMCFSApi) GetRealPath(path string) (realpath string, err error) {
 	if file := fsapi.knownFilesTracker.GetFile(path); file != nil {
 		// Found known file, so return it's real path
-		return file.ToUnderlyingFilePath(mcfsRoot), nil
+		return file.ToUnderlyingFilePath(fsapi.mcfsRoot), nil
 	}
 
 	// Didn't find a previously opened file, so look up file.
@@ -402,30 +403,30 @@ func (fsapi *LocalMCFSApi) GetRealPath(path string, mcfsRoot string) (realpath s
 		return "", err
 	}
 
-	return file.ToUnderlyingFilePath(mcfsRoot), nil
+	return file.ToUnderlyingFilePath(fsapi.mcfsRoot), nil
 }
 
-func (fsapi *LocalMCFSApi) GetKnownFileRealPath(path, mcfsRoot string) (string, error) {
+func (fsapi *LocalMCFSApi) GetKnownFileRealPath(path string) (string, error) {
 	f := fsapi.knownFilesTracker.GetFile(path)
 	if f != nil {
-		return f.ToUnderlyingFilePath(mcfsRoot), nil
+		return f.ToUnderlyingFilePath(fsapi.mcfsRoot), nil
 	}
 
 	return "", fmt.Errorf("unknown file: %s", path)
 }
 
-func (fsapi *LocalMCFSApi) FTruncate(path, mcfsRoot string, size uint64) (error, *syscall.Stat_t) {
+func (fsapi *LocalMCFSApi) FTruncate(path string, size uint64) (error, *syscall.Stat_t) {
 	f := fsapi.knownFilesTracker.GetFile(path)
 	if f == nil {
 		return syscall.ENOENT, nil
 	}
 
-	if err := syscall.Truncate(f.ToUnderlyingFilePath(mcfsRoot), int64(size)); err != nil {
+	if err := syscall.Truncate(f.ToUnderlyingFilePath(fsapi.mcfsRoot), int64(size)); err != nil {
 		return fs.ToErrno(err), nil
 	}
 
 	st := syscall.Stat_t{}
-	if err := syscall.Lstat(f.ToUnderlyingFilePath(mcfsRoot), &st); err != nil {
+	if err := syscall.Lstat(f.ToUnderlyingFilePath(fsapi.mcfsRoot), &st); err != nil {
 		return fs.ToErrno(err), nil
 	}
 
