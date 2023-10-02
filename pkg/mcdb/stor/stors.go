@@ -54,6 +54,7 @@ type TransferRequestStor interface {
 	GetFileByPath(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error)
 	GetTransferRequestForProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error)
 	GetTransferRequestsForProject(projectID int) ([]mcmodel.TransferRequest, error)
+	GetTransferRequestByUUID(transferUUID string) (*mcmodel.TransferRequest, error)
 }
 
 type GlobusTransferStor interface {

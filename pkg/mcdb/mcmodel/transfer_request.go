@@ -1,6 +1,9 @@
 package mcmodel
 
-import "time"
+import (
+	"path/filepath"
+	"time"
+)
 
 type TransferRequest struct {
 	ID             int             `json:"id"`
@@ -17,4 +20,14 @@ type TransferRequest struct {
 
 func (TransferRequest) TableName() string {
 	return "transfer_requests"
+}
+
+func (tr TransferRequest) Join(paths ...string) string {
+	pathParts := append([]string{"/", tr.UUID}, paths...)
+	return filepath.Join(pathParts...)
+}
+
+func (tr TransferRequest) JoinFromBase(base string, paths ...string) string {
+	pathParts := append([]string{base, tr.UUID}, paths...)
+	return filepath.Join(pathParts...)
 }
