@@ -84,7 +84,11 @@ func TestProjectPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			p := ParseProjectPath(test.path)
+			parser := NewProjectPathParser()
+			p, err := parser.Parse(test.path)
+			if test.expectPathType == BadIDPath {
+				require.Error(t, err)
+			}
 			require.Equal(t, test.expectedProjectID, p.ProjectID())
 			require.Equal(t, test.expectedUserID, p.UserID())
 			require.Equal(t, test.expectedProjectPath, p.ProjectPath())
@@ -109,8 +113,11 @@ func TestProjectPath_Join(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			p := ParseProjectPath(test.path)
-			joined := p.Join(test.join)
+			parser := NewProjectPathParser()
+			p, err := parser.Parse(test.path)
+			require.NoError(t, err)
+			asProjPath := p.(*ProjectPath)
+			joined := asProjPath.Join(test.join)
 			require.Equal(t, test.expected, joined)
 		})
 	}

@@ -36,7 +36,7 @@ func NewLocalMCFSApi(stors *stor.Stors, tracker *KnownFilesTracker, mcfsRoot str
 }
 
 func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	if file := fsapi.knownFilesTracker.GetFile(projPath.FullPath()); file != nil {
 		// This should not happen - Create was called on a file that the file
 		// system is already tracking as opened.
@@ -51,7 +51,7 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	slog.Debug("LocalMCFSApi Open", "path", path)
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	f = fsapi.knownFilesTracker.GetFile(path)
 	if f != nil {
 		// Existing file found
@@ -151,7 +151,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		return syscall.ENOENT
 	}
 
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	checksum := ""
 	var err error
 	if knownFile.hashInvalid {
@@ -210,7 +210,7 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 
 func (fsapi *LocalMCFSApi) Lookup(path string) (*mcmodel.File, error) {
 	slog.Debug("LocalMCFSApi.Lookup", "path", path)
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 
 	switch projPath.PathType() {
 	case mcpath.BadIDPath:
@@ -229,14 +229,14 @@ func (fsapi *LocalMCFSApi) Lookup(path string) (*mcmodel.File, error) {
 		return fsapi.lookupUser(path)
 
 	default:
-		projPath := mcpath.ParseProjectPath(path)
+		projPath := makeProjectPath(path)
 		f, err := fsapi.stors.FileStor.GetFileByPath(projPath.ProjectID(), projPath.ProjectPath())
 		return f, err
 	}
 }
 
 func (fsapi *LocalMCFSApi) lookupProject(path string) (*mcmodel.File, error) {
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 
 	transferRequests, err := fsapi.stors.TransferRequestStor.GetTransferRequestsForProject(projPath.ProjectID())
 	switch {
@@ -259,7 +259,7 @@ func (fsapi *LocalMCFSApi) lookupProject(path string) (*mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) lookupUser(path string) (*mcmodel.File, error) {
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 
 	// If we are here then the project has been verified, so we need to make sure that the
 	// user exists
@@ -289,7 +289,7 @@ func (fsapi *LocalMCFSApi) lookupUser(path string) (*mcmodel.File, error) {
 func (fsapi *LocalMCFSApi) Readdir(path string) ([]mcmodel.File, error) {
 	slog.Debug("LocalMCFSApi.Readdir", "path", path)
 
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 
 	switch projPath.PathType() {
 	case mcpath.BadIDPath:
@@ -327,7 +327,7 @@ func (fsapi *LocalMCFSApi) listActiveProjects() ([]mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) listActiveUsersForProject(path string) ([]mcmodel.File, error) {
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	transferRequests, err := fsapi.stors.TransferRequestStor.ListTransferRequests()
 	if err != nil {
 		return nil, err
@@ -356,7 +356,7 @@ func (fsapi *LocalMCFSApi) listActiveUsersForProject(path string) ([]mcmodel.Fil
 }
 
 func (fsapi *LocalMCFSApi) listProjectDirectory(path string) ([]mcmodel.File, error) {
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 
 	dir, err := fsapi.stors.FileStor.GetDirByPath(projPath.ProjectID(), projPath.ProjectPath())
 	if err != nil {
@@ -382,7 +382,7 @@ func (fsapi *LocalMCFSApi) listProjectDirectory(path string) ([]mcmodel.File, er
 
 func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 	slog.Debug("LocalMCFSApi.Mkdir", "path", path)
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	parentDir, err := fsapi.stors.FileStor.GetFileByPath(projPath.ProjectID(), filepath.Dir(projPath.ProjectPath()))
 	if err != nil {
 		return nil, err
@@ -399,7 +399,7 @@ func (fsapi *LocalMCFSApi) GetRealPath(path string) (realpath string, err error)
 	}
 
 	// Didn't find a previously opened file, so look up file.
-	projPath := mcpath.ParseProjectPath(path)
+	projPath := makeProjectPath(path)
 	file, err := fsapi.stors.FileStor.GetFileByPath(projPath.ProjectID(), projPath.ProjectPath())
 	if err != nil {
 		return "", err
@@ -462,4 +462,10 @@ func determineMimeType(name string) string {
 	}
 
 	return strings.TrimSpace(mediatype)
+}
+
+func makeProjectPath(path string) *mcpath.ProjectPath {
+	pathParser := mcpath.NewProjectPathParser()
+	p, _ := pathParser.Parse(path)
+	return p.(*mcpath.ProjectPath)
 }

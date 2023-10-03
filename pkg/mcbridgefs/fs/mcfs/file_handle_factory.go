@@ -36,7 +36,8 @@ func NewMCFileHandlerFactory(mcfsapi MCFSApi, knownFilesTracker *KnownFilesTrack
 // NewFileHandle creates a new MCFileHandle. Handles created this way will share the activity counter,
 // known files tracker and MCFSApi.
 func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
-	projPath := mcpath.ParseProjectPath(path)
+	parser := mcpath.NewProjectPathParser()
+	projPath, _ := parser.Parse(path)
 	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(projPath.TransferBase())
 	return NewMCFileHandle(fd, flags).
 		WithPath(path).
