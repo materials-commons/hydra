@@ -8,6 +8,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
@@ -185,8 +186,9 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, opts.mcfsDir)
-	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, time.Second*2)
+	pathParser := mcpath.NewProjectPathParser()
+	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, pathParser, opts.mcfsDir)
+	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, pathParser, time.Second*2)
 	tc.factory = newHandleFactory
 
 	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {

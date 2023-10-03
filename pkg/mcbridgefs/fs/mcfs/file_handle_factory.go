@@ -22,23 +22,24 @@ type MCFileHandlerFactory struct {
 	mcfsapi                MCFSApi
 	activityCounterFactory *ActivityCounterMonitor
 	knownFilesTracker      *KnownFilesTracker
+	pathParser             mcpath.Parser
 }
 
 // NewMCFileHandlerFactory creates a new MCFileHandlerFactory.
-func NewMCFileHandlerFactory(mcfsapi MCFSApi, knownFilesTracker *KnownFilesTracker, inactivity time.Duration) *MCFileHandlerFactory {
+func NewMCFileHandlerFactory(mcfsapi MCFSApi, knownFilesTracker *KnownFilesTracker, pathParser mcpath.Parser, inactivity time.Duration) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcfsapi:                mcfsapi,
 		activityCounterFactory: NewActivityCounterMonitor(inactivity),
 		knownFilesTracker:      knownFilesTracker,
+		pathParser:             pathParser,
 	}
 }
 
 // NewFileHandle creates a new MCFileHandle. Handles created this way will share the activity counter,
 // known files tracker and MCFSApi.
 func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
-	parser := mcpath.NewProjectPathParser()
-	projPath, _ := parser.Parse(path)
-	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(projPath.TransferBase())
+	p, _ := f.pathParser.Parse(path)
+	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(p.TransferBase())
 	return NewMCFileHandle(fd, flags).
 		WithPath(path).
 		WithFile(file).
