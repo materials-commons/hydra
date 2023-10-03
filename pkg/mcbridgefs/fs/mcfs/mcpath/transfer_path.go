@@ -2,6 +2,7 @@ package mcpath
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
@@ -61,32 +62,68 @@ func (p *TransferPath) PathType() PathType {
 }
 
 func (p *TransferPath) Lookup() (*mcmodel.File, error) {
-	return nil, nil
+	switch p.pathType {
+	case BadPathType:
+		return nil, fmt.Errorf("bad path: %s", p.fullPath)
+	case RootPathType:
+		return nil, fmt.Errorf("root not supported")
+	case ContextPathType:
+		f := &mcmodel.File{
+			Name:      p.transferRequest.UUID,
+			MimeType:  "directory",
+			Path:      filepath.Join("/", p.transferRequest.UUID),
+			Directory: &mcmodel.File{Path: "/", Name: "/", MimeType: "directory"},
+		}
+		return f, nil
+	default:
+		f, err := p.stors.FileStor.GetFileByPath(p.ProjectID(), p.projectPath)
+		return f, err
+	}
 }
 
 func (p *TransferPath) List() ([]mcmodel.File, error) {
 	switch p.pathType {
-	case RootPathType:
-		return p.listTransferRequests()
-	case ContextPathType:
-		return p.listProjectRoot()
-	case ProjectPathType:
-		return p.listProjectDir()
 	case BadPathType:
 		return nil, fmt.Errorf("pathType for TransferPath type is BadPath")
+	case RootPathType:
+		return p.listTransferRequests()
 	default:
-		return nil, fmt.Errorf("pathType for Transfer is unknown")
+		return p.listProjectDirectory()
 	}
 }
 
 func (p *TransferPath) listTransferRequests() ([]mcmodel.File, error) {
-	return nil, nil
+	transferRequests, err := p.stors.TransferRequestStor.ListTransferRequests()
+	if err != nil {
+		return nil, err
+	}
+	inDir := &mcmodel.File{Path: "/", MimeType: "directory"}
+	var dirEntries []mcmodel.File
+	for _, tr := range transferRequests {
+		entry := mcmodel.File{
+			Directory: inDir,
+			Name:      fmt.Sprintf("%s", tr.UUID),
+			Path:      fmt.Sprintf("/%s", tr.UUID),
+			MimeType:  "directory",
+		}
+		dirEntries = append(dirEntries, entry)
+	}
+	return dirEntries, nil
 }
 
-func (p *TransferPath) listProjectRoot() ([]mcmodel.File, error) {
-	return nil, nil
-}
+func (p *TransferPath) listProjectDirectory() ([]mcmodel.File, error) {
+	dir, err := p.stors.FileStor.GetDirByPath(p.ProjectID(), p.projectPath)
+	if err != nil {
+		return nil, err
+	}
 
-func (p *TransferPath) listProjectDir() ([]mcmodel.File, error) {
-	return nil, nil
+	// Make list directory to a pointer for transferRequest?
+	dirEntries, err := p.stors.TransferRequestStor.ListDirectory(dir, p.transferRequest)
+
+	inDir := &mcmodel.File{Path: p.projectPath, MimeType: "directory"}
+	for _, entry := range dirEntries {
+		entry.Directory = inDir
+	}
+
+	return dirEntries, nil
 }
