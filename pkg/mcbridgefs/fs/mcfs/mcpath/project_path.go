@@ -279,40 +279,6 @@ func ToProjectPath(path string) string {
 	return projPath.ProjectPath()
 }
 
-// TransferBase takes a path that contains the project/user portions and returns
-// the TransferBase. For example "/25/301/rest/of/path" will return
-// "/25/301".
-func TransferBase(path string) string {
-	p := NewProjectPathParser(nil)
-	projPath, err := p.Parse(path)
-	if err != nil {
-		return ""
-	}
-	return projPath.TransferBase()
-}
-
-// ProjectID takes a path that contains the project/user portions and returns
-// the project-id. For example "/25/301/rest/of/path" will return 25.
-func ProjectID(path string) (id int) {
-	p := NewProjectPathParser(nil)
-	projPath, err := p.Parse(path)
-	if err != nil {
-		return -1
-	}
-	return projPath.ProjectID()
-}
-
-// UserID takes a path that contains the project/user portions and returns
-// the user-id. For example "/25/301/rest/of/path" will return 301.
-func UserID(path string) (id int) {
-	p := NewProjectPathParser(nil)
-	projPath, err := p.Parse(path)
-	if err != nil {
-		return -1
-	}
-	return projPath.UserID()
-}
-
 // Join takes a path that contains the project/user portions and returns
 // the project path portion joined with elements. For example
 // "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
@@ -326,18 +292,4 @@ func Join(path string, elements ...string) string {
 
 	asProjPath := projPath.(*ProjectPath)
 	return asProjPath.Join(elements...)
-}
-
-// FullPathJoin takes a path that contains the project/user portions and returns
-// the project path portion joined with elements. For example
-// "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
-// will return "/project-uuid/user-uuid/rest/of/path/dir1/file.txt".
-func FullPathJoin(path string, elements ...string) string {
-	p := NewProjectPathParser(nil)
-	projPath, err := p.Parse(path)
-	if err != nil {
-		return ""
-	}
-	asProjPath := projPath.(*ProjectPath)
-	return asProjPath.FullPathJoin(elements...)
 }
