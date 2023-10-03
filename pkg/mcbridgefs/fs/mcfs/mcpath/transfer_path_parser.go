@@ -11,22 +11,22 @@ import (
 )
 
 type TransferPathParser struct {
-	mu                  sync.Mutex
-	transferRequests    map[string]*mcmodel.TransferRequest
-	transferRequestStor stor.TransferRequestStor
+	mu               sync.Mutex
+	transferRequests map[string]*mcmodel.TransferRequest
+	stors            *stor.Stors
 }
 
-func NewTransferPathParser(transferRequestStor stor.TransferRequestStor) ParserReleaser {
+func NewTransferPathParser(stors *stor.Stors) ParserReleaser {
 	return &TransferPathParser{
-		transferRequests:    make(map[string]*mcmodel.TransferRequest),
-		transferRequestStor: transferRequestStor,
+		transferRequests: make(map[string]*mcmodel.TransferRequest),
+		stors:            stors,
 	}
 }
 
 func (p *TransferPathParser) Parse(path string) (Path, error) {
 	path = filepath.Clean(path)
 	if path == "/" {
-		return &TransferPath{pathType: RootPath, fullPath: path}, nil
+		return &TransferPath{pathType: RootPathType, fullPath: path}, nil
 	}
 
 	pathParts := strings.Split(path, "/")
@@ -49,7 +49,7 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 
 	if tr := p.transferRequests[transferUUID]; tr != nil {
 		transferPath := &TransferPath{
-			pathType:        ContextPath,
+			pathType:        ContextPathType,
 			fullPath:        path,
 			transferBase:    path,
 			transferRequest: tr,
@@ -58,14 +58,14 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 	}
 
 	// transferUUID wasn't in p.transferRequests, so we need to look it up
-	tr, err := p.transferRequestStor.GetTransferRequestByUUID(transferUUID)
+	tr, err := p.stors.TransferRequestStor.GetTransferRequestByUUID(transferUUID)
 	if err != nil {
-		return &TransferPath{pathType: BadPath}, err
+		return &TransferPath{pathType: BadPathType}, err
 	}
 
 	p.transferRequests[transferUUID] = tr
 	transferPath := &TransferPath{
-		pathType:        ContextPath,
+		pathType:        ContextPathType,
 		fullPath:        path,
 		transferBase:    path,
 		transferRequest: tr,
@@ -89,12 +89,12 @@ func (p *TransferPathParser) handleProjectPath(path string, pathParts []string) 
 	tr := p.transferRequests[pathParts[1]]
 	if tr == nil {
 		// This is an error because the transfer request uuid is not known
-		return &TransferPath{pathType: BadPath}, fmt.Errorf("unknown transfer request uuid %s", pathParts[1])
+		return &TransferPath{pathType: BadPathType}, fmt.Errorf("unknown transfer request uuid %s", pathParts[1])
 	}
 
 	projectPathPieces := append([]string{"/"}, pathParts[2:]...)
 	transferPath := &TransferPath{
-		pathType:        ProjectPath,
+		pathType:        ProjectPathType,
 		projectPath:     filepath.Join(projectPathPieces...),
 		fullPath:        path,
 		transferBase:    filepath.Join("/", pathParts[1]), // create /transfer-uuid path

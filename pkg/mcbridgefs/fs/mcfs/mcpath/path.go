@@ -27,8 +27,8 @@ type Path interface {
 type PathType int
 
 const (
-	RootPath    PathType = 1
-	ContextPath PathType = 2
-	ProjectPath PathType = 3
-	BadPath     PathType = 4
+	RootPathType    PathType = 1
+	ContextPathType PathType = 2
+	ProjectPathType PathType = 3
+	BadPathType     PathType = 4
 )

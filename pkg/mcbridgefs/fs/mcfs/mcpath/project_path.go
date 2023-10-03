@@ -1,4 +1,4 @@
-package projectpath
+package mcpath
 
 import (
 	"path/filepath"
@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-type pathTypeEnum int
+//type pathTypeEnum int
 
 const (
-	RootBasePath     pathTypeEnum = 1
-	ProjectBasePath  pathTypeEnum = 2
-	UserBasePath     pathTypeEnum = 3
-	CompleteBasePath pathTypeEnum = 4
-	BadIDPath        pathTypeEnum = 5
+	RootBasePath     PathType = 10
+	ProjectBasePath  PathType = 11
+	UserBasePath     PathType = 12
+	CompleteBasePath PathType = 13
+	BadIDPath        PathType = 14
 )
 
 // ProjectPath represents the different parts of a project path in the file system.
@@ -25,26 +25,26 @@ const (
 // The methods for ProjectPath help with these two representations
 type ProjectPath struct {
 	// The type of path this represents
-	PathType pathTypeEnum
+	pathType PathType
 
 	// The id for the project; derived from the path
-	ProjectID int
+	projectID int
 
 	// id for the user; derived from the path
-	UserID int
+	userID int
 
 	// The project path, ie after remove the project-id and user-id portions
-	ProjectPath string
+	projectPath string
 
 	// The TransferBase is the project user path. For example if the path
 	// is /25/301/rest/of/path, then TransferBase is /25/301
-	TransferBase string
+	transferBase string
 
 	// The full path, containing the project-id and the user-id
-	FullPath string
+	fullPath string
 }
 
-// NewProjectPath takes a path containing the project and user uuid and creates
+// ParseProjectPath takes a path containing the project and user uuid and creates
 // a ProjectPath structure containing the various parts of the path. A path
 // consists of /project-id/user-id/rest/of/path. From this path it constructs
 // ProjectPath that would look as follows for /25/301/rest/of/path
@@ -55,24 +55,24 @@ type ProjectPath struct {
 //	    ProjectPath: /rest/of/path
 //	    FullPath: /25/301/rest/of/path
 //	}
-func NewProjectPath(path string) *ProjectPath {
+func ParseProjectPath(path string) *ProjectPath {
 	// Create initial ProjectPath and fill out with
 	// default values. This will be further filled in
 	// as we parse out the path components.
 	projPath := &ProjectPath{
-		PathType:     RootBasePath,
-		ProjectID:    -1,
-		UserID:       -1,
-		ProjectPath:  "/",
-		TransferBase: "/",
-		FullPath:     filepath.Clean(path),
+		pathType:     RootBasePath,
+		projectID:    -1,
+		userID:       -1,
+		projectPath:  "/",
+		transferBase: "/",
+		fullPath:     filepath.Clean(path),
 	}
 
 	if path == "/" {
 		return projPath
 	}
 
-	pathParts := strings.Split(projPath.FullPath, "/")
+	pathParts := strings.Split(projPath.fullPath, "/")
 
 	// A fully formed path looks as follows:
 	//   pathParts[0] = ""
@@ -124,12 +124,12 @@ func parse2PartPath(pathParts []string, projPath *ProjectPath) *ProjectPath {
 	if id, err = strconv.Atoi(pathParts[1]); err != nil {
 		// This should have been a path to a project ID, but
 		// the project id isn't an integer.
-		projPath.PathType = BadIDPath
+		projPath.pathType = BadIDPath
 		return projPath
 	}
 	// The project id is good
-	projPath.ProjectID = id
-	projPath.PathType = ProjectBasePath
+	projPath.projectID = id
+	projPath.pathType = ProjectBasePath
 	return projPath
 }
 
@@ -155,38 +155,38 @@ func parse3PartPath(pathParts []string, projPath *ProjectPath) *ProjectPath {
 		// /123/
 		if id, err = strconv.Atoi(pathParts[1]); err != nil {
 			// The project id isn't numeric
-			projPath.PathType = BadIDPath
+			projPath.pathType = BadIDPath
 			return projPath
 		}
 		// The project id is good
-		projPath.ProjectID = id
-		projPath.PathType = ProjectBasePath
+		projPath.projectID = id
+		projPath.pathType = ProjectBasePath
 		return projPath
 	}
 
 	// If we are here then the path looks like /123/456
 	if id, err = strconv.Atoi(pathParts[1]); err != nil {
 		// Project id isn't numeric
-		projPath.PathType = BadIDPath
+		projPath.pathType = BadIDPath
 		return projPath
 	}
 
-	projPath.ProjectID = id // Save the project id
+	projPath.projectID = id // Save the project id
 	if id, err = strconv.Atoi(pathParts[2]); err != nil {
 		// project id was numeric but user id isn't so this
 		// is a bad path
-		projPath.PathType = BadIDPath
+		projPath.pathType = BadIDPath
 		return projPath
 	}
 
 	// If we are here then both the proj id and the user id were
 	// numeric. So a bit more work to fill out projPath.
-	projPath.UserID = id
-	projPath.PathType = UserBasePath
+	projPath.userID = id
+	projPath.pathType = UserBasePath
 
 	// Transfer is same as full path, while project path is "/"
-	projPath.TransferBase = projPath.FullPath
-	projPath.ProjectPath = "/"
+	projPath.transferBase = projPath.fullPath
+	projPath.projectPath = "/"
 	return projPath
 }
 
@@ -199,31 +199,56 @@ func parseGreaterThan3PartPath(pathParts []string, projPath *ProjectPath) *Proje
 	)
 
 	if projectID, err = strconv.Atoi(pathParts[1]); err != nil {
-		projPath.PathType = BadIDPath
+		projPath.pathType = BadIDPath
 		return projPath
 	}
 
-	projPath.ProjectID = projectID
+	projPath.projectID = projectID
 
 	if userID, err = strconv.Atoi(pathParts[2]); err != nil {
-		projPath.PathType = BadIDPath
+		projPath.pathType = BadIDPath
 
 		userID = -1
 	}
 
-	projPath.UserID = userID
-	projPath.PathType = CompleteBasePath
+	projPath.userID = userID
+	projPath.pathType = CompleteBasePath
 	pathPieces := append([]string{"/"}, pathParts[3:]...)
-	projPath.ProjectPath = filepath.Join(pathPieces...)
-	projPath.TransferBase = filepath.Join("/", pathParts[1], pathParts[2])
+	projPath.projectPath = filepath.Join(pathPieces...)
+	projPath.transferBase = filepath.Join("/", pathParts[1], pathParts[2])
 	return projPath
+}
+
+func (p *ProjectPath) ProjectID() int {
+	return p.projectID
+}
+func (p *ProjectPath) UserID() int {
+	return p.userID
+}
+func (p *ProjectPath) TransferID() int {
+	return -1
+}
+func (p *ProjectPath) TransferUUID() string {
+	return ""
+}
+func (p *ProjectPath) ProjectPath() string {
+	return p.projectPath
+}
+func (p *ProjectPath) FullPath() string {
+	return p.fullPath
+}
+func (p *ProjectPath) TransferBase() string {
+	return p.transferBase
+}
+func (p *ProjectPath) PathType() PathType {
+	return p.pathType
 }
 
 // Join will return the joined path elements onto the ProjectPath.ProjectPath, for
 // example if ProjectPath.ProjectPath is "/dir1/dir2", and you join "dir3", "file.txt"
 // it will return "/dir1/dir2/dir3/file.txt".
 func (p *ProjectPath) Join(elements ...string) string {
-	pathPieces := append([]string{p.ProjectPath}, elements...)
+	pathPieces := append([]string{p.projectPath}, elements...)
 	return filepath.Join(pathPieces...)
 }
 
@@ -231,7 +256,7 @@ func (p *ProjectPath) Join(elements ...string) string {
 // example if ProjectPath.FullPath is "/25/301/dir1/dir2", and you join "dir3", "file.txt"
 // it will return "/25/301/dir1/dir2/dir3/file.txt".
 func (p *ProjectPath) FullPathJoin(elements ...string) string {
-	pathPieces := append([]string{p.FullPath}, elements...)
+	pathPieces := append([]string{p.fullPath}, elements...)
 	return filepath.Join(pathPieces...)
 }
 
@@ -239,30 +264,30 @@ func (p *ProjectPath) FullPathJoin(elements ...string) string {
 // the project path. For example "/25/301/rest/of/path" will return
 // "/rest/of/path".
 func ToProjectPath(path string) string {
-	p := NewProjectPath(path)
-	return p.ProjectPath
+	p := ParseProjectPath(path)
+	return p.projectPath
 }
 
 // TransferBase takes a path that contains the project/user portions and returns
 // the TransferBase. For example "/25/301/rest/of/path" will return
 // "/25/301".
 func TransferBase(path string) string {
-	p := NewProjectPath(path)
-	return p.TransferBase
+	p := ParseProjectPath(path)
+	return p.transferBase
 }
 
 // ProjectID takes a path that contains the project/user portions and returns
 // the project-id. For example "/25/301/rest/of/path" will return 25.
 func ProjectID(path string) (id int) {
-	p := NewProjectPath(path)
-	return p.ProjectID
+	p := ParseProjectPath(path)
+	return p.projectID
 }
 
 // UserID takes a path that contains the project/user portions and returns
 // the user-id. For example "/25/301/rest/of/path" will return 301.
 func UserID(path string) (id int) {
-	p := NewProjectPath(path)
-	return p.UserID
+	p := ParseProjectPath(path)
+	return p.userID
 }
 
 // Join takes a path that contains the project/user portions and returns
@@ -270,7 +295,7 @@ func UserID(path string) (id int) {
 // "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
 // will return "/rest/of/path/dir1/file.txt".
 func Join(path string, elements ...string) string {
-	p := NewProjectPath(path)
+	p := ParseProjectPath(path)
 	return p.Join(elements...)
 }
 
@@ -279,6 +304,6 @@ func Join(path string, elements ...string) string {
 // "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
 // will return "/project-uuid/user-uuid/rest/of/path/dir1/file.txt".
 func FullPathJoin(path string, elements ...string) string {
-	p := NewProjectPath(path)
+	p := ParseProjectPath(path)
 	return p.FullPathJoin(elements...)
 }

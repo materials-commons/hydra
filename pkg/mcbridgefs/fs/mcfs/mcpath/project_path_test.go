@@ -1,4 +1,4 @@
-package projectpath
+package mcpath
 
 import (
 	"path/filepath"
@@ -14,7 +14,7 @@ func TestProjectPath(t *testing.T) {
 		expectedUserID       int
 		expectedProjectPath  string
 		expectedTransferBase string
-		expectPathType       pathTypeEnum
+		expectPathType       PathType
 	}{
 		{
 			path:                 "/25/301/dir1",
@@ -84,13 +84,13 @@ func TestProjectPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			p := NewProjectPath(test.path)
-			require.Equal(t, test.expectedProjectID, p.ProjectID)
-			require.Equal(t, test.expectedUserID, p.UserID)
-			require.Equal(t, test.expectedProjectPath, p.ProjectPath)
-			require.Equal(t, test.expectedTransferBase, p.TransferBase)
-			require.Equal(t, test.expectPathType, p.PathType)
-			require.Equal(t, filepath.Clean(test.path), p.FullPath)
+			p := ParseProjectPath(test.path)
+			require.Equal(t, test.expectedProjectID, p.ProjectID())
+			require.Equal(t, test.expectedUserID, p.UserID())
+			require.Equal(t, test.expectedProjectPath, p.ProjectPath())
+			require.Equal(t, test.expectedTransferBase, p.TransferBase())
+			require.Equal(t, test.expectPathType, p.PathType())
+			require.Equal(t, filepath.Clean(test.path), p.FullPath())
 		})
 	}
 }
@@ -109,7 +109,7 @@ func TestProjectPath_Join(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			p := NewProjectPath(test.path)
+			p := ParseProjectPath(test.path)
 			joined := p.Join(test.join)
 			require.Equal(t, test.expected, joined)
 		})

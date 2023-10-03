@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/projectpath"
+	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
@@ -36,8 +36,8 @@ func NewMCFileHandlerFactory(mcfsapi MCFSApi, knownFilesTracker *KnownFilesTrack
 // NewFileHandle creates a new MCFileHandle. Handles created this way will share the activity counter,
 // known files tracker and MCFSApi.
 func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
-	projPath := projectpath.NewProjectPath(path)
-	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(projPath.TransferBase)
+	projPath := mcpath.ParseProjectPath(path)
+	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(projPath.TransferBase())
 	return NewMCFileHandle(fd, flags).
 		WithPath(path).
 		WithFile(file).

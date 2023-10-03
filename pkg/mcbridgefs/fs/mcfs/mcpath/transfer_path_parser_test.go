@@ -32,7 +32,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:                 "root path",
 			path:                 "/",
 			errExpected:          false,
-			pathTypeExpected:     RootPath,
+			pathTypeExpected:     RootPathType,
 			fullPathExpected:     "/",
 			transferBaseExpected: "",
 			projectPathExpected:  "",
@@ -41,7 +41,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:                 "transfer request path",
 			path:                 tc.transferRequest.Join(),
 			errExpected:          false,
-			pathTypeExpected:     ContextPath,
+			pathTypeExpected:     ContextPathType,
 			fullPathExpected:     filepath.Join("/", tc.transferRequest.UUID),
 			transferBaseExpected: filepath.Join("/", tc.transferRequest.UUID),
 			projectPathExpected:  "",
@@ -50,7 +50,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:                 "project path",
 			path:                 tc.transferRequest.Join("/dir1/file1.txt"),
 			errExpected:          false,
-			pathTypeExpected:     ProjectPath,
+			pathTypeExpected:     ProjectPathType,
 			fullPathExpected:     filepath.Join("/", tc.transferRequest.UUID, "dir1/file1.txt"),
 			transferBaseExpected: filepath.Join("/", tc.transferRequest.UUID),
 			projectPathExpected:  "/dir1/file1.txt",
@@ -59,7 +59,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:                 "project path",
 			path:                 tc.transferRequest.Join("/dir1"),
 			errExpected:          false,
-			pathTypeExpected:     ProjectPath,
+			pathTypeExpected:     ProjectPathType,
 			fullPathExpected:     filepath.Join("/", tc.transferRequest.UUID, "dir1"),
 			transferBaseExpected: filepath.Join("/", tc.transferRequest.UUID),
 			projectPathExpected:  "/dir1",
@@ -68,7 +68,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:                 "unclean path",
 			path:                 filepath.Join("/", tc.transferRequest.UUID, "/dir1/../dir1/file.txt"),
 			errExpected:          false,
-			pathTypeExpected:     ProjectPath,
+			pathTypeExpected:     ProjectPathType,
 			fullPathExpected:     filepath.Join("/", tc.transferRequest.UUID, "dir1", "file.txt"),
 			transferBaseExpected: filepath.Join("/", tc.transferRequest.UUID),
 			projectPathExpected:  "/dir1/file.txt",
@@ -77,23 +77,23 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			name:             "invalid uuid",
 			path:             "/abc123/dir1",
 			errExpected:      true,
-			pathTypeExpected: BadPath,
+			pathTypeExpected: BadPathType,
 		},
 	}
 
-	transferPathParser := NewTransferPathParser(tc.stors.TransferRequestStor)
+	transferPathParser := NewTransferPathParser(tc.stors)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tp, err := transferPathParser.Parse(test.path)
 			if test.errExpected {
 				require.Error(t, err)
-				require.Equal(t, BadPath, tp.PathType())
+				require.Equal(t, BadPathType, tp.PathType())
 				return
 			}
 
 			require.NoError(t, err)
 
-			if test.pathTypeExpected == RootPath {
+			if test.pathTypeExpected == RootPathType {
 				require.Equal(t, test.pathTypeExpected, tp.PathType())
 				require.Equal(t, test.fullPathExpected, tp.FullPath())
 				require.Equal(t, test.transferBaseExpected, tp.TransferBase())

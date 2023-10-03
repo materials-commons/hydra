@@ -1,7 +1,10 @@
 package mcpath
 
 import (
+	"fmt"
+
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
 type TransferPath struct {
@@ -10,6 +13,7 @@ type TransferPath struct {
 	fullPath        string
 	transferBase    string
 	transferRequest *mcmodel.TransferRequest
+	stors           *stor.Stors
 }
 
 func (p *TransferPath) ProjectID() int {
@@ -54,4 +58,31 @@ func (p *TransferPath) TransferBase() string {
 
 func (p *TransferPath) PathType() PathType {
 	return p.pathType
+}
+
+func (p *TransferPath) ListPath() ([]mcmodel.File, error) {
+	switch p.pathType {
+	case RootPathType:
+		return p.listTransferRequests()
+	case ContextPathType:
+		return p.listProjectRoot()
+	case ProjectPathType:
+		return p.listProjectDir()
+	case BadPathType:
+		return nil, fmt.Errorf("pathType for TransferPath type is BadPath")
+	default:
+		return nil, fmt.Errorf("pathType for Transfer is unknown")
+	}
+}
+
+func (p *TransferPath) listTransferRequests() ([]mcmodel.File, error) {
+	return nil, nil
+}
+
+func (p *TransferPath) listProjectRoot() ([]mcmodel.File, error) {
+	return nil, nil
+}
+
+func (p *TransferPath) listProjectDir() ([]mcmodel.File, error) {
+	return nil, nil
 }
