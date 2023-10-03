@@ -87,7 +87,7 @@ func (p *ProjectPath) FullPathJoin(elements ...string) string {
 // the project path. For example "/25/301/rest/of/path" will return
 // "/rest/of/path".
 func ToProjectPath(path string) string {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return ""
@@ -99,7 +99,7 @@ func ToProjectPath(path string) string {
 // the TransferBase. For example "/25/301/rest/of/path" will return
 // "/25/301".
 func TransferBase(path string) string {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return ""
@@ -110,7 +110,7 @@ func TransferBase(path string) string {
 // ProjectID takes a path that contains the project/user portions and returns
 // the project-id. For example "/25/301/rest/of/path" will return 25.
 func ProjectID(path string) (id int) {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return -1
@@ -121,7 +121,7 @@ func ProjectID(path string) (id int) {
 // UserID takes a path that contains the project/user portions and returns
 // the user-id. For example "/25/301/rest/of/path" will return 301.
 func UserID(path string) (id int) {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return -1
@@ -134,7 +134,7 @@ func UserID(path string) (id int) {
 // "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
 // will return "/rest/of/path/dir1/file.txt".
 func Join(path string, elements ...string) string {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return ""
@@ -149,7 +149,7 @@ func Join(path string, elements ...string) string {
 // "/project-uuid/user-uuid/rest/of/path" joined with "dir1", "file.txt"
 // will return "/project-uuid/user-uuid/rest/of/path/dir1/file.txt".
 func FullPathJoin(path string, elements ...string) string {
-	p := NewProjectPathParser()
+	p := NewProjectPathParser(nil)
 	projPath, err := p.Parse(path)
 	if err != nil {
 		return ""

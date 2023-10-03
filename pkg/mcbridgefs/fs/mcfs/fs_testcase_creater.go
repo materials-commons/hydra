@@ -61,6 +61,8 @@ type fsTestCase struct {
 	factory *MCFileHandlerFactory
 }
 
+type newPathParserFn func(stor *stor.Stors) mcpath.Parser
+
 type fsTestOptions struct {
 	entryCache    bool
 	enableLocks   bool
@@ -75,6 +77,9 @@ type fsTestOptions struct {
 
 	// The directory to mount the file system to. If blank it is set to /tmp/mnt/mcfs
 	mntDir string
+
+	// path parser creater
+	newPathParser newPathParserFn
 }
 
 type NullLogger struct{}
@@ -186,7 +191,12 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.knownFilesTracker = NewKnownFilesTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
-	pathParser := mcpath.NewProjectPathParser()
+	var pathParser mcpath.Parser
+	if opts.newPathParser != nil {
+		pathParser = opts.newPathParser(stors)
+	} else {
+		pathParser = mcpath.NewProjectPathParser(stors)
+	}
 	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, pathParser, opts.mcfsDir)
 	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, pathParser, time.Second*2)
 	tc.factory = newHandleFactory

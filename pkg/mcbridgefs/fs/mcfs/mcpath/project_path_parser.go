@@ -13,8 +13,8 @@ type ProjectPathParser struct {
 	stors *stor.Stors
 }
 
-func NewProjectPathParser() *ProjectPathParser {
-	return &ProjectPathParser{}
+func NewProjectPathParser(stors *stor.Stors) *ProjectPathParser {
+	return &ProjectPathParser{stors: stors}
 }
 
 // Parse takes a path containing the project and user uuid and creates

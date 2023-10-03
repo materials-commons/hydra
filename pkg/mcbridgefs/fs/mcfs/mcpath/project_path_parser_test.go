@@ -84,7 +84,7 @@ func TestProjectPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			parser := NewProjectPathParser()
+			parser := NewProjectPathParser(nil)
 			p, err := parser.Parse(test.path)
 			if test.expectPathType == BadIDPath {
 				require.Error(t, err)
@@ -113,7 +113,7 @@ func TestProjectPath_Join(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
-			parser := NewProjectPathParser()
+			parser := NewProjectPathParser(nil)
 			p, err := parser.Parse(test.path)
 			require.NoError(t, err)
 			asProjPath := p.(*ProjectPath)
