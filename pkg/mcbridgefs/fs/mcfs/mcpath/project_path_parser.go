@@ -39,6 +39,7 @@ func (p *ProjectPathParser) Parse(path string) (Path, error) {
 		projectPath:  "/",
 		transferBase: "/",
 		fullPath:     filepath.Clean(path),
+		stors:        p.stors,
 	}
 
 	if path == "/" {

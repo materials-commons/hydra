@@ -1,5 +1,9 @@
 package mcpath
 
+import (
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+)
+
 type Parser interface {
 	Parse(path string) (Path, error)
 }
@@ -22,6 +26,8 @@ type Path interface {
 	FullPath() string
 	TransferBase() string
 	PathType() PathType
+	Lookup() (*mcmodel.File, error)
+	List() ([]mcmodel.File, error)
 }
 
 type PathType int

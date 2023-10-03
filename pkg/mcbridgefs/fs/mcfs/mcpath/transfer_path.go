@@ -60,7 +60,11 @@ func (p *TransferPath) PathType() PathType {
 	return p.pathType
 }
 
-func (p *TransferPath) ListPath() ([]mcmodel.File, error) {
+func (p *TransferPath) Lookup() (*mcmodel.File, error) {
+	return nil, nil
+}
+
+func (p *TransferPath) List() ([]mcmodel.File, error) {
 	switch p.pathType {
 	case RootPathType:
 		return p.listTransferRequests()
