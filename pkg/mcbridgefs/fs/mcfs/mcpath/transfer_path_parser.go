@@ -53,6 +53,7 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 			fullPath:        path,
 			transferBase:    path,
 			transferRequest: tr,
+			stors:           p.stors,
 		}
 		return transferPath, nil
 	}
@@ -69,6 +70,7 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 		fullPath:        path,
 		transferBase:    path,
 		transferRequest: tr,
+		stors:           p.stors,
 	}
 
 	return transferPath, nil
@@ -99,6 +101,7 @@ func (p *TransferPathParser) handleProjectPath(path string, pathParts []string) 
 		fullPath:        path,
 		transferBase:    filepath.Join("/", pathParts[1]), // create /transfer-uuid path
 		transferRequest: tr,
+		stors:           p.stors,
 	}
 
 	return transferPath, nil
