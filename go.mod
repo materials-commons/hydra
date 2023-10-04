@@ -13,7 +13,6 @@ require (
 	github.com/hanwen/go-fuse/v2 v2.3.0
 	github.com/hashicorp/go-uuid v1.0.3
 	github.com/labstack/echo/v4 v4.11.1
-	github.com/materials-commons/goglobus v0.0.0-20210301184122-e8ff1687f02c
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/sftp v1.13.6
 	github.com/saracen/walker v0.1.3
@@ -49,7 +48,6 @@ require (
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
-	github.com/materials-commons/mc v0.0.0-20190920151351-e37fe638d79b // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
