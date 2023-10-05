@@ -2,22 +2,22 @@ package monitor
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/globus"
 )
 
-type UploadMonitor struct {
+type GlobusUploadMonitor struct {
 	client *globus.Client
 	//globusUploads       *store.GlobusUploadsStore
 	endpointID          string
 	finishedGlobusTasks map[string]bool
 }
 
-func NewUploadMonitor(client *globus.Client, endpointID string) *UploadMonitor {
-	return &UploadMonitor{
+func NewGlobusUploadMonitor(client *globus.Client, endpointID string) *GlobusUploadMonitor {
+	return &GlobusUploadMonitor{
 		client:     client,
 		endpointID: endpointID,
 		//globusUploads:       db.GlobusUploadsStore(),
@@ -26,24 +26,24 @@ func NewUploadMonitor(client *globus.Client, endpointID string) *UploadMonitor {
 	}
 }
 
-func (m *UploadMonitor) Start(c context.Context) {
+func (m *GlobusUploadMonitor) Start(c context.Context) {
 	go m.monitorAndProcessUploads(c)
 }
 
-func (m *UploadMonitor) monitorAndProcessUploads(c context.Context) {
-	log.Printf("Starting globus monitoring...")
+func (m *GlobusUploadMonitor) monitorAndProcessUploads(c context.Context) {
+	log.Infof("Starting globus monitoring...")
 	for {
 		m.retrieveAndProcessUploads(c)
 		select {
 		case <-c.Done():
-			log.Printf("Shutting down globus monitoring...")
+			log.Infof("Shutting down globus monitoring...")
 			return
 		case <-time.After(10 * time.Second):
 		}
 	}
 }
 
-func (m *UploadMonitor) retrieveAndProcessUploads(c context.Context) {
+func (m *GlobusUploadMonitor) retrieveAndProcessUploads(c context.Context) {
 	// Build a filter to get all successful tasks that completed in the last week
 	lastWeek := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
 	taskFilter := map[string]string{
@@ -53,7 +53,7 @@ func (m *UploadMonitor) retrieveAndProcessUploads(c context.Context) {
 	tasks, err := m.client.GetEndpointTaskList(m.endpointID, taskFilter)
 
 	if err != nil {
-		log.Printf("globus.GetEndpointTaskList returned the following error: %s - %#v", err, m.client.GetGlobusErrorResponse())
+		log.Errorf("globus.GetEndpointTaskList returned the following error: %s - %#v", err, m.client.GetGlobusErrorResponse())
 		return
 	}
 
@@ -63,7 +63,7 @@ func (m *UploadMonitor) retrieveAndProcessUploads(c context.Context) {
 
 		switch {
 		case err != nil:
-			log.Printf("globus.GetTaskSuccessfulTransfers(%s) returned error %s - %#v", task.TaskID, err, m.client.GetGlobusErrorResponse())
+			log.Errorf("globus.GetTaskSuccessfulTransfers(%s) returned error %s - %#v", task.TaskID, err, m.client.GetGlobusErrorResponse())
 			continue
 		case len(transfers.Transfers) == 0:
 			// No files transferred in this request
@@ -82,7 +82,7 @@ func (m *UploadMonitor) retrieveAndProcessUploads(c context.Context) {
 	}
 }
 
-func (m *UploadMonitor) processTransfers(transfers *globus.TransferItems) {
+func (m *GlobusUploadMonitor) processTransfers(transfers *globus.TransferItems) {
 	transferItem := transfers.Transfers[0]
 
 	// Transfer items with a blank DestinationPath are downloads not uploads.
@@ -97,7 +97,7 @@ func (m *UploadMonitor) processTransfers(transfers *globus.TransferItems) {
 	if len(pieces) < 4 {
 		// sanity check, because the destination path should at least be /__globus_uploads/<id>/...rest of path...
 		// it should at least have 4 entries in it (See Split return description above)
-		log.Printf("Invalid globus DestinationPath: %s", transferItem.DestinationPath)
+		log.Errorf("Invalid globus DestinationPath: %s", transferItem.DestinationPath)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (m *UploadMonitor) processTransfers(transfers *globus.TransferItems) {
 	// the meantime since we've now created a file load from this globus upload we can delete the entry
 	// from the globus_uploads table. Finally, we are going to update the status for this background process.
 
-	log.Printf("Processing globus upload %s", id)
+	log.Errorf("Processing globus upload %s", id)
 
 	//if _, err := m.client.DeleteEndpointACLRule(m.endpointID, globusUpload.GlobusAclID); err != nil {
 	//	log.Printf("Unable to delete ACL: %s", err)

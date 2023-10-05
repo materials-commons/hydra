@@ -6,11 +6,11 @@ package mcfs
 
 import (
 	"context"
-	"log/slog"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -20,7 +20,7 @@ import (
 func (f *BaseFileHandle) Allocate(ctx context.Context, off uint64, sz uint64, mode uint32) syscall.Errno {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	slog.Debug("BaseFileHandle.Allocate")
+	log.Debug("BaseFileHandle.Allocate")
 	err := syscall.Fallocate(f.Fd, mode, int64(off), int64(sz))
 	if err != nil {
 		return fs.ToErrno(err)

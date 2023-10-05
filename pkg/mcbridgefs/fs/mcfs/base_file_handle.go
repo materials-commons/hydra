@@ -6,10 +6,10 @@ package mcfs
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"syscall"
 
+	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -171,7 +171,7 @@ func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.Fil
 
 // Setattr implements the FUSE Setattr call for setting attributes on a file
 func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	slog.Debug("BaseFileHandle.Setattr")
+	log.Debug("BaseFileHandle.Setattr")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -181,7 +181,7 @@ func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *f
 
 // setAttr sets the actual file attributes, it doesn't grab the mutex
 func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscall.Errno {
-	slog.Debug("BaseFileHandle.setAttr")
+	log.Debug("BaseFileHandle.setAttr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	var errno syscall.Errno
@@ -239,7 +239,7 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 
 // Getattr implements getting attributes about a file (different from stat)
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
-	slog.Debug("BaseFileHandle.Getattr")
+	log.Debug("BaseFileHandle.Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
@@ -247,7 +247,7 @@ func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.E
 
 // getattr gets the file attributes, no mutex is used
 func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
-	slog.Debug("  BaseFileHandle.getattr")
+	log.Debug("  BaseFileHandle.getattr")
 	st := syscall.Stat_t{}
 	if err := syscall.Fstat(f.Fd, &st); err != nil {
 		return fs.ToErrno(err)
@@ -262,7 +262,7 @@ func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Err
 func (f *BaseFileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	slog.Debug("BaseFileHandle.Lseek")
+	log.Debug("BaseFileHandle.Lseek")
 	n, err := unix.Seek(f.Fd, int64(off), int(whence))
 	return uint64(n), fs.ToErrno(err)
 }

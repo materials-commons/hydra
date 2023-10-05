@@ -4,13 +4,13 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
-	"log/slog"
 	"mime"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -52,7 +52,7 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
-	slog.Debug("LocalMCFSApi Open", "path", path)
+	log.Debugf("LocalMCFSApi Open %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 	f = fsapi.knownFilesTracker.GetFile(path)
 	if f != nil {
@@ -166,19 +166,18 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	} else {
 		checksum = fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
 		err = fsapi.stors.TransferRequestStor.MarkFileReleased(knownFile.file, checksum, parsedPath.ProjectID(), int64(size))
+		if err != nil {
+			log.Debugf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
+			return err
+		}
 		// Add to convertible list after marking as released to prevent the condition where the
 		// file hasn't been released but is picked up for conversion. This is a very unlikely
 		// case, but easy to prevent by releasing then adding to conversions list.
 		if knownFile.file.IsConvertible() {
 			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(knownFile.file); err != nil {
-				slog.Error("Failed adding file to conversion", "file.ID", knownFile.file.ID)
+				log.Errorf("Failed adding file to conversion %d", knownFile.file.ID)
 			}
 		}
-
-		if err != nil {
-			fmt.Printf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
-		}
-		return err
 	}
 
 	return nil
@@ -211,19 +210,19 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 }
 
 func (fsapi *LocalMCFSApi) Lookup(path string) (*mcmodel.File, error) {
-	slog.Debug("LocalMCFSApi.Lookup", "path", path)
+	log.Debugf("LocalMCFSApi.Lookup %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 	return parsedPath.Lookup()
 }
 
 func (fsapi *LocalMCFSApi) Readdir(path string) ([]mcmodel.File, error) {
-	slog.Debug("LocalMCFSApi.Readdir", "path", path)
+	log.Debugf("LocalMCFSApi.Readdir %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 	return parsedPath.List()
 }
 
 func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
-	slog.Debug("LocalMCFSApi.Mkdir", "path", path)
+	log.Debugf("LocalMCFSApi.Mkdir %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 	parentDir, err := fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
 	if err != nil {

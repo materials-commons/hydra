@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"syscall"
 
+	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -74,7 +74,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 	knownFile := h.knownFilesTracker.Get(h.Path)
 	if knownFile == nil {
-		slog.Error("Unknown file in MCFileHandle", "path", h.Path)
+		log.Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO
 	}
 
@@ -165,8 +165,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 }
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
-	slog.Debug("MCFileHandle.Setattr")
-	fmt.Println("MCFileHandle.Setattr")
+	log.Debug("MCFileHandle.Setattr")
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
-	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -97,13 +97,13 @@ func (n *Node) Opendir(_ context.Context) syscall.Errno {
 // Getxattr returns extra attributes. This is used by lstat. There are no extra attributes to
 // return, so we always return a 0 for buffer length and success.
 func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.Errno) {
-	//slog.Error("Node.Getxattr")
+	//log.Error("Node.Getxattr")
 	return 0, fs.OK
 }
 
 // Getattr gets attributes about the file
 func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) (errno syscall.Errno) {
-	slog.Debug("Node.Getattr")
+	log.Debug("Node.Getattr")
 	defer func() {
 		if r := recover(); r != nil {
 			errno = syscall.ENOENT
@@ -133,7 +133,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	st := syscall.Stat_t{}
 	if err := syscall.Lstat(realPath, &st); err != nil {
-		slog.Error("Node.Getattr: Lstat failed", "path", realPath, "error", err)
+		log.Errorf("Node.Getattr: Lstat failed path %s: %s", realPath, err)
 		return fs.ToErrno(err)
 	}
 
@@ -195,7 +195,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 
 	n.RootData.mu.Lock()
 
-	slog.Debug("Node.Mkdir", "name", name)
+	log.Debugf("Node.Mkdir %s", name)
 
 	path := filepath.Join("/", n.Path(n.Root()), name)
 	dir, err := n.RootData.mcfsapi.Mkdir(path)
@@ -214,7 +214,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 }
 
 func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
-	slog.Error("Node.Rmdir", "path", n.Path(n.Root()), "name", name)
+	log.Errorf("Node.Rmdir %s name %s", n.Path(n.Root()), name)
 	return syscall.EIO
 }
 
@@ -233,7 +233,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
 	f, err := n.RootData.mcfsapi.Create(fpath)
 	if err != nil {
-		slog.Error("Node.Create - failed creating new file", "file", fpath, "error", err)
+		log.Errorf("Node.Create - failed creating new file %s: %s\n", fpath, err)
 		fmt.Printf("Node.Create - failed creating new file %s: %s\n", fpath, err)
 		return nil, nil, 0, syscall.EIO
 	}
@@ -241,8 +241,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	flags = flags &^ syscall.O_APPEND
 	fd, err := syscall.Open(f.ToUnderlyingFilePath(n.RootData.mcfsRoot), int(flags)|os.O_CREATE, mode)
 	if err != nil {
-		slog.Error("Node.Create - syscall.Open failed", "error", err)
-		slog.Error("Node.Create - syscall.Open failed %s: %s\n", f.ToUnderlyingFilePath(n.RootData.mcfsRoot), err)
+		log.Errorf("Node.Create - syscall.Open failed %s: %s\n", f.ToUnderlyingFilePath(n.RootData.mcfsRoot), err)
 		return nil, nil, 0, syscall.EIO
 	}
 
@@ -316,8 +315,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 	}()
 
 	path := filepath.Join("/", n.Path(n.Root()))
-	slog.Debug("Node.Setattr", "path", path)
-	fmt.Println("Node.Setattr")
+	log.Debugf("Node.Setattr %s", path)
 
 	if fops, ok := f.(fs.FileSetattrer); ok {
 		return fops.Setattr(ctx, in, out)
@@ -348,12 +346,12 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 }
 
 func (n *Node) Rename(_ context.Context, _ string, _ fs.InodeEmbedder, _ string, _ uint32) syscall.Errno {
-	slog.Error("Node.Rename")
+	log.Error("Node.Rename")
 	return syscall.EPERM
 }
 
 func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
-	slog.Error("Node.Unlink", "path", n.Path(n.Root()), "name", name)
+	log.Errorf("Node.Unlink %s, name %s", n.Path(n.Root()), name)
 	return syscall.EPERM
 }
 
