@@ -2,14 +2,15 @@ package api
 
 import (
 	"fmt"
+	"net/http"
+	"os/exec"
+	"sync"
+
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
-	"sync"
 
 	"github.com/apex/log"
 	"github.com/labstack/echo/v4"
-	"net/http"
-	"os/exec"
 )
 
 type BridgeController struct {

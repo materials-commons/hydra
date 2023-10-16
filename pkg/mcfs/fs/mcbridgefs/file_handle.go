@@ -8,8 +8,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/bridgefs"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/monitor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/bridgefs"
+	"github.com/materials-commons/hydra/pkg/mcfs/monitor"
 )
 
 // Code based on loopback file system from github.com/hanwen/go-fuse/v2/fs/file.go

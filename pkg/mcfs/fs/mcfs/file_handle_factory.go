@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 )
 
 // FileHandleFactory is an interface that wraps the method for getting a new file handle. This allows

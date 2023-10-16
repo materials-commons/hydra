@@ -21,8 +21,8 @@ import (
 	"github.com/apex/log"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs"
 	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcfs"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 )
@@ -46,7 +46,7 @@ var rootCmd = &cobra.Command{
 
 		g := e.Group("/api")
 
-		s := mcbridgefs.NewServer(g, db)
+		s := mcfs.NewServer(g, db)
 
 		if err := s.Init(); err != nil {
 			log.Fatalf("Unable to initialize mcbridgefsd: %s", err)

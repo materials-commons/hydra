@@ -7,11 +7,10 @@ package bridgefs
 import (
 	"context"
 	"sync"
+	"syscall"
 
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
-
-	"syscall"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"golang.org/x/sys/unix"

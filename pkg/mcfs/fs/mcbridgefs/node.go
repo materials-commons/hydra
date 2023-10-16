@@ -16,15 +16,25 @@ import (
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/bridgefs"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/bridgefs"
 	"gorm.io/gorm"
 )
 
 type Node struct {
 	file *mcmodel.File
 	*bridgefs.BridgeNode
+}
+
+func (n *Node) embed() *fs.Inode {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n *Node) EmbeddedInode() *fs.Inode {
+	//TODO implement me
+	panic("implement me")
 }
 
 var (

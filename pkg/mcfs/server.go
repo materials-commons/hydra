@@ -1,8 +1,8 @@
-package mcbridgefs
+package mcfs
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/materials-commons/hydra/pkg/mcbridgefs/web/api"
+	"github.com/materials-commons/hydra/pkg/mcfs/web/api"
 	"gorm.io/gorm"
 )
 
