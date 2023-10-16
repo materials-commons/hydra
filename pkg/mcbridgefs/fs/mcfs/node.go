@@ -2,7 +2,6 @@ package mcfs
 
 import (
 	"context"
-	"fmt"
 	"hash/fnv"
 	"os"
 	"os/user"
@@ -165,7 +164,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 
 	f, err := n.RootData.mcfsapi.Lookup(path)
 	if err != nil {
-		fmt.Printf("Lookup failed %s: %s\n", path, err)
+		log.Debugf("Lookup failed %s: %s\n", path, err)
 		return nil, syscall.ENOENT
 	}
 
@@ -234,7 +233,6 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	f, err := n.RootData.mcfsapi.Create(fpath)
 	if err != nil {
 		log.Errorf("Node.Create - failed creating new file %s: %s\n", fpath, err)
-		fmt.Printf("Node.Create - failed creating new file %s: %s\n", fpath, err)
 		return nil, nil, 0, syscall.EIO
 	}
 
@@ -264,14 +262,14 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	defer func() {
 		if r := recover(); r != nil {
 			fh = nil
-			fmt.Println("Open panicked")
+			log.Errorf("Open panicked")
 			fuseFlags = 0
 			errno = syscall.EIO
 		}
 	}()
 
 	path := filepath.Join("/", n.Path(n.Root()))
-	fmt.Println("Node.Open", path)
+	log.Debugf("Node.Open %s", path)
 	omode := flags & syscall.O_ACCMODE
 
 	f, isNewFile, err := n.RootData.mcfsapi.Open(path, int(flags))

@@ -21,7 +21,7 @@ type Path interface {
 	ProjectID() int
 	UserID() int
 	TransferID() int
-	TransferUUID() string
+	TransferKey() string
 	ProjectPath() string
 	FullPath() string
 	TransferBase() string

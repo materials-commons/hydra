@@ -45,5 +45,6 @@ func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *m
 		WithFile(file).
 		WithActivityCounter(activityCounter).
 		WithKnownFilesTracker(f.knownFilesTracker).
-		WithMCFSApi(f.mcfsapi)
+		WithMCFSApi(f.mcfsapi).
+		WithPathParser(f.pathParser)
 }

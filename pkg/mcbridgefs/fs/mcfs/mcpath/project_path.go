@@ -45,6 +45,8 @@ type ProjectPath struct {
 	// The full path, containing the project-id and the user-id
 	fullPath string
 
+	transferKey string
+
 	stors *stor.Stors
 }
 
@@ -60,8 +62,8 @@ func (p *ProjectPath) TransferID() int {
 	return -1
 }
 
-func (p *ProjectPath) TransferUUID() string {
-	return ""
+func (p *ProjectPath) TransferKey() string {
+	return p.transferKey
 }
 
 func (p *ProjectPath) ProjectPath() string {

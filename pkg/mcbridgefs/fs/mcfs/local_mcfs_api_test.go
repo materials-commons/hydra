@@ -40,7 +40,8 @@ func TestMCApi_Create(t *testing.T) {
 			} else {
 				require.Nil(t, err)
 				require.NotNil(t, createdFile)
-				f := knownFilesTracker.GetFile(test.path)
+				// TODO: Fix path parsing
+				f := knownFilesTracker.GetFile("", test.path)
 				require.NotNil(t, f)
 				require.Equal(t, createdFile.ID, f.ID)
 			}

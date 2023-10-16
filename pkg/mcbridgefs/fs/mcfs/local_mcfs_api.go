@@ -39,14 +39,15 @@ func NewLocalMCFSApi(stors *stor.Stors, tracker *KnownFilesTracker, pathParser m
 
 func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	if file := fsapi.knownFilesTracker.GetFile(parsedPath.FullPath()); file != nil {
+	log.Debugf("fsapi.Create %s = %s, %s\n", path, parsedPath.TransferKey(), parsedPath.ProjectPath())
+	if file := fsapi.knownFilesTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath()); file != nil {
 		// This should not happen - Create was called on a file that the file
 		// system is already tracking as opened.
 		return nil, fmt.Errorf("file found on create: %s", path)
 	}
 
 	f, err := fsapi.createNewFile(parsedPath)
-	fsapi.knownFilesTracker.Store(path, f, FileStateOpen)
+	fsapi.knownFilesTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
 
 	return f, err
 }
@@ -54,7 +55,7 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	log.Debugf("LocalMCFSApi Open %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	f = fsapi.knownFilesTracker.GetFile(path)
+	f = fsapi.knownFilesTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if f != nil {
 		// Existing file found
 		return f, false, nil
@@ -71,7 +72,7 @@ func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewF
 	// files, so we need to create the file.
 	f, err = fsapi.createNewFileVersion(parsedPath)
 	if err != nil {
-		fsapi.knownFilesTracker.Store(path, f, FileStateOpen)
+		fsapi.knownFilesTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
 	}
 
 	return f, true, err
@@ -147,15 +148,14 @@ func (fsapi *LocalMCFSApi) createNewFileVersion(p mcpath.Path) (*mcmodel.File, e
 }
 
 func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
-	knownFile := fsapi.knownFilesTracker.Get(path)
+	parsedPath, _ := fsapi.pathParser.Parse(path)
+	knownFile := fsapi.knownFilesTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if knownFile == nil {
 		fmt.Printf("LocalMCFSApi.Release knownFile is nil for %s\n", path)
 		return syscall.ENOENT
 	}
 
 	knownFile.FileState = FileStateClosed
-
-	parsedPath, _ := fsapi.pathParser.Parse(path)
 	checksum := ""
 	var err error
 	if knownFile.HashInvalid {
@@ -194,7 +194,9 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 	_, _ = io.Copy(hasher, fh)
 	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
 
-	fsapi.knownFilesTracker.WithLockHeld(path, func(knownFile *KnownFile) {
+	parsedPath, _ := fsapi.pathParser.Parse(path)
+
+	fsapi.knownFilesTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(knownFile *KnownFile) {
 		if knownFile.Sequence == sequence {
 			// This check ensures that another thread wasn't kicked off to compute the checksum. This could
 			// happen if the file was closed with an invalid checksum, a thread was kicked off, and then while
@@ -234,13 +236,13 @@ func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) GetRealPath(path string) (realpath string, err error) {
-	if file := fsapi.knownFilesTracker.GetFile(path); file != nil {
+	parsedPath, _ := fsapi.pathParser.Parse(path)
+	if file := fsapi.knownFilesTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath()); file != nil {
 		// Found known file, so return it's real path
 		return file.ToUnderlyingFilePath(fsapi.mcfsRoot), nil
 	}
 
 	// Didn't find a previously opened file, so look up file.
-	parsedPath, _ := fsapi.pathParser.Parse(path)
 	file, err := fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), parsedPath.ProjectPath())
 	if err != nil {
 		return "", err
@@ -250,7 +252,8 @@ func (fsapi *LocalMCFSApi) GetRealPath(path string) (realpath string, err error)
 }
 
 func (fsapi *LocalMCFSApi) GetKnownFileRealPath(path string) (string, error) {
-	f := fsapi.knownFilesTracker.GetFile(path)
+	parsedPath, _ := fsapi.pathParser.Parse(path)
+	f := fsapi.knownFilesTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if f != nil {
 		return f.ToUnderlyingFilePath(fsapi.mcfsRoot), nil
 	}
@@ -259,7 +262,8 @@ func (fsapi *LocalMCFSApi) GetKnownFileRealPath(path string) (string, error) {
 }
 
 func (fsapi *LocalMCFSApi) FTruncate(path string, size uint64) (error, *syscall.Stat_t) {
-	f := fsapi.knownFilesTracker.GetFile(path)
+	parsedPath, _ := fsapi.pathParser.Parse(path)
+	f := fsapi.knownFilesTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if f == nil {
 		return syscall.ENOENT, nil
 	}

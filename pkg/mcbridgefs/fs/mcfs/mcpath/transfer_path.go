@@ -38,7 +38,7 @@ func (p *TransferPath) TransferID() int {
 	return p.transferRequest.ID
 }
 
-func (p *TransferPath) TransferUUID() string {
+func (p *TransferPath) TransferKey() string {
 	if p.transferRequest == nil {
 		return ""
 	}

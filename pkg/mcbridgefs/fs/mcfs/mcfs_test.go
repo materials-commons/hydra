@@ -172,6 +172,8 @@ func TestCreate(t *testing.T) {
 		},
 	}
 
+	//log.SetLevel(log.DebugLevel)
+
 	tc := newTestCase(t, &fsTestOptions{})
 	require.NotNil(t, tc)
 
@@ -221,9 +223,7 @@ func TestOpen(t *testing.T) {
 	require.NoErrorf(t, err, "Couldn't get database file entry: %s", err)
 
 	// Reopen and make sure we get back what was written
-	fmt.Println("Calling os.OpenFile")
 	fh, err = os.OpenFile(path, os.O_RDONLY, 0755)
-	fmt.Println("Past os.OpenFile")
 	require.NoErrorf(t, err, "Unexpected error on open %s, for path %s", err, path)
 	contents := make([]byte, 1024)
 	n, err = fh.Read(contents)

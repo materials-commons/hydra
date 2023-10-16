@@ -38,6 +38,7 @@ func (p *ProjectPathParser) Parse(path string) (Path, error) {
 		userID:       -1,
 		projectPath:  "/",
 		transferBase: "/",
+		transferKey:  "",
 		fullPath:     filepath.Clean(path),
 		stors:        p.stors,
 	}
@@ -104,6 +105,7 @@ func (p *ProjectPathParser) parse2PartPath(pathParts []string, projPath *Project
 	// The project id is good
 	projPath.projectID = id
 	projPath.pathType = ProjectBasePath
+	projPath.transferKey = pathParts[1]
 	return projPath, nil
 }
 
@@ -135,6 +137,7 @@ func (p *ProjectPathParser) parse3PartPath(pathParts []string, projPath *Project
 		// The project id is good
 		projPath.projectID = id
 		projPath.pathType = ProjectBasePath
+		projPath.transferKey = pathParts[1]
 		return projPath, nil
 	}
 
@@ -161,6 +164,7 @@ func (p *ProjectPathParser) parse3PartPath(pathParts []string, projPath *Project
 	// Transfer is same as full path, while project path is "/"
 	projPath.transferBase = projPath.fullPath
 	projPath.projectPath = "/"
+	projPath.transferKey = fmt.Sprintf("%s/%s", pathParts[1], pathParts[2])
 	return projPath, nil
 }
 
@@ -189,5 +193,6 @@ func (p *ProjectPathParser) parseGreaterThan3PartPath(pathParts []string, projPa
 	pathPieces := append([]string{"/"}, pathParts[3:]...)
 	projPath.projectPath = filepath.Join(pathPieces...)
 	projPath.transferBase = filepath.Join("/", pathParts[1], pathParts[2])
+	projPath.transferKey = fmt.Sprintf("%s/%s", pathParts[1], pathParts[2])
 	return projPath, nil
 }

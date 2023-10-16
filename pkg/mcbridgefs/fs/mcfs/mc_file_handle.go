@@ -3,7 +3,6 @@ package mcfs
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"syscall"
@@ -11,6 +10,7 @@ import (
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/materials-commons/hydra/pkg/mcbridgefs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
@@ -22,6 +22,7 @@ type MCFileHandle struct {
 	activityCounter   *ActivityCounter
 	mcfsapi           MCFSApi
 	knownFilesTracker *KnownFilesTracker
+	pathParser        mcpath.Parser
 }
 
 var _ = (fs.FileHandle)((*MCFileHandle)(nil))
@@ -46,6 +47,11 @@ func (h *MCFileHandle) WithFile(f *mcmodel.File) *MCFileHandle {
 	return h
 }
 
+func (h *MCFileHandle) WithPathParser(p mcpath.Parser) *MCFileHandle {
+	h.pathParser = p
+	return h
+}
+
 func (h *MCFileHandle) WithActivityCounter(activityCounter *ActivityCounter) *MCFileHandle {
 	h.activityCounter = activityCounter
 	return h
@@ -63,16 +69,18 @@ func (h *MCFileHandle) WithKnownFilesTracker(tracker *KnownFilesTracker) *MCFile
 
 func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
 	h.Mu.Lock()
-	fmt.Printf("MCFileHandle.Write %s:%d\n", string(data), off)
+	log.Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
 	defer func() {
 		if r := recover(); r != nil {
+			log.Debug("MCFileHandle panic")
 			bytesWritten = 0
 			errno = syscall.EIO
 		}
 		h.Mu.Unlock()
 	}()
 
-	knownFile := h.knownFilesTracker.Get(h.Path)
+	parsedPath, _ := h.pathParser.Parse(h.Path)
+	knownFile := h.knownFilesTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if knownFile == nil {
 		log.Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO
@@ -106,7 +114,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 func (h *MCFileHandle) Read(_ context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	h.Mu.Lock()
-	fmt.Println("MCFileHandle.Read")
+	log.Debugf("MCFileHandle.Read")
 	defer func() {
 		if r := recover(); r != nil {
 			res = nil
@@ -135,14 +143,14 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	}()
 
 	if h.Fd == -1 {
-		fmt.Printf("h.Fd == -1 for %s\n", h.Path)
+		log.Debugf("h.Fd == -1 for %s\n", h.Path)
 		return syscall.EBADF
 	}
 
 	err := syscall.Close(h.Fd)
 	h.Fd = -1
 	if err != nil {
-		fmt.Printf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
+		log.Debugf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
 		return fs.ToErrno(err)
 	}
 
