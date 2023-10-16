@@ -46,7 +46,7 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 	}
 
 	f, err := fsapi.createNewFile(parsedPath)
-	fsapi.knownFilesTracker.Store(path, f)
+	fsapi.knownFilesTracker.Store(path, f, FileStateOpen)
 
 	return f, err
 }
@@ -71,7 +71,7 @@ func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewF
 	// files, so we need to create the file.
 	f, err = fsapi.createNewFileVersion(parsedPath)
 	if err != nil {
-		fsapi.knownFilesTracker.Store(path, f)
+		fsapi.knownFilesTracker.Store(path, f, FileStateOpen)
 	}
 
 	return f, true, err
@@ -153,19 +153,19 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		return syscall.ENOENT
 	}
 
+	knownFile.FileState = FileStateClosed
+
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 	checksum := ""
 	var err error
-	if knownFile.hashInvalid {
+	if knownFile.HashInvalid {
 		var sequence int
-		fsapi.knownFilesTracker.WithLockHeld(path, func(knownFile *KnownFile) {
-			knownFile.sequence = knownFile.sequence + 1
-			sequence = knownFile.sequence
-		})
-		go fsapi.computeAndUpdateChecksum(path, knownFile.file, size, sequence)
+		knownFile.Sequence = knownFile.Sequence + 1
+		sequence = knownFile.Sequence
+		go fsapi.computeAndUpdateChecksum(path, knownFile.File, size, sequence)
 	} else {
-		checksum = fmt.Sprintf("%x", knownFile.hasher.Sum(nil))
-		err = fsapi.stors.TransferRequestStor.MarkFileReleased(knownFile.file, checksum, parsedPath.ProjectID(), int64(size))
+		checksum = fmt.Sprintf("%x", knownFile.Hasher.Sum(nil))
+		err = fsapi.stors.TransferRequestStor.MarkFileReleased(knownFile.File, checksum, parsedPath.ProjectID(), int64(size))
 		if err != nil {
 			log.Debugf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
 			return err
@@ -173,9 +173,9 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		// Add to convertible list after marking as released to prevent the condition where the
 		// file hasn't been released but is picked up for conversion. This is a very unlikely
 		// case, but easy to prevent by releasing then adding to conversions list.
-		if knownFile.file.IsConvertible() {
-			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(knownFile.file); err != nil {
-				log.Errorf("Failed adding file to conversion %d", knownFile.file.ID)
+		if knownFile.File.IsConvertible() {
+			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(knownFile.File); err != nil {
+				log.Errorf("Failed adding file to conversion %d", knownFile.File.ID)
 			}
 		}
 	}
@@ -195,7 +195,7 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
 
 	fsapi.knownFilesTracker.WithLockHeld(path, func(knownFile *KnownFile) {
-		if knownFile.sequence == sequence {
+		if knownFile.Sequence == sequence {
 			// This check ensures that another thread wasn't kicked off to compute the checksum. This could
 			// happen if the file was closed with an invalid checksum, a thread was kicked off, and then while
 			// the thread was computing the checksum, another open/close happened that kicked off another

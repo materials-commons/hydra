@@ -1,16 +1,36 @@
 package globus
 
 type MockClient struct {
-	err error
+	err           error
+	tasks         []TaskList
+	transferItems map[string]TransferItems
 }
 
-func NewMockClient(err error) *MockClient {
-	return &MockClient{err: err}
+func NewMockClient() *MockClient {
+	return &MockClient{transferItems: make(map[string]TransferItems)}
 }
 
-func (c *MockClient) Authenticate() error { return c.err }
+func (c *MockClient) SetError(err error) {
+	c.err = err
+}
+
+func (c *MockClient) SetTasks(tasks []TaskList) {
+	c.tasks = tasks
+}
+
+func (c *MockClient) SetTransfersForTask(taskID string, t TransferItems) {
+	c.transferItems[taskID] = t
+}
+
+func (c *MockClient) Authenticate() error {
+	return c.err
+}
 
 func (c *MockClient) GetEndpointTaskList(endpointID string, filters map[string]string) (TaskList, error) {
+	if c.err != nil {
+		return TaskList{}, c.err
+	}
+
 	return TaskList{}, c.err
 }
 

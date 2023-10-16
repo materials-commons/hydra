@@ -13,7 +13,7 @@ type GlobusUploadMonitor struct {
 	client *globus.Client
 	//globusUploads       *store.GlobusUploadsStore
 	endpointID          string
-	finishedGlobusTasks map[string]bool
+	finishedGlobusTasks map[string]time.Time
 }
 
 func NewGlobusUploadMonitor(client *globus.Client, endpointID string) *GlobusUploadMonitor {
@@ -22,7 +22,7 @@ func NewGlobusUploadMonitor(client *globus.Client, endpointID string) *GlobusUpl
 		endpointID: endpointID,
 		//globusUploads:       db.GlobusUploadsStore(),
 		//fileLoads:           db.FileLoadsStore(),
-		finishedGlobusTasks: make(map[string]bool),
+		finishedGlobusTasks: make(map[string]time.Time),
 	}
 }
 
@@ -69,6 +69,14 @@ func (m *GlobusUploadMonitor) retrieveAndProcessUploads(c context.Context) {
 			// No files transferred in this request
 			continue
 		default:
+			// If we are here then we need to check if this task has already been processed
+			t, ok := m.finishedGlobusTasks[task.TaskID]
+			if ok {
+				// Already processed this transfer, if its older than a week then delete
+				now := time.Now()
+				_ = now
+				_ = t
+			}
 			// Files were transferred for this request
 			m.processTransfers(&transfers)
 		}
@@ -106,6 +114,8 @@ func (m *GlobusUploadMonitor) processTransfers(transfers *globus.TransferItems) 
 		// We've seen this globus task before and already processed it
 		return
 	}
+
+	// If we are here then this is a set of files we may not have processed
 
 	//globusUpload, err := m.globusUploads.GetGlobusUpload(id)
 	//if err != nil {

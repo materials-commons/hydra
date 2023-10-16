@@ -27,21 +27,26 @@ type KnownFilesTracker struct {
 	knownFiles map[string]*KnownFile
 }
 
+const FileStateOpen = "open"
+const FileStateClosed = "closed"
+
 // KnownFile tracks the state of a file that was opened for write. This tracks the underlying
 // database file entry and the hasher used to construct the checksum.
 type KnownFile struct {
-	// file is the database file the file system file is associated with
-	file *mcmodel.File
+	// File is the database file the file system file is associated with
+	File *mcmodel.File
 
-	// hasher is used to create the checksum. As writes are done to a file the
+	// Hasher is used to create the checksum. As writes are done to a file the
 	// checksum is updated.
-	hasher hash.Hash
+	Hasher hash.Hash
 
-	// hashInvalid is set to true when a user seeks or truncates a file. When
+	// HashInvalid is set to true when a user seeks or truncates a file. When
 	// that happens the hash state is invalid.
-	hashInvalid bool
+	HashInvalid bool
 
-	// sequence is used when hashInvalid is set to true. The sequence is used by
+	FileState string
+
+	// Sequence is used when hashInvalid is set to true. The sequence is used by
 	// the thread that is recomputing a file hash by reading the entire file.
 	// It's possible that a process could seek into a file, causing hashInvalid
 	// to be set to true. Then close the file, which causes a thread to launch
@@ -53,7 +58,7 @@ type KnownFile struct {
 	// changed from the one passed to the thread then it knows another thread is
 	// computing a more up-to-date checksum. Only the thread that has a sequence
 	// matching the sequence in the KnownFile entry will update the checksum.
-	sequence int
+	Sequence int
 }
 
 func NewKnownFilesTracker() *KnownFilesTracker {
@@ -88,8 +93,8 @@ func (tracker *KnownFilesTracker) LoadOrStore(path string, fn LoadOrStoreFN) err
 		// If we are here then a *mcmodel.File was returned. This means
 		// we need to add it into the list of known files.
 		newKnownFile := &KnownFile{
-			file:   potentialNewFile,
-			hasher: md5.New(),
+			File:   potentialNewFile,
+			Hasher: md5.New(),
 		}
 		tracker.knownFiles[path] = newKnownFile
 		return nil
@@ -118,7 +123,7 @@ func (tracker *KnownFilesTracker) WithLockHeld(path string, fn func(knownFile *K
 // Store grabs the mutex and stores the entry. It returns false if an
 // entry already existed (and doesn't update it), otherwise it returns
 // true and adds the path and a new KnownFile to the tracker.
-func (tracker *KnownFilesTracker) Store(path string, file *mcmodel.File) bool {
+func (tracker *KnownFilesTracker) Store(path string, file *mcmodel.File, state string) bool {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -131,8 +136,9 @@ func (tracker *KnownFilesTracker) Store(path string, file *mcmodel.File) bool {
 	// If we are here then path was not found. Create a new entry and
 	// add it to the tracker.
 	knownFile := &KnownFile{
-		file:   file,
-		hasher: md5.New(),
+		File:      file,
+		Hasher:    md5.New(),
+		FileState: state,
 	}
 
 	tracker.knownFiles[path] = knownFile
@@ -145,7 +151,7 @@ func (tracker *KnownFilesTracker) Store(path string, file *mcmodel.File) bool {
 func (tracker *KnownFilesTracker) GetFile(path string) *mcmodel.File {
 	knownFileEntry := tracker.Get(path)
 	if knownFileEntry != nil {
-		return knownFileEntry.file
+		return knownFileEntry.File
 	}
 
 	return nil

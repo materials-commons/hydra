@@ -285,22 +285,12 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 		}
 	}
 
-	if flagSet(int(flags), syscall.O_APPEND) {
-		fmt.Println("In open O_APPEND Set")
-	}
-
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
 	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
-		fmt.Printf("syscall.Open (%s) %s: %s\n", path, filePath, err)
+		log.Debugf("syscall.Open (%s) %s: %s\n", path, filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
-
-	st := syscall.Stat_t{}
-	if err := syscall.Fstat(fd, &st); err != nil {
-		fmt.Println("Open Fstat failed with", err)
-	}
-	fmt.Println("Open file size =", st.Size)
 
 	fhandle := n.RootData.newFileHandle(fd, int(flags), path, f)
 	return fhandle, 0, fs.OK

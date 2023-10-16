@@ -82,9 +82,9 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 		// If the O_APPEND flag is not set then we need to track
 		// the offset. If it was set, then each write will automatically
 		// be done to the end of the file.
-		if !knownFile.hashInvalid {
+		if !knownFile.HashInvalid {
 			if h.expectedOffset != off {
-				knownFile.hashInvalid = true
+				knownFile.HashInvalid = true
 			}
 		}
 	}
@@ -97,8 +97,8 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 	h.expectedOffset = h.expectedOffset + int64(n)
 
-	if !knownFile.hashInvalid {
-		_, _ = io.Copy(knownFile.hasher, bytes.NewBuffer(data[:n]))
+	if !knownFile.HashInvalid {
+		_, _ = io.Copy(knownFile.Hasher, bytes.NewBuffer(data[:n]))
 	}
 
 	return uint32(n), fs.OK
