@@ -26,7 +26,7 @@ func NewTransferPathParser(stors *stor.Stors) ParserReleaser {
 func (p *TransferPathParser) Parse(path string) (Path, error) {
 	path = filepath.Clean(path)
 	if path == "/" {
-		return &TransferPath{pathType: RootPathType, fullPath: path}, nil
+		return &TransferPath{pathType: RootPathType, fullPath: path, stors: p.stors}, nil
 	}
 
 	pathParts := strings.Split(path, "/")

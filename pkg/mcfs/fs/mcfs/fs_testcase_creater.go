@@ -3,6 +3,7 @@ package mcfs
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ type fsTestCase struct {
 	factory *MCFileHandlerFactory
 }
 
-type newPathParserFn func(stor *stor.Stors) mcpath.Parser
+type newPathParserFn func(stor *stor.Stors) mcpath.ParserReleaser
 
 type fsTestOptions struct {
 	entryCache    bool
@@ -219,6 +220,10 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	t.Cleanup(tc.unmount)
 	t.Cleanup(tc.closeDB)
 	return tc
+}
+
+func (tc *fsTestCase) makeTransferRequestPath(path string) string {
+	return filepath.Join(tc.mntDir, tc.transferRequest.UUID, path)
 }
 
 // populateDatabase is called from newTestCase and newTestStor. It populates the database

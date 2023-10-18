@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,10 +27,10 @@ func TestListingTransferRequestProjects(t *testing.T) {
 		errExpected bool
 	}{
 		{name: "list projects", dir: "/tmp/mnt/mcfs", numEntries: 1, errExpected: false},
-		{name: "project does not exist", dir: "/tmp/mnt/mcfs/2", numEntries: 0, errExpected: true},
+		{name: "project does not exist", dir: "/tmp/mnt/mcfs/abc123", numEntries: 0, errExpected: true},
 	}
 
-	tc := newTestCase(t, &fsTestOptions{})
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
 	require.NotNil(t, tc)
 
 	for _, test := range tests {
@@ -43,7 +44,7 @@ func TestListingTransferRequestProjects(t *testing.T) {
 				// test only returns one project, with id 1
 				entry := entries[0]
 				require.True(t, entry.IsDir())
-				require.Equal(t, "1", entry.Name())
+				require.Equal(t, tc.transferRequest.UUID, entry.Name())
 			}
 		})
 	}
@@ -77,6 +78,32 @@ func TestListingTransferRequestProjectUsers(t *testing.T) {
 				entry := entries[0]
 				require.True(t, entry.IsDir())
 				require.Equal(t, "1", entry.Name())
+			}
+		})
+	}
+}
+
+func TestLookupUsingTransferRequestPath(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+	require.NotNil(t, tc)
+
+	var tests = []struct {
+		name        string
+		path        string
+		errExpected bool
+	}{
+		{name: "Check that root exists for transfer request", path: tc.makeTransferRequestPath(""), errExpected: false},
+		{name: "Check that root exists for transfer request", path: tc.makeTransferRequestPath("/does-not-exist"), errExpected: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			finfo, err := os.Stat(test.path)
+			if test.errExpected {
+				require.Errorf(t, err, "Expected err for path %s", test.path)
+			} else {
+				require.NoErrorf(t, err, "Expected no error for path %s, got %s", test.path, err)
+				require.Truef(t, finfo.IsDir(), "Expected %s to be a dir", test.path)
 			}
 		})
 	}
