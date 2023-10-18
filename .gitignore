@@ -24,3 +24,5 @@ cmd/mcft/mcft
 cmd/mcsshd/mcsshd
 cmd/mchydrad/mchydrad
 cmd/mcftservd/mcftservd
+cmd/mcfsd/mcfsd
+cmd/mcfsc/mcfsc
