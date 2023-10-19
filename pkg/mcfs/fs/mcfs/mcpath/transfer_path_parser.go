@@ -50,6 +50,7 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 	if tr := p.transferRequests[transferUUID]; tr != nil {
 		transferPath := &TransferPath{
 			pathType:        ContextPathType,
+			projectPath:     "/",
 			fullPath:        path,
 			transferBase:    path,
 			transferRequest: tr,
@@ -67,6 +68,7 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 	p.transferRequests[transferUUID] = tr
 	transferPath := &TransferPath{
 		pathType:        ContextPathType,
+		projectPath:     "/",
 		fullPath:        path,
 		transferBase:    path,
 		transferRequest: tr,

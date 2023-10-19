@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
@@ -82,6 +83,7 @@ func (p *TransferPath) Lookup() (*mcmodel.File, error) {
 }
 
 func (p *TransferPath) List() ([]mcmodel.File, error) {
+	log.Debugf("TransferPath.List %#v", p)
 	switch p.pathType {
 	case BadPathType:
 		return nil, fmt.Errorf("pathType for TransferPath type is BadPath")
@@ -112,17 +114,22 @@ func (p *TransferPath) listTransferRequests() ([]mcmodel.File, error) {
 }
 
 func (p *TransferPath) listProjectDirectory() ([]mcmodel.File, error) {
+	log.Debugf("TransferPath.listProjectDirectory %d, path = %s", p.ProjectID(), p.projectPath)
 	dir, err := p.stors.FileStor.GetDirByPath(p.ProjectID(), p.projectPath)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debugf("GetDirByPath returned = %#v", dir)
 	// Make list directory to a pointer for transferRequest?
 	dirEntries, err := p.stors.TransferRequestStor.ListDirectory(dir, p.transferRequest)
+	if err != nil {
+		log.Debugf("ListDirectory returned error %s", err)
+		return nil, err
+	}
 
-	inDir := &mcmodel.File{Path: p.projectPath, MimeType: "directory"}
-	for _, entry := range dirEntries {
-		entry.Directory = inDir
+	for i := 0; i < len(dirEntries); i++ {
+		dirEntries[i].Directory = dir
 	}
 
 	return dirEntries, nil

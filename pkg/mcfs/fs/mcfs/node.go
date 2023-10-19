@@ -63,6 +63,7 @@ func (n *Node) newNode() *Node {
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Debugf("Node.Readdir panicked")
 			ds = nil
 			errno = syscall.ENOENT
 		}
