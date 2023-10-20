@@ -140,6 +140,28 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+//func TestListRoot(t *testing.T) {
+//	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+//	require.NotNil(t, tc)
+//
+//	var tests = []struct {
+//		name string
+//		path string
+//	}{
+//		{name: "list root", path: tc.makeTransferRequestPath("/dir1")},
+//	}
+//
+//	for _, test := range tests {
+//		t.Run(test.name, func(t *testing.T) {
+//			rootDir, err := tc.stors.FileStor.GetFileByPath(tc.proj.ID, "/")
+//			require.NoError(t, err)
+//			dir, err := tc.stors.FileStor.CreateDirectory(rootDir.ID, tc.proj.ID, tc.user.ID, "/dir1", "dir1")
+//			require.NoError(t, err)
+//			entries, err := os.ReadDir(filepath.Join("/", tc.transferRequest.UUID))
+//		})
+//	}
+//}
+
 func TestMkdir(t *testing.T) {
 	var tests = []struct {
 		name        string
