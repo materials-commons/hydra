@@ -6,6 +6,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/labstack/echo/v4"
+	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
@@ -14,6 +15,7 @@ import (
 type TransferRequestsController struct {
 	activity            *mcfs.ActivityCounterMonitor
 	transferRequestStor stor.TransferRequestStor
+	globusClient        *globus.Client
 }
 
 func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
@@ -33,6 +35,25 @@ const TransferRequestInactive = "inactive"
 const TransferRequestStatusUnknown = "unknown"
 
 func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, c.getStatusForAllTransferRequests())
+}
+
+func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.Context) error {
+	allTransferRequestsByStatus := c.getStatusForAllTransferRequests()
+
+	var inactiveRequests []*TransferRequestStatus
+	for _, tr := range allTransferRequestsByStatus {
+		if tr.Status == TransferRequestInactive {
+			inactiveRequests = append(inactiveRequests, tr)
+			// TODO: GlobusTransfer isn't loaded, decide what we want to do here...
+			_, _ = c.globusClient.DeleteEndpointACLRule(tr.TransferRequest.GlobusTransfer.GlobusEndpointID, tr.TransferRequest.GlobusTransfer.GlobusAclID)
+		}
+	}
+
+	return nil
+}
+
+func (c *TransferRequestsController) getStatusForAllTransferRequests() []*TransferRequestStatus {
 	transferRequests := make(map[string]*TransferRequestStatus)
 
 	// Get all transfer requests that have seen some activity
@@ -57,8 +78,8 @@ func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context)
 	}
 
 	// There may be transfer requests for which there has been no activity, lets gather those by
-	// get all transfer requests, filtering out active transfer requests, and then adding the
-	// inactive transfer requests into the transferRequests map
+	// getting all transfer requests, filtering out active transfer requests, and then adding the
+	// inactive transfer requests into the transferRequests map.
 	allTransferRequests, err := c.transferRequestStor.ListTransferRequests()
 	if err != nil {
 		log.Errorf("TransferRequestsController.ListTransferRequestStatus unable to retrieve all transfer requests: %s", err)
@@ -83,5 +104,5 @@ func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context)
 		trequests = append(trequests, tr)
 	}
 
-	return ctx.JSON(http.StatusOK, trequests)
+	return trequests
 }
