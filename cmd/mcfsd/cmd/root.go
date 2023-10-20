@@ -10,11 +10,14 @@ import (
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
+	"github.com/materials-commons/hydra/pkg/mcfs/webapi"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 )
@@ -33,7 +36,24 @@ var rootCmd = &cobra.Command{
 
 		readConfig()
 
-		log.SetLevel(log.DebugLevel)
+		e := echo.New()
+		e.HideBanner = true
+		e.HidePort = true
+		e.Use(middleware.Recover())
+
+		g := e.Group("/api")
+
+		logController := webapi.NewLogController()
+		g.POST("/set-logging-level", logController.SetLogLevel)
+		g.POST("/set-logging-output", logController.SetLogOutput)
+		g.POST("/set-logging", logController.SetLogging)
+		g.GET("/show-logging", logController.ShowCurrentLogging)
+
+		go func() {
+			if err := e.Start("localhost:1350"); err != nil {
+				log.Fatalf("Unable to start web server: %s", err)
+			}
+		}()
 
 		db := mcdb.MustConnectToDB()
 		knownFilesTracker := mcfs.NewKnownFilesTracker()
