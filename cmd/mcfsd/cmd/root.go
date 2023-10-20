@@ -36,6 +36,10 @@ var rootCmd = &cobra.Command{
 
 		readConfig()
 
+		db := mcdb.MustConnectToDB()
+		stors := stor.NewGormStors(db, mcfsDir)
+		activityCounterMonitor := mcfs.NewActivityCounterMonitor(time.Hour * 2)
+
 		e := echo.New()
 		e.HideBanner = true
 		e.HidePort = true
@@ -49,18 +53,20 @@ var rootCmd = &cobra.Command{
 		g.POST("/set-logging", logController.SetLogging)
 		g.GET("/show-logging", logController.ShowCurrentLogging)
 
+		transferRequestsActivityController := webapi.NewTransferRequestsController(activityCounterMonitor, stors.TransferRequestStor)
+		g.GET("/list-transfer-request-status", transferRequestsActivityController.ListTransferRequestStatus)
+
 		go func() {
 			if err := e.Start("localhost:1350"); err != nil {
 				log.Fatalf("Unable to start web server: %s", err)
 			}
 		}()
 
-		db := mcdb.MustConnectToDB()
 		knownFilesTracker := mcfs.NewKnownFilesTracker()
-		stors := stor.NewGormStors(db, mcfsDir)
+
 		pathParser := mcpath.NewTransferPathParser(stors)
 		mcapi := mcfs.NewLocalMCFSApi(stors, knownFilesTracker, pathParser, mcfsDir)
-		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, knownFilesTracker, pathParser, time.Hour*12)
+		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, knownFilesTracker, pathParser, activityCounterMonitor)
 		newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 			return handleFactory.NewFileHandle(fd, flags, path, file)
 		}

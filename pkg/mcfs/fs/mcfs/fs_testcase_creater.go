@@ -199,7 +199,8 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		pathParser = mcpath.NewProjectPathParser(stors)
 	}
 	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, pathParser, opts.mcfsDir)
-	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, pathParser, time.Second*2)
+	activityCounterMonitor := NewActivityCounterMonitor(time.Second * 2)
+	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, pathParser, activityCounterMonitor)
 	tc.factory = newHandleFactory
 
 	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
