@@ -53,7 +53,7 @@ func (h *Handler) HandleLog(e *log.Entry) error {
 
 	now := time.Now()
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "%5s %s %-25s", level, now.Format(time.RFC850), e.Message)
+	fmt.Fprintf(&b, "%5s %s %-25s", level, now.Format(time.DateTime), e.Message)
 
 	for _, f := range fields {
 		fmt.Fprintf(&b, " %s=%v", f.Name, f.Value)
