@@ -19,17 +19,17 @@ type FileHandleFactory interface {
 type MCFileHandlerFactory struct {
 	mcfsapi                MCFSApi
 	activityCounterFactory *ActivityCounterMonitor
-	knownFilesTracker      *KnownFilesTracker
+	transferStateTracker   *TransferStateTracker
 	pathParser             mcpath.Parser
 }
 
 // NewMCFileHandlerFactory creates a new MCFileHandlerFactory.
-func NewMCFileHandlerFactory(mcfsapi MCFSApi, knownFilesTracker *KnownFilesTracker, pathParser mcpath.Parser,
+func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *TransferStateTracker, pathParser mcpath.Parser,
 	activityCounterFactory *ActivityCounterMonitor) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcfsapi:                mcfsapi,
 		activityCounterFactory: activityCounterFactory,
-		knownFilesTracker:      knownFilesTracker,
+		transferStateTracker:   transferStateTracker,
 		pathParser:             pathParser,
 	}
 }
@@ -43,7 +43,7 @@ func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *m
 		WithPath(path).
 		WithFile(file).
 		WithActivityCounter(activityCounter).
-		WithKnownFilesTracker(f.knownFilesTracker).
+		WithTransferStateTracker(f.transferStateTracker).
 		WithMCFSApi(f.mcfsapi).
 		WithPathParser(f.pathParser)
 }

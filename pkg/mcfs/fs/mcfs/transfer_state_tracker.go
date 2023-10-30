@@ -8,7 +8,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
-// The KnownFilesTracker is used to track files the filesystem has already seen. The
+// The TransferStateTracker is used to track files the filesystem has already seen. The
 // paths that are stored include the user/project combination. This means that there
 // could be multiple instances of the same project file path, but different for
 // each user. This is ok, because each these will represent a different file version
@@ -16,8 +16,8 @@ import (
 //
 // Note: Files are only stored if opened for write. That means if a file is opened
 // for write, then later opened for read, it will refer to the version opened for write.
-// All calls on a KnownFilesTracker are thread safe.
-type KnownFilesTracker struct {
+// All calls on a TransferStateTracker are thread safe.
+type TransferStateTracker struct {
 	// Synchronizes access to the knownFiles map
 	mu sync.Mutex
 
@@ -61,8 +61,8 @@ type KnownFile struct {
 	Sequence int
 }
 
-func NewKnownFilesTracker() *KnownFilesTracker {
-	return &KnownFilesTracker{knownFiles: make(map[string]map[string]*KnownFile)}
+func NewTransferStateTracker() *TransferStateTracker {
+	return &TransferStateTracker{knownFiles: make(map[string]map[string]*KnownFile)}
 }
 
 type LoadOrStoreFN func(knownFile *KnownFile) (*mcmodel.File, error)
@@ -78,7 +78,7 @@ type LoadOrStoreFN func(knownFile *KnownFile) (*mcmodel.File, error)
 // This function exists so that a set of operations can be completed before loading
 // a known file. It prevents a race condition where other file system calls made
 // don't complete before the known files tracker is loaded.
-func (tracker *KnownFilesTracker) LoadOrStore(baseKey, path string, fn LoadOrStoreFN) error {
+func (tracker *TransferStateTracker) LoadOrStore(baseKey, path string, fn LoadOrStoreFN) error {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -111,7 +111,7 @@ func (tracker *KnownFilesTracker) LoadOrStore(baseKey, path string, fn LoadOrSto
 // while the tracker mutex is held. This way fn knows that the KnownFile entry cannot change
 // while fn is running. WithLockHeld returns true if it found a matching KnownFile. It returns
 // false if path didn't match a KnownFile. When no match is found, fn is **not** called.
-func (tracker *KnownFilesTracker) WithLockHeld(baseKey, path string, fn func(knownFile *KnownFile)) bool {
+func (tracker *TransferStateTracker) WithLockHeld(baseKey, path string, fn func(knownFile *KnownFile)) bool {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -135,7 +135,7 @@ func (tracker *KnownFilesTracker) WithLockHeld(baseKey, path string, fn func(kno
 // Store grabs the mutex and stores the entry. It returns false if an
 // entry already existed (and doesn't update it), otherwise it returns
 // true and adds the path and a new KnownFile to the tracker.
-func (tracker *KnownFilesTracker) Store(baseKey, path string, file *mcmodel.File, state string) bool {
+func (tracker *TransferStateTracker) Store(baseKey, path string, file *mcmodel.File, state string) bool {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -166,7 +166,7 @@ func (tracker *KnownFilesTracker) Store(baseKey, path string, file *mcmodel.File
 
 // GetFile will return the &mcmodel.File entry in the KnownFile if path
 // exists. Otherwise, it will return nil.
-func (tracker *KnownFilesTracker) GetFile(baseKey, path string) *mcmodel.File {
+func (tracker *TransferStateTracker) GetFile(baseKey, path string) *mcmodel.File {
 	knownFileEntry := tracker.Get(baseKey, path)
 	if knownFileEntry != nil {
 		return knownFileEntry.File
@@ -176,7 +176,7 @@ func (tracker *KnownFilesTracker) GetFile(baseKey, path string) *mcmodel.File {
 }
 
 // Get will return the KnownFile entry if path exists. Otherwise, it will return nil.
-func (tracker *KnownFilesTracker) Get(baseKey, path string) *KnownFile {
+func (tracker *TransferStateTracker) Get(baseKey, path string) *KnownFile {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -194,7 +194,7 @@ func (tracker *KnownFilesTracker) Get(baseKey, path string) *KnownFile {
 }
 
 // DeletePath will delete path from the tracker. It doesn't check for existence.
-func (tracker *KnownFilesTracker) DeletePath(baseKey, path string) {
+func (tracker *TransferStateTracker) DeletePath(baseKey, path string) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -203,7 +203,7 @@ func (tracker *KnownFilesTracker) DeletePath(baseKey, path string) {
 	}
 }
 
-func (tracker *KnownFilesTracker) DeleteBase(baseKey string) {
+func (tracker *TransferStateTracker) DeleteBase(baseKey string) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 

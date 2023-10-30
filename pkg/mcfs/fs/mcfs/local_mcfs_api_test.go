@@ -15,9 +15,9 @@ func TestMCApi_Create(t *testing.T) {
 	//transferRequests := []mcmodel.TransferRequest{
 	//	{ID: 234, ProjectID: 123, OwnerID: 301},
 	//}
-	knownFilesTracker := NewKnownFilesTracker()
+	transferStateTracker := NewTransferStateTracker()
 	_, stors := newTestStor(t, "", "/tmp/mcfs")
-	mcapi := NewLocalMCFSApi(stors, knownFilesTracker, nil, "/tmp/mcfs")
+	mcapi := NewLocalMCFSApi(stors, transferStateTracker, nil, "/tmp/mcfs")
 
 	var tests = []struct {
 		name          string
@@ -26,7 +26,7 @@ func TestMCApi_Create(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "Test added file in knownFilesTracker",
+			name: "Test added file in transferStateTracker",
 			path: "/123/301/data/file.txt",
 			f:    &mcmodel.File{ID: 123, Name: "file.txt"},
 		},
@@ -41,7 +41,7 @@ func TestMCApi_Create(t *testing.T) {
 				require.Nil(t, err)
 				require.NotNil(t, createdFile)
 				// TODO: Fix path parsing
-				f := knownFilesTracker.GetFile("", test.path)
+				f := transferStateTracker.GetFile("", test.path)
 				require.NotNil(t, f)
 				require.Equal(t, createdFile.ID, f.ID)
 			}

@@ -16,13 +16,13 @@ import (
 
 type MCFileHandle struct {
 	*BaseFileHandle
-	expectedOffset    int64
-	Path              string
-	File              *mcmodel.File
-	activityCounter   *ActivityCounter
-	mcfsapi           MCFSApi
-	knownFilesTracker *KnownFilesTracker
-	pathParser        mcpath.Parser
+	expectedOffset       int64
+	Path                 string
+	File                 *mcmodel.File
+	activityCounter      *ActivityCounter
+	mcfsapi              MCFSApi
+	transferStateTracker *TransferStateTracker
+	pathParser           mcpath.Parser
 }
 
 var _ = (fs.FileHandle)((*MCFileHandle)(nil))
@@ -62,8 +62,8 @@ func (h *MCFileHandle) WithMCFSApi(mcfsapi MCFSApi) *MCFileHandle {
 	return h
 }
 
-func (h *MCFileHandle) WithKnownFilesTracker(tracker *KnownFilesTracker) *MCFileHandle {
-	h.knownFilesTracker = tracker
+func (h *MCFileHandle) WithTransferStateTracker(tracker *TransferStateTracker) *MCFileHandle {
+	h.transferStateTracker = tracker
 	return h
 }
 
@@ -80,7 +80,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 	}()
 
 	parsedPath, _ := h.pathParser.Parse(h.Path)
-	knownFile := h.knownFilesTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
+	knownFile := h.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if knownFile == nil {
 		log.Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO

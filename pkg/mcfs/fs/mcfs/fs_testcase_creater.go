@@ -55,8 +55,8 @@ type fsTestCase struct {
 	// The transfer request created by the test case
 	transferRequest *mcmodel.TransferRequest
 
-	// The knownFilesTracker used in the test case
-	knownFilesTracker *KnownFilesTracker
+	// The transferStateTracker used in the test case
+	transferStateTracker *TransferStateTracker
 
 	// The factory for creating new MCFileHandles
 	factory *MCFileHandlerFactory
@@ -190,7 +190,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 
-	tc.knownFilesTracker = NewKnownFilesTracker()
+	tc.transferStateTracker = NewTransferStateTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
 	var pathParser mcpath.Parser
 	if opts.newPathParser != nil {
@@ -198,9 +198,9 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	} else {
 		pathParser = mcpath.NewProjectPathParser(stors)
 	}
-	mcapi := NewLocalMCFSApi(stors, tc.knownFilesTracker, pathParser, opts.mcfsDir)
+	mcapi := NewLocalMCFSApi(stors, tc.transferStateTracker, pathParser, opts.mcfsDir)
 	activityCounterMonitor := NewActivityCounterMonitor(time.Second * 2)
-	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.knownFilesTracker, pathParser, activityCounterMonitor)
+	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.transferStateTracker, pathParser, activityCounterMonitor)
 	tc.factory = newHandleFactory
 
 	newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {

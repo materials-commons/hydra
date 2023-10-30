@@ -62,7 +62,7 @@ var rootCmd = &cobra.Command{
 			}
 		}()
 
-		knownFilesTracker := mcfs.NewKnownFilesTracker()
+		knownFilesTracker := mcfs.NewTransferStateTracker()
 
 		pathParser := mcpath.NewTransferPathParser(stors)
 		mcapi := mcfs.NewLocalMCFSApi(stors, knownFilesTracker, pathParser, mcfsDir)
