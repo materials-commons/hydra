@@ -65,7 +65,7 @@ func (p *TransferPath) PathType() PathType {
 func (p *TransferPath) Lookup() (*mcmodel.File, error) {
 	switch p.pathType {
 	case BadPathType:
-		return nil, fmt.Errorf("bad path: %s", p.fullPath)
+		return nil, fmt.Errorf("bad path: %s\n", p.fullPath)
 	case RootPathType:
 		return nil, fmt.Errorf("root not supported")
 	case ContextPathType:

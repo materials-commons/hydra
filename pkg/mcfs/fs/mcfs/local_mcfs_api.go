@@ -226,6 +226,7 @@ func (fsapi *LocalMCFSApi) Readdir(path string) ([]mcmodel.File, error) {
 func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
 	log.Debugf("LocalMCFSApi.Mkdir %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
+	log.Debugf("LocalMCFSApi.Mkdir GetFileByPath(%d, '%s')\n", parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
 	parentDir, err := fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
 	if err != nil {
 		return nil, err

@@ -44,7 +44,7 @@ func TestTransferPathParser_Parse(t *testing.T) {
 			pathTypeExpected:     ContextPathType,
 			fullPathExpected:     filepath.Join("/", tc.transferRequest.UUID),
 			transferBaseExpected: filepath.Join("/", tc.transferRequest.UUID),
-			projectPathExpected:  "",
+			projectPathExpected:  "/",
 		},
 		{
 			name:                 "project path",

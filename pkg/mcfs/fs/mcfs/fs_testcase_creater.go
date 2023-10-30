@@ -223,10 +223,6 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	return tc
 }
 
-func (tc *fsTestCase) makeTransferRequestPath(path string) string {
-	return filepath.Join(tc.mntDir, tc.transferRequest.UUID, path)
-}
-
 // populateDatabase is called from newTestCase and newTestStor. It populates the database
 // with a project, user, globus transfer and transfer request. It saves these created items
 // into the fsTestCase.
@@ -300,4 +296,8 @@ func (tc *fsTestCase) closeDB() {
 func umount(path string) {
 	cmd := exec.Command("/usr/bin/umount", path)
 	_ = cmd.Run()
+}
+
+func (tc *fsTestCase) makeTransferRequestPath(path string) string {
+	return filepath.Join(tc.mntDir, tc.transferRequest.UUID, path)
 }

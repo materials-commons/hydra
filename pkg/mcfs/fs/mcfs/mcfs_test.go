@@ -162,20 +162,33 @@ func TestLookup(t *testing.T) {
 //	}
 //}
 
+func TestMkdirSamePathTwice(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+	require.NotNil(t, tc)
+
+	path := tc.makeTransferRequestPath("dir1")
+	err := os.Mkdir(path, 0755)
+	require.NoError(t, err)
+
+	err = os.Mkdir(path, 0755)
+	fmt.Printf("second mkdir err = %s\n", err)
+}
+
 func TestMkdir(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+	require.NotNil(t, tc)
+
 	var tests = []struct {
 		name        string
 		path        string
 		errExpected bool
 	}{
-		{name: "Create directory in existing project", path: "/tmp/mnt/mcfs/1/1/dir1", errExpected: false},
-		{name: "Create directory off of dir1 should pass", path: "/tmp/mnt/mcfs/1/1/dir1/dir11", errExpected: false},
-		{name: "Create directory in project that does not exist", path: "/tmp/mnt/mcfs/1/2/dir1", errExpected: true},
-		{name: "Create directory where parent does not exist should fail", path: "/tmp/mnt/mcfs/1/1/dir2/dir3", errExpected: true},
+		//{name: "Create directory in existing project", path: "/tmp/mnt/mcfs/1/1/dir1", errExpected: false},
+		{name: "Create directory in existing project", path: tc.makeTransferRequestPath("dir1"), errExpected: false},
+		//{name: "Create directory off of dir1 should pass", path: "/tmp/mnt/mcfs/1/1/dir1/dir11", errExpected: false},
+		//{name: "Create directory in project that does not exist", path: "/tmp/mnt/mcfs/1/2/dir1", errExpected: true},
+		//{name: "Create directory where parent does not exist should fail", path: "/tmp/mnt/mcfs/1/1/dir2/dir3", errExpected: true},
 	}
-
-	tc := newTestCase(t, &fsTestOptions{})
-	require.NotNil(t, tc)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -423,8 +436,10 @@ func TestParallelMkdirSameUser(t *testing.T) {
 }
 
 func TestParallelMkdirDifferentUser(t *testing.T) {
-	tc := newTestCase(t, &fsTestOptions{})
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
 	require.NotNil(t, tc)
+
+	//log.SetLevel(log.DebugLevel)
 
 	// Create a second transfer request and user, so we can do
 	// multiple mkdirs across the users
@@ -460,7 +475,8 @@ func TestParallelMkdirDifferentUser(t *testing.T) {
 	var wg sync.WaitGroup
 	fnUser1 := func() {
 		defer wg.Done()
-		dirToCreate := "/tmp/mnt/mcfs/1/1/dir1"
+		//dirToCreate := "/tmp/mnt/mcfs/1/1/dir1"
+		dirToCreate := tc.makeTransferRequestPath("dir1")
 		if err := os.Mkdir(dirToCreate, 0755); err != nil {
 			assert.True(t, errors.Is(err, os.ErrExist))
 		}
@@ -468,7 +484,8 @@ func TestParallelMkdirDifferentUser(t *testing.T) {
 
 	fnUser2 := func() {
 		defer wg.Done()
-		dirToCreate := "/tmp/mnt/mcfs/1/2/dir1"
+		//dirToCreate := "/tmp/mnt/mcfs/1/2/dir1"
+		dirToCreate := filepath.Join(tc.mntDir, transferRequest.UUID, "dir1")
 		if err := os.Mkdir(dirToCreate, 0755); err != nil {
 			assert.True(t, errors.Is(err, os.ErrExist))
 		}
@@ -489,19 +506,24 @@ func TestParallelMkdirDifferentUser(t *testing.T) {
 }
 
 func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
-	tc := newTestCase(t, &fsTestOptions{})
+	//tc := newTestCase(t, &fsTestOptions{})
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+
 	require.NotNil(t, tc)
 
 	// Test that write will increment the activity counter
-	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	//path := "/tmp/mnt/mcfs/1/1/file.txt"
+	path := tc.makeTransferRequestPath("file.txt")
 	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
+	defer fh.Close()
 
 	_, err = io.WriteString(fh, "hello ")
 	require.NoError(t, err)
 
 	// Stored by project/user path, eg /1/1
-	activityCounter, found := tc.factory.activityCounterFactory.activityCounters["/1/1"]
+	//activityCounter, found := tc.factory.activityCounterFactory.activityCounters["/1/1"]
+	activityCounter, found := tc.factory.activityCounterFactory.activityCounters[filepath.Join("/", tc.transferRequest.UUID)]
 	require.True(t, found)
 
 	count := atomic.LoadInt64(&(activityCounter.activityCount))
@@ -519,10 +541,12 @@ func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
 }
 
 func TestFileOpenAppend(t *testing.T) {
-	tc := newTestCase(t, &fsTestOptions{})
+	//tc := newTestCase(t, &fsTestOptions{})
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
 	require.NotNil(t, tc)
 	// Test that write will increment the activity counter
-	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	//path := "/tmp/mnt/mcfs/1/1/file.txt"
+	path := tc.makeTransferRequestPath("file.txt")
 	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
 
@@ -545,20 +569,22 @@ func TestFileOpenAppend(t *testing.T) {
 }
 
 func TestFileSeek(t *testing.T) {
-	t.Skip()
-	tc := newTestCase(t, &fsTestOptions{})
+	//t.Skip()
+	tc := newTestCase(t, &fsTestOptions{newPathParser: mcpath.NewTransferPathParser})
+	//tc := newTestCase(t, &fsTestOptions{})
 	require.NotNil(t, tc)
 
 	// Test that write will increment the activity counter
-	path := "/tmp/mnt/mcfs/1/1/file.txt"
+	//path := "/tmp/mnt/mcfs/1/1/file.txt"
+	path := tc.makeTransferRequestPath("file.txt")
 	fh, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
 
 	_, err = io.WriteString(fh, "hello")
 	require.NoError(t, err)
-	//offset, err := fh.Seek(0, 0)
-	//require.NoError(t, err)
-	//require.Equal(t, int64(0), offset)
+	offset, err := fh.Seek(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), offset)
 	_, err = io.WriteString(fh, "world")
 	require.NoError(t, err)
 	err = fh.Close()

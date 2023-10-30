@@ -63,7 +63,7 @@ func (n *Node) newNode() *Node {
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Debugf("Node.Readdir panicked")
+			log.Errorf("Node.Readdir panicked")
 			ds = nil
 			errno = syscall.ENOENT
 		}
@@ -106,6 +106,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 	log.Debug("Node.Getattr")
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf("Node.Getattr panicked")
 			errno = syscall.ENOENT
 		}
 	}()
@@ -145,8 +146,10 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 // Lookup will return information about the current entry.
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
 	n.RootData.mu.Lock()
+
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf("Node.Lookup panicked")
 			inode = nil
 			errno = syscall.ENOENT
 		}
@@ -185,15 +188,16 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 // Mkdir will create a new directory. If an attempt is made to create an existing directory then it will return
 // the existing directory rather than returning an error.
 func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.EntryOut) (inode *fs.Inode, errno syscall.Errno) {
+	n.RootData.mu.Lock()
+
 	defer func() {
 		if r := recover(); r != nil {
+			log.Error("Node.Mkdir panicked")
 			inode = nil
 			errno = syscall.EINVAL
 		}
 		n.RootData.mu.Unlock()
 	}()
-
-	n.RootData.mu.Lock()
 
 	log.Debugf("Node.Mkdir %s", name)
 
@@ -223,6 +227,7 @@ func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
 func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (inode *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf("Node.Create panicked")
 			inode = nil
 			fh = nil
 			fuseFlags = 0
@@ -262,8 +267,8 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf("Node.Open panicked")
 			fh = nil
-			log.Errorf("Open panicked")
 			fuseFlags = 0
 			errno = syscall.EIO
 		}
@@ -299,6 +304,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 	defer func() {
 		if r := recover(); r != nil {
 			// If there is a panic then for now say that we don't support this call
+			log.Errorf("Node.Setattr panicked")
 			errno = syscall.ENOTSUP
 		}
 	}()
@@ -347,6 +353,7 @@ func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
 func (n *Node) Statfs(_ context.Context, out *fuse.StatfsOut) (errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf("Node.Statfs panicked")
 			// If there is a panic then for now just return success
 			errno = fs.OK
 		}
