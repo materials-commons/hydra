@@ -1,6 +1,7 @@
 package mcfs
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,9 +135,13 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	dsn := "file::memory:?cache=shared"
 	if opts.dsn != "" {
 		dsn = opts.dsn
-		_ = os.Remove(opts.dsn)
-		fh, err := os.Create(opts.dsn)
-		require.NoErrorf(t, err, "Failed opening %s, got %s", opts.dsn, err)
+	}
+
+	if dsn != "file::memory:?cache=shared" {
+		fmt.Printf("opening '%s'\n", dsn)
+		_ = os.Remove(dsn)
+		fh, err := os.Create(dsn)
+		require.NoErrorf(t, err, "Failed opening %s, got %s", dsn, err)
 		_ = fh.Close()
 	}
 
@@ -196,7 +201,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 	if opts.newPathParser != nil {
 		pathParser = opts.newPathParser(stors)
 	} else {
-		pathParser = mcpath.NewProjectPathParser(stors)
+		pathParser = mcpath.NewTransferPathParser(stors)
 	}
 	mcapi := NewLocalMCFSApi(stors, tc.transferStateTracker, pathParser, opts.mcfsDir)
 	activityCounterMonitor := NewActivityCounterMonitor(time.Second * 2)
@@ -276,7 +281,7 @@ func (tc *fsTestCase) unmount() {
 // projects, users, etc... that populateDatabase is adding. Tests assume that
 // there is only a single entry of these items and thus the test will fail.
 func (tc *fsTestCase) closeDB() {
-	time.Sleep(time.Millisecond)
+	time.Sleep(time.Millisecond * 5)
 	sqlDB, err := tc.db.DB()
 
 	if err != nil {
