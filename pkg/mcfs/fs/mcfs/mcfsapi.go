@@ -33,7 +33,7 @@ type MCFSApi interface {
 	GetRealPath(path string) (realpath string, err error)
 
 	// GetKnownFileRealPath will return the real underlying file path (the UUID based path) only for files
-	// that are in the KnownFile tracker.
+	// that are in the AccessedFileState tracker.
 	GetKnownFileRealPath(path string) (string, error)
 
 	// FTruncate will truncate the real underlying file (the UUID based one) and return

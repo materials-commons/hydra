@@ -268,7 +268,7 @@ func TestOpen(t *testing.T) {
 	f2, err := tc.stors.FileStor.GetFileByPath(1, "/readwrite.txt")
 	require.NoErrorf(t, err, "Couldn't get database file entry: %s", err)
 
-	// At this point the database knownFiles should be the same
+	// At this point the database accessedFiles should be the same
 	require.Equal(t, f.ID, f2.ID)
 }
 

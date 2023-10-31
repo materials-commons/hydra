@@ -149,23 +149,23 @@ func (fsapi *LocalMCFSApi) createNewFileVersion(p mcpath.Path) (*mcmodel.File, e
 
 func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	knownFile := fsapi.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
-	if knownFile == nil {
-		fmt.Printf("LocalMCFSApi.Release knownFile is nil for %s\n", path)
+	fileState := fsapi.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
+	if fileState == nil {
+		fmt.Printf("LocalMCFSApi.Release fileState is nil for %s\n", path)
 		return syscall.ENOENT
 	}
 
-	knownFile.FileState = FileStateClosed
+	fileState.FileState = FileStateClosed
 	checksum := ""
 	var err error
-	if knownFile.HashInvalid {
+	if fileState.HashInvalid {
 		var sequence int
-		knownFile.Sequence = knownFile.Sequence + 1
-		sequence = knownFile.Sequence
-		go fsapi.computeAndUpdateChecksum(path, knownFile.File, size, sequence)
+		fileState.Sequence = fileState.Sequence + 1
+		sequence = fileState.Sequence
+		go fsapi.computeAndUpdateChecksum(path, fileState.File, size, sequence)
 	} else {
-		checksum = fmt.Sprintf("%x", knownFile.Hasher.Sum(nil))
-		err = fsapi.stors.TransferRequestStor.MarkFileReleased(knownFile.File, checksum, parsedPath.ProjectID(), int64(size))
+		checksum = fmt.Sprintf("%x", fileState.Hasher.Sum(nil))
+		err = fsapi.stors.TransferRequestStor.MarkFileReleased(fileState.File, checksum, parsedPath.ProjectID(), int64(size))
 		if err != nil {
 			log.Debugf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
 			return err
@@ -173,9 +173,9 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		// Add to convertible list after marking as released to prevent the condition where the
 		// file hasn't been released but is picked up for conversion. This is a very unlikely
 		// case, but easy to prevent by releasing then adding to conversions list.
-		if knownFile.File.IsConvertible() {
-			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(knownFile.File); err != nil {
-				log.Errorf("Failed adding file to conversion %d", knownFile.File.ID)
+		if fileState.File.IsConvertible() {
+			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(fileState.File); err != nil {
+				log.Errorf("Failed adding file to conversion %d", fileState.File.ID)
 			}
 		}
 	}
@@ -196,8 +196,8 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 
-	fsapi.transferStateTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(knownFile *KnownFile) {
-		if knownFile.Sequence == sequence {
+	fsapi.transferStateTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(fileState *AccessedFileState) {
+		if fileState.Sequence == sequence {
 			// This check ensures that another thread wasn't kicked off to compute the checksum. This could
 			// happen if the file was closed with an invalid checksum, a thread was kicked off, and then while
 			// the thread was computing the checksum, another open/close happened that kicked off another

@@ -80,8 +80,8 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 	}()
 
 	parsedPath, _ := h.pathParser.Parse(h.Path)
-	knownFile := h.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
-	if knownFile == nil {
+	fileState := h.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
+	if fileState == nil {
 		log.Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO
 	}
@@ -90,9 +90,9 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 		// If the O_APPEND flag is not set then we need to track
 		// the offset. If it was set, then each write will automatically
 		// be done to the end of the file.
-		if !knownFile.HashInvalid {
+		if !fileState.HashInvalid {
 			if h.expectedOffset != off {
-				knownFile.HashInvalid = true
+				fileState.HashInvalid = true
 			}
 		}
 	}
@@ -105,8 +105,8 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 	h.expectedOffset = h.expectedOffset + int64(n)
 
-	if !knownFile.HashInvalid {
-		_, _ = io.Copy(knownFile.Hasher, bytes.NewBuffer(data[:n]))
+	if !fileState.HashInvalid {
+		_, _ = io.Copy(fileState.Hasher, bytes.NewBuffer(data[:n]))
 	}
 
 	return uint32(n), fs.OK
