@@ -59,7 +59,7 @@ func (n *Node) newNode() *Node {
 	}
 }
 
-// Readdir reads the corresponding directory and returns its accessedFiles
+// Readdir reads the corresponding directory and returns its files
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {

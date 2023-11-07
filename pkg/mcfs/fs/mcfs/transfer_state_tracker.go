@@ -19,13 +19,13 @@ import (
 // for write, then later opened for read, it will refer to the version opened for write.
 // All calls on a TransferStateTracker are thread safe.
 type TransferStateTracker struct {
-	// Synchronizes access to the accessedFiles map
+	// Synchronizes access to the TransferRequestStates map
 	mu sync.Mutex
 
 	// A map of known files. This is a two level map. The first key is a unique tied to an entire
 	// upload instance. For example a transfer request uuid or a project/user combination. The
 	// second map is keyed by the path for the project.
-	accessedFiles map[string]map[string]*AccessedFileState
+	TransferRequestStates map[string]*TransferRequestState
 }
 
 type GlobusTask struct {
@@ -73,7 +73,7 @@ type AccessedFileState struct {
 }
 
 func NewTransferStateTracker() *TransferStateTracker {
-	return &TransferStateTracker{accessedFiles: make(map[string]map[string]*AccessedFileState)}
+	return &TransferStateTracker{TransferRequestStates: make(map[string]*TransferRequestState)}
 }
 
 type LoadOrStoreFN func(fileState *AccessedFileState) (*mcmodel.File, error)
@@ -89,17 +89,19 @@ type LoadOrStoreFN func(fileState *AccessedFileState) (*mcmodel.File, error)
 // This function exists so that a set of operations can be completed before loading
 // a known file. It prevents a race condition where other file system calls made
 // don't complete before the known files tracker is loaded.
-func (tracker *TransferStateTracker) LoadOrStore(baseKey, path string, fn LoadOrStoreFN) error {
+func (tracker *TransferStateTracker) LoadOrStore(transferRequestKey, path string, fn LoadOrStoreFN) error {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	files, ok := tracker.accessedFiles[baseKey]
+	transferState, ok := tracker.TransferRequestStates[transferRequestKey]
 	if !ok {
-		files = make(map[string]*AccessedFileState)
-		tracker.accessedFiles[baseKey] = files
+		transferState = &TransferRequestState{
+			AccessedFileStates: make(map[string]*AccessedFileState),
+		}
+		tracker.TransferRequestStates[transferRequestKey] = transferState
 	}
 
-	file := files[path]
+	file := transferState.AccessedFileStates[path]
 	potentialNewFile, err := fn(file)
 	switch {
 	case err != nil:
@@ -108,12 +110,12 @@ func (tracker *TransferStateTracker) LoadOrStore(baseKey, path string, fn LoadOr
 		return nil
 	default:
 		// If we are here then a *mcmodel.File was returned. This means
-		// we need to add it into the list of known files.
-		newFile := &AccessedFileState{
+		// we need to add it into the list of known transferState.
+		newAccessedFileState := &AccessedFileState{
 			File:   potentialNewFile,
 			Hasher: md5.New(),
 		}
-		files[path] = newFile
+		transferState.AccessedFileStates[path] = newAccessedFileState
 		return nil
 	}
 }
@@ -122,17 +124,17 @@ func (tracker *TransferStateTracker) LoadOrStore(baseKey, path string, fn LoadOr
 // while the tracker mutex is held. This way fn knows that the AccessedFileState entry cannot change
 // while fn is running. WithLockHeld returns true if it found a matching AccessedFileState. It returns
 // false if path didn't match a AccessedFileState. When no match is found, fn is **not** called.
-func (tracker *TransferStateTracker) WithLockHeld(baseKey, path string, fn func(fileState *AccessedFileState)) bool {
+func (tracker *TransferStateTracker) WithLockHeld(transferRequestKey, path string, fn func(fileState *AccessedFileState)) bool {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	files, ok := tracker.accessedFiles[baseKey]
+	transferRequestState, ok := tracker.TransferRequestStates[transferRequestKey]
 	if !ok {
 		// Nothing under first level key
 		return false
 	}
 
-	fileEntry := files[path]
+	fileEntry := transferRequestState.AccessedFileStates[path]
 	if fileEntry == nil {
 		// File not found
 		return false
@@ -146,17 +148,20 @@ func (tracker *TransferStateTracker) WithLockHeld(baseKey, path string, fn func(
 // Store grabs the mutex and stores the entry. It returns false if an
 // entry already existed (and doesn't update it), otherwise it returns
 // true and adds the path and a new AccessedFileState to the tracker.
-func (tracker *TransferStateTracker) Store(baseKey, path string, file *mcmodel.File, state string) bool {
+func (tracker *TransferStateTracker) Store(transferRequestKey, path string, file *mcmodel.File, state string) bool {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	files, ok := tracker.accessedFiles[baseKey]
+	transferRequestState, ok := tracker.TransferRequestStates[transferRequestKey]
 	if !ok {
-		files = make(map[string]*AccessedFileState)
-		tracker.accessedFiles[baseKey] = files
+		transferRequestState = &TransferRequestState{
+			AccessedFileStates: make(map[string]*AccessedFileState),
+		}
+		tracker.TransferRequestStates[transferRequestKey] = transferRequestState
 	}
 
-	if _, ok := files[path]; ok {
+	// Now look for the file now that we have the transferRequestState
+	if _, ok := transferRequestState.AccessedFileStates[path]; ok {
 		// An entry already exists. Don't create a new one
 		// and signal this case by returning false.
 		return false
@@ -170,15 +175,15 @@ func (tracker *TransferStateTracker) Store(baseKey, path string, file *mcmodel.F
 		FileState: state,
 	}
 
-	files[path] = fileState
+	transferRequestState.AccessedFileStates[path] = fileState
 
 	return true
 }
 
 // GetFile will return the &mcmodel.File entry in the AccessedFileState if path
 // exists. Otherwise, it will return nil.
-func (tracker *TransferStateTracker) GetFile(baseKey, path string) *mcmodel.File {
-	fileEntry := tracker.Get(baseKey, path)
+func (tracker *TransferStateTracker) GetFile(transferRequestKey, path string) *mcmodel.File {
+	fileEntry := tracker.Get(transferRequestKey, path)
 	if fileEntry != nil {
 		return fileEntry.File
 	}
@@ -187,16 +192,16 @@ func (tracker *TransferStateTracker) GetFile(baseKey, path string) *mcmodel.File
 }
 
 // Get will return the AccessedFileState entry if path exists. Otherwise, it will return nil.
-func (tracker *TransferStateTracker) Get(baseKey, path string) *AccessedFileState {
+func (tracker *TransferStateTracker) Get(transferRequestKey, path string) *AccessedFileState {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	if _, ok := tracker.accessedFiles[baseKey]; !ok {
+	if _, ok := tracker.TransferRequestStates[transferRequestKey]; !ok {
 		return nil
 	}
 
-	files := tracker.accessedFiles[baseKey]
-	fileEntry := files[path]
+	transferRequestState := tracker.TransferRequestStates[transferRequestKey]
+	fileEntry := transferRequestState.AccessedFileStates[path]
 
 	if fileEntry != nil {
 		return fileEntry
@@ -205,18 +210,18 @@ func (tracker *TransferStateTracker) Get(baseKey, path string) *AccessedFileStat
 }
 
 // DeletePath will delete path from the tracker. It doesn't check for existence.
-func (tracker *TransferStateTracker) DeletePath(baseKey, path string) {
+func (tracker *TransferStateTracker) DeletePath(transferRequestKey, path string) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	if _, ok := tracker.accessedFiles[baseKey]; ok {
-		delete(tracker.accessedFiles[baseKey], path)
+	if _, ok := tracker.TransferRequestStates[transferRequestKey]; ok {
+		delete(tracker.TransferRequestStates[transferRequestKey].AccessedFileStates, path)
 	}
 }
 
-func (tracker *TransferStateTracker) DeleteBase(baseKey string) {
+func (tracker *TransferStateTracker) DeleteBase(transferRequestKey string) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	delete(tracker.accessedFiles, baseKey)
+	delete(tracker.TransferRequestStates, transferRequestKey)
 }
