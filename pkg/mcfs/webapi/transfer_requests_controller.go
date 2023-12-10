@@ -1,6 +1,7 @@
 package webapi
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,6 +17,7 @@ type TransferRequestsController struct {
 	activity            *mcfs.ActivityCounterMonitor
 	transferRequestStor stor.TransferRequestStor
 	globusClient        *globus.Client
+	tracker             *mcfs.TransferStateTracker
 }
 
 func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
@@ -49,6 +51,29 @@ func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.C
 			_, _ = c.globusClient.DeleteEndpointACLRule(tr.TransferRequest.GlobusTransfer.GlobusEndpointID, tr.TransferRequest.GlobusTransfer.GlobusAclID)
 		}
 	}
+
+	return nil
+}
+
+func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) error {
+	var req struct {
+		TransferRequestUUID string `json:transfer_request_uuid`
+	}
+
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+
+	tr, err := c.transferRequestStor.GetTransferRequestByUUID(req.TransferRequestUUID)
+	if err != nil {
+		return err
+	}
+
+	if tr.State != "closing" {
+		return fmt.Errorf("transfer request state is '%s', should be 'closing'", tr.State)
+	}
+
+	c.tracker.DeleteBase(tr.UUID)
 
 	return nil
 }
