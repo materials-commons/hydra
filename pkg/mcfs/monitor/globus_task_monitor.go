@@ -7,22 +7,23 @@ import (
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/globus"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
 )
 
 type GlobusUploadMonitor struct {
 	client *globus.Client
 	//globusUploads       *store.GlobusUploadsStore
-	endpointID          string
-	finishedGlobusTasks map[string]time.Time
+	endpointID           string
+	finishedGlobusTasks  map[string]time.Time
+	transferStateTracker *mcfs.TransferStateTracker
 }
 
-func NewGlobusUploadMonitor(client *globus.Client, endpointID string) *GlobusUploadMonitor {
+func NewGlobusUploadMonitor(client *globus.Client, endpointID string, transferStateTracker *mcfs.TransferStateTracker) *GlobusUploadMonitor {
 	return &GlobusUploadMonitor{
-		client:     client,
-		endpointID: endpointID,
-		//globusUploads:       db.GlobusUploadsStore(),
-		//fileLoads:           db.FileLoadsStore(),
-		finishedGlobusTasks: make(map[string]time.Time),
+		client:               client,
+		endpointID:           endpointID,
+		finishedGlobusTasks:  make(map[string]time.Time),
+		transferStateTracker: transferStateTracker,
 	}
 }
 
@@ -72,7 +73,7 @@ func (m *GlobusUploadMonitor) retrieveAndProcessUploads(c context.Context) {
 			// If we are here then we need to check if this task has already been processed
 			t, ok := m.finishedGlobusTasks[task.TaskID]
 			if ok {
-				// Already processed this transfer, if its older than a week then delete
+				// Already processed this transfer, if it's older than a week then delete
 				now := time.Now()
 				_ = now
 				_ = t
