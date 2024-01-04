@@ -36,10 +36,6 @@ const TransferRequestActive = "active"
 const TransferRequestInactive = "inactive"
 const TransferRequestStatusUnknown = "unknown"
 
-func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context) error {
-	return ctx.JSON(http.StatusOK, c.getStatusForAllTransferRequests())
-}
-
 func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.Context) error {
 	allTransferRequestsByStatus := c.getStatusForAllTransferRequests()
 
@@ -76,6 +72,10 @@ func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) erro
 	c.tracker.DeleteBase(tr.UUID)
 
 	return nil
+}
+
+func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, c.getStatusForAllTransferRequests())
 }
 
 func (c *TransferRequestsController) getStatusForAllTransferRequests() []*TransferRequestStatus {
