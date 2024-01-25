@@ -18,6 +18,7 @@ type LogController struct {
 	currentHandler  *clog.Handler
 }
 
+// NewLogController creates a new LogController
 func NewLogController() *LogController {
 	handler := clog.NewHandler(os.Stdout)
 	log.SetHandler(handler)
