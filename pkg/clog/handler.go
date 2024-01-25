@@ -1,4 +1,4 @@
-package logger
+package clog
 
 import (
 	"bytes"
@@ -53,10 +53,10 @@ func (h *Handler) HandleLog(e *log.Entry) error {
 
 	now := time.Now()
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "%5s %s %-25s", level, now.Format(time.DateTime), e.Message)
+	_, _ = fmt.Fprintf(&b, "%5s %s %-25s", level, now.Format(time.DateTime), e.Message)
 
 	for _, f := range fields {
-		fmt.Fprintf(&b, " %s=%v", f.Name, f.Value)
+		_, _ = fmt.Fprintf(&b, " %s=%v", f.Name, f.Value)
 	}
 
 	h.mu.Lock()

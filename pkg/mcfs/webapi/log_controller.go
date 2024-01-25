@@ -7,7 +7,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/labstack/echo/v4"
-	"github.com/materials-commons/hydra/pkg/logger"
+	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/pkg/errors"
 )
 
@@ -15,11 +15,11 @@ type LogController struct {
 	mu              sync.Mutex
 	CurrentLogLevel log.Level `json:"current_log_level"`
 	CurrentLogFile  string    `json:"current_log_file"`
-	currentHandler  *logger.Handler
+	currentHandler  *clog.Handler
 }
 
 func NewLogController() *LogController {
-	handler := logger.NewHandler(os.Stdout)
+	handler := clog.NewHandler(os.Stdout)
 	log.SetHandler(handler)
 
 	return &LogController{
@@ -117,7 +117,7 @@ func (c *LogController) setLoggingOutput(logOutput string) error {
 		}
 
 		c.CurrentLogFile = logOutput
-		c.currentHandler = logger.NewHandler(writer)
+		c.currentHandler = clog.NewHandler(writer)
 		log.SetHandler(c.currentHandler)
 
 		return nil
@@ -133,7 +133,7 @@ func (c *LogController) setLoggingOutput(logOutput string) error {
 
 	c.closeCurrentLogHandler()
 	c.CurrentLogFile = logOutput
-	c.currentHandler = logger.NewHandler(f)
+	c.currentHandler = clog.NewHandler(f)
 	log.SetHandler(c.currentHandler)
 
 	return nil
