@@ -9,8 +9,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/materials-commons/hydra/pkg/clog"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"golang.org/x/sys/unix"
@@ -54,7 +54,7 @@ var _ = (fs.FileAllocater)((*BaseFileHandle)(nil))
 
 // Read reads a from the file descriptor.
 func (f *BaseFileHandle) Read(ctx context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
-	//log.Debug("BaseFileHandle Read")
+	//clog.Global().Debug("BaseFileHandle Read")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	r := fuse.ReadResultFd(uintptr(f.Fd), off, len(buf))
@@ -63,7 +63,7 @@ func (f *BaseFileHandle) Read(ctx context.Context, buf []byte, off int64) (res f
 
 // Write writes to the file descriptor.
 func (f *BaseFileHandle) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
-	//log.Debug("BaseFileHandle Write")
+	//clog.Global().Debug("BaseFileHandle Write")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	n, err := syscall.Pwrite(f.Fd, data, off)
@@ -72,7 +72,7 @@ func (f *BaseFileHandle) Write(ctx context.Context, data []byte, off int64) (uin
 
 // Release handles the close operation.
 func (f *BaseFileHandle) Release(ctx context.Context) syscall.Errno {
-	//log.Debug("BaseFileHandle Release")
+	//clog.Global().Debug("BaseFileHandle Release")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	if f.Fd != -1 {
@@ -85,7 +85,7 @@ func (f *BaseFileHandle) Release(ctx context.Context) syscall.Errno {
 
 // Flush handles flushing the file buffer.
 func (f *BaseFileHandle) Flush(ctx context.Context) syscall.Errno {
-	//log.Debug("BaseFileHandle Flush")
+	//clog.Global().Debug("BaseFileHandle Flush")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	// Since Flush() may be called for each dup'd Fd, we don't
@@ -171,7 +171,7 @@ func (f *BaseFileHandle) setLock(ctx context.Context, owner uint64, lk *fuse.Fil
 
 // Setattr implements the FUSE Setattr call for setting attributes on a file
 func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	log.Debug("BaseFileHandle.Setattr")
+	clog.Global().Debug("BaseFileHandle.Setattr")
 	if errno := f.setAttr(ctx, in); errno != 0 {
 		return errno
 	}
@@ -181,7 +181,7 @@ func (f *BaseFileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *f
 
 // setAttr sets the actual file attributes, it doesn't grab the mutex
 func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscall.Errno {
-	log.Debug("BaseFileHandle.setAttr")
+	clog.Global().Debug("BaseFileHandle.setAttr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	var errno syscall.Errno
@@ -239,7 +239,7 @@ func (f *BaseFileHandle) setAttr(ctx context.Context, in *fuse.SetAttrIn) syscal
 
 // Getattr implements getting attributes about a file (different from stat)
 func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.Errno {
-	log.Debug("BaseFileHandle.Getattr")
+	clog.Global().Debug("BaseFileHandle.Getattr")
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	return f.getattr(ctx, a)
@@ -247,7 +247,7 @@ func (f *BaseFileHandle) Getattr(ctx context.Context, a *fuse.AttrOut) syscall.E
 
 // getattr gets the file attributes, no mutex is used
 func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Errno {
-	log.Debug("  BaseFileHandle.getattr")
+	clog.Global().Debug("  BaseFileHandle.getattr")
 	st := syscall.Stat_t{}
 	if err := syscall.Fstat(f.Fd, &st); err != nil {
 		return fs.ToErrno(err)
@@ -262,7 +262,7 @@ func (f *BaseFileHandle) getattr(_ context.Context, a *fuse.AttrOut) syscall.Err
 func (f *BaseFileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	log.Debug("BaseFileHandle.Lseek")
+	clog.Global().Debug("BaseFileHandle.Lseek")
 	n, err := unix.Seek(f.Fd, int64(off), int(whence))
 	return uint64(n), fs.ToErrno(err)
 }

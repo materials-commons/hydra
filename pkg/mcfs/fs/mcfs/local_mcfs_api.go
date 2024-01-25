@@ -10,8 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
@@ -39,7 +39,7 @@ func NewLocalMCFSApi(stors *stor.Stors, tracker *TransferStateTracker, pathParse
 
 func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	log.Debugf("fsapi.Create %s = %s, %s\n", path, parsedPath.TransferKey(), parsedPath.ProjectPath())
+	clog.UsingCtx(parsedPath.TransferKey()).Debugf("fsapi.Create %s = %s, %s\n", path, parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if file := fsapi.transferStateTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath()); file != nil {
 		// This should not happen - Create was called on a file that the file
 		// system is already tracking as opened.
@@ -53,8 +53,8 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
-	log.Debugf("LocalMCFSApi Open %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
+	clog.UsingCtx(parsedPath.TransferKey()).Debugf("LocalMCFSApi Open %s", path)
 	f = fsapi.transferStateTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if f != nil {
 		// Existing file found
@@ -149,9 +149,10 @@ func (fsapi *LocalMCFSApi) createNewFileVersion(p mcpath.Path) (*mcmodel.File, e
 
 func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	fileState := fsapi.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
+	key := parsedPath.TransferKey()
+	fileState := fsapi.transferStateTracker.Get(key, parsedPath.ProjectPath())
 	if fileState == nil {
-		fmt.Printf("LocalMCFSApi.Release fileState is nil for %s\n", path)
+		clog.UsingCtx(key).Errorf("LocalMCFSApi.Release fileState is nil for %s\n", path)
 		return syscall.ENOENT
 	}
 
@@ -167,7 +168,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		checksum = fmt.Sprintf("%x", fileState.Hasher.Sum(nil))
 		err = fsapi.stors.TransferRequestStor.MarkFileReleased(fileState.File, checksum, parsedPath.ProjectID(), int64(size))
 		if err != nil {
-			log.Debugf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
+			clog.UsingCtx(key).Debugf("LocalMCFSApi.Release MarkFileReleased failed with err %s\n", err)
 			return err
 		}
 		// Add to convertible list after marking as released to prevent the condition where the
@@ -175,7 +176,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		// case, but easy to prevent by releasing then adding to conversions list.
 		if fileState.File.IsConvertible() {
 			if _, err := fsapi.stors.ConversionStor.AddFileToConvert(fileState.File); err != nil {
-				log.Errorf("Failed adding file to conversion %d", fileState.File.ID)
+				clog.UsingCtx(key).Errorf("Failed adding file to conversion %d", fileState.File.ID)
 			}
 		}
 	}
@@ -212,21 +213,22 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 }
 
 func (fsapi *LocalMCFSApi) Lookup(path string) (*mcmodel.File, error) {
-	log.Debugf("LocalMCFSApi.Lookup %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
+	clog.UsingCtx(parsedPath.TransferKey()).Debugf("LocalMCFSApi.Lookup %s", path)
 	return parsedPath.Lookup()
 }
 
 func (fsapi *LocalMCFSApi) Readdir(path string) ([]mcmodel.File, error) {
-	log.Debugf("LocalMCFSApi.Readdir %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
+	clog.UsingCtx(parsedPath.TransferKey()).Debugf("LocalMCFSApi.Readdir %s", path)
 	return parsedPath.List()
 }
 
 func (fsapi *LocalMCFSApi) Mkdir(path string) (*mcmodel.File, error) {
-	log.Debugf("LocalMCFSApi.Mkdir %s", path)
+	clog.Global().Debugf("LocalMCFSApi.Mkdir %s", path)
 	parsedPath, _ := fsapi.pathParser.Parse(path)
-	log.Debugf("LocalMCFSApi.Mkdir GetFileByPath(%d, '%s')\n", parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
+	key := parsedPath.TransferKey()
+	clog.UsingCtx(key).Debugf("LocalMCFSApi.Mkdir GetFileByPath(%d, '%s')\n", parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
 	parentDir, err := fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), filepath.Dir(parsedPath.ProjectPath()))
 	if err != nil {
 		return nil, err

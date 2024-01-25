@@ -10,8 +10,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/materials-commons/hydra/pkg/clog"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -20,7 +20,7 @@ import (
 func (f *BaseFileHandle) Allocate(ctx context.Context, off uint64, sz uint64, mode uint32) syscall.Errno {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
-	log.Debug("BaseFileHandle.Allocate")
+	clog.Global().Debug("BaseFileHandle.Allocate")
 	err := syscall.Fallocate(f.Fd, mode, int64(off), int64(sz))
 	if err != nil {
 		return fs.ToErrno(err)

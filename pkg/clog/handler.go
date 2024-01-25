@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -39,6 +40,30 @@ func (a byName) Less(i, j int) bool { return a[i].Name < a[j].Name }
 
 func NewHandler(w io.WriteCloser) *Handler {
 	return &Handler{Writer: w}
+}
+
+func (h *Handler) SetOutput(w io.WriteCloser) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	_ = h.Writer.Close()
+	h.Writer = w
+}
+
+func (h *Handler) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.Writer == nil {
+		return
+	}
+
+	if h.Writer == os.Stdout || h.Writer == os.Stderr {
+		return
+	}
+
+	// Only close if Writer points to a file
+	_ = h.Writer.Close()
 }
 
 func (h *Handler) HandleLog(e *log.Entry) error {

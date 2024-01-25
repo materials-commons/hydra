@@ -7,9 +7,9 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 )
@@ -69,10 +69,10 @@ func (h *MCFileHandle) WithTransferStateTracker(tracker *TransferStateTracker) *
 
 func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
 	h.Mu.Lock()
-	log.Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
+	clog.Global().Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Debug("MCFileHandle panic")
+			clog.Global().Debug("MCFileHandle panic")
 			bytesWritten = 0
 			errno = syscall.EIO
 		}
@@ -82,7 +82,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 	parsedPath, _ := h.pathParser.Parse(h.Path)
 	fileState := h.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if fileState == nil {
-		log.Errorf("Unknown file in MCFileHandle %s", h.Path)
+		clog.Global().Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO
 	}
 
@@ -114,7 +114,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 func (h *MCFileHandle) Read(_ context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	h.Mu.Lock()
-	log.Debugf("MCFileHandle.Read")
+	clog.Global().Debugf("MCFileHandle.Read")
 	defer func() {
 		if r := recover(); r != nil {
 			res = nil
@@ -143,14 +143,14 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	}()
 
 	if h.Fd == -1 {
-		log.Debugf("h.Fd == -1 for %s\n", h.Path)
+		clog.Global().Debugf("h.Fd == -1 for %s\n", h.Path)
 		return syscall.EBADF
 	}
 
 	err := syscall.Close(h.Fd)
 	h.Fd = -1
 	if err != nil {
-		log.Debugf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
+		clog.Global().Debugf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
 		return fs.ToErrno(err)
 	}
 
@@ -173,7 +173,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 }
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
-	log.Debug("MCFileHandle.Setattr")
+	clog.Global().Debug("MCFileHandle.Setattr")
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {

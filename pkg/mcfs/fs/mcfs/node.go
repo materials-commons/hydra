@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
@@ -63,7 +63,7 @@ func (n *Node) newNode() *Node {
 func (n *Node) Readdir(_ context.Context) (ds fs.DirStream, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Readdir panicked")
+			clog.Global().Errorf("Node.Readdir panicked")
 			ds = nil
 			errno = syscall.ENOENT
 		}
@@ -97,16 +97,16 @@ func (n *Node) Opendir(_ context.Context) syscall.Errno {
 // Getxattr returns extra attributes. This is used by lstat. There are no extra attributes to
 // return, so we always return a 0 for buffer length and success.
 func (n *Node) Getxattr(_ context.Context, _ string, _ []byte) (uint32, syscall.Errno) {
-	//log.Error("Node.Getxattr")
+	//clog.Global().Error("Node.Getxattr")
 	return 0, fs.OK
 }
 
 // Getattr gets attributes about the file
 func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) (errno syscall.Errno) {
-	log.Debug("Node.Getattr")
+	clog.Global().Debug("Node.Getattr")
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Getattr panicked")
+			clog.Global().Errorf("Node.Getattr panicked")
 			errno = syscall.ENOENT
 		}
 	}()
@@ -134,7 +134,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	st := syscall.Stat_t{}
 	if err := syscall.Lstat(realPath, &st); err != nil {
-		log.Errorf("Node.Getattr: Lstat failed path %s: %s", realPath, err)
+		clog.Global().Errorf("Node.Getattr: Lstat failed path %s: %s", realPath, err)
 		return fs.ToErrno(err)
 	}
 
@@ -149,7 +149,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Lookup panicked")
+			clog.Global().Errorf("Node.Lookup panicked")
 			inode = nil
 			errno = syscall.ENOENT
 		}
@@ -168,7 +168,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 
 	f, err := n.RootData.mcfsapi.Lookup(path)
 	if err != nil {
-		log.Debugf("Lookup failed %s: %s\n", path, err)
+		clog.Global().Debugf("Lookup failed %s: %s\n", path, err)
 		return nil, syscall.ENOENT
 	}
 
@@ -192,14 +192,14 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error("Node.Mkdir panicked")
+			clog.Global().Error("Node.Mkdir panicked")
 			inode = nil
 			errno = syscall.EINVAL
 		}
 		n.RootData.mu.Unlock()
 	}()
 
-	log.Debugf("Node.Mkdir %s", name)
+	clog.Global().Debugf("Node.Mkdir %s", name)
 
 	path := filepath.Join("/", n.Path(n.Root()), name)
 	dir, err := n.RootData.mcfsapi.Mkdir(path)
@@ -218,7 +218,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, _ uint32, out *fuse.Entry
 }
 
 func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
-	log.Errorf("Node.Rmdir %s name %s", n.Path(n.Root()), name)
+	clog.Global().Errorf("Node.Rmdir %s name %s", n.Path(n.Root()), name)
 	return syscall.EIO
 }
 
@@ -227,7 +227,7 @@ func (n *Node) Rmdir(_ context.Context, name string) syscall.Errno {
 func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (inode *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Create panicked")
+			clog.Global().Errorf("Node.Create panicked")
 			inode = nil
 			fh = nil
 			fuseFlags = 0
@@ -238,14 +238,14 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	fpath := filepath.Join("/", n.Path(n.Root()), name)
 	f, err := n.RootData.mcfsapi.Create(fpath)
 	if err != nil {
-		log.Errorf("Node.Create - failed creating new file %s: %s\n", fpath, err)
+		clog.Global().Errorf("Node.Create - failed creating new file %s: %s\n", fpath, err)
 		return nil, nil, 0, syscall.EIO
 	}
 
 	flags = flags &^ syscall.O_APPEND
 	fd, err := syscall.Open(f.ToUnderlyingFilePath(n.RootData.mcfsRoot), int(flags)|os.O_CREATE, mode)
 	if err != nil {
-		log.Errorf("Node.Create - syscall.Open failed %s: %s\n", f.ToUnderlyingFilePath(n.RootData.mcfsRoot), err)
+		clog.Global().Errorf("Node.Create - syscall.Open failed %s: %s\n", f.ToUnderlyingFilePath(n.RootData.mcfsRoot), err)
 		return nil, nil, 0, syscall.EIO
 	}
 
@@ -267,7 +267,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Open panicked")
+			clog.Global().Errorf("Node.Open panicked")
 			fh = nil
 			fuseFlags = 0
 			errno = syscall.EIO
@@ -275,7 +275,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	}()
 
 	path := filepath.Join("/", n.Path(n.Root()))
-	log.Debugf("Node.Open %s", path)
+	clog.Global().Debugf("Node.Open %s", path)
 	omode := flags & syscall.O_ACCMODE
 
 	f, isNewFile, err := n.RootData.mcfsapi.Open(path, int(flags))
@@ -292,7 +292,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
 	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
-		log.Debugf("syscall.Open (%s) %s: %s\n", path, filePath, err)
+		clog.Global().Debugf("syscall.Open (%s) %s: %s\n", path, filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
 
@@ -304,13 +304,13 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 	defer func() {
 		if r := recover(); r != nil {
 			// If there is a panic then for now say that we don't support this call
-			log.Errorf("Node.Setattr panicked")
+			clog.Global().Errorf("Node.Setattr panicked")
 			errno = syscall.ENOTSUP
 		}
 	}()
 
 	path := filepath.Join("/", n.Path(n.Root()))
-	log.Debugf("Node.Setattr %s", path)
+	clog.Global().Debugf("Node.Setattr %s", path)
 
 	if fops, ok := f.(fs.FileSetattrer); ok {
 		return fops.Setattr(ctx, in, out)
@@ -341,19 +341,19 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 }
 
 func (n *Node) Rename(_ context.Context, _ string, _ fs.InodeEmbedder, _ string, _ uint32) syscall.Errno {
-	log.Error("Node.Rename")
+	clog.Global().Error("Node.Rename")
 	return syscall.EPERM
 }
 
 func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
-	log.Errorf("Node.Unlink %s, name %s", n.Path(n.Root()), name)
+	clog.Global().Errorf("Node.Unlink %s, name %s", n.Path(n.Root()), name)
 	return syscall.EPERM
 }
 
 func (n *Node) Statfs(_ context.Context, out *fuse.StatfsOut) (errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Node.Statfs panicked")
+			clog.Global().Errorf("Node.Statfs panicked")
 			// If there is a panic then for now just return success
 			errno = fs.OK
 		}
