@@ -159,7 +159,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	err := syscall.Close(h.Fd)
 	h.Fd = -1
 	if err != nil {
-		clog.UsingCtx(h.key).Debugf("MCFileHandle.Release syscall.CloseWriter failed %s: %s\n", h.Path, err)
+		clog.UsingCtx(h.key).Debugf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
 		return fs.ToErrno(err)
 	}
 
