@@ -17,19 +17,19 @@ func RemoveLoggingContext(ctx string) {
 	clogger.RemoveLoggingContext(ctx)
 }
 
-func SetLevel(ctx string, level log.Level) {
-	clogger.SetLevel(ctx, level)
+func SetLevel(ctx string, level log.Level) (log.Level, error) {
+	return clogger.SetLevel(ctx, level)
 }
 
-func SetGlobalLoggerLevel(level log.Level) {
-	clogger.SetGlobalLoggerLevel(level)
+func SetGlobalLoggerLevel(level log.Level) (log.Level, error) {
+	return clogger.SetGlobalLoggerLevel(level)
 }
 
-func SetLevelFromString(ctx, s string) error {
+func SetLevelFromString(ctx, s string) (log.Level, error) {
 	return clogger.SetLevelFromString(ctx, s)
 }
 
-func SetGlobalLoggerLevelFromString(s string) error {
+func SetGlobalLoggerLevelFromString(s string) (log.Level, error) {
 	return clogger.SetGlobalLoggerLevelFromString(s)
 }
 
