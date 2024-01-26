@@ -31,7 +31,7 @@ type mcfile struct {
 	// The real underlying handle to read/write the file.
 	fileHandle *os.File
 
-	// openForWrite is true when the file was opened for write. This is used in MCFile.Close() to
+	// openForWrite is true when the file was opened for write. This is used in MCFile.CloseWriter() to
 	// determine if file statistics and checksum handling should be done.
 	openForWrite bool
 
