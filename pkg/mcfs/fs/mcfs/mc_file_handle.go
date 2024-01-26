@@ -23,6 +23,7 @@ type MCFileHandle struct {
 	mcfsapi              MCFSApi
 	transferStateTracker *TransferStateTracker
 	pathParser           mcpath.Parser
+	key                  string // The pathParser.TransferKey() to use for logging
 }
 
 var _ = (fs.FileHandle)((*MCFileHandle)(nil))
@@ -39,6 +40,14 @@ func NewMCFileHandle(fd, flags int) *MCFileHandle {
 
 func (h *MCFileHandle) WithPath(path string) *MCFileHandle {
 	h.Path = path
+
+	// Set the transfer key
+	parsedPath, err := h.pathParser.Parse(path)
+	if err != nil {
+		clog.Global().Errorf("Unable to parse path '%s'", path)
+		return h
+	}
+	h.key = parsedPath.TransferKey()
 	return h
 }
 
@@ -69,10 +78,10 @@ func (h *MCFileHandle) WithTransferStateTracker(tracker *TransferStateTracker) *
 
 func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
 	h.Mu.Lock()
-	clog.Global().Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
+	clog.UsingCtx(h.key).Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
 	defer func() {
 		if r := recover(); r != nil {
-			clog.Global().Debug("MCFileHandle panic")
+			clog.UsingCtx(h.key).Debug("MCFileHandle panic")
 			bytesWritten = 0
 			errno = syscall.EIO
 		}
@@ -82,7 +91,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 	parsedPath, _ := h.pathParser.Parse(h.Path)
 	fileState := h.transferStateTracker.Get(parsedPath.TransferKey(), parsedPath.ProjectPath())
 	if fileState == nil {
-		clog.Global().Errorf("Unknown file in MCFileHandle %s", h.Path)
+		clog.UsingCtx(h.key).Errorf("Unknown file in MCFileHandle %s", h.Path)
 		return 0, syscall.EIO
 	}
 
@@ -114,7 +123,7 @@ func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWr
 
 func (h *MCFileHandle) Read(_ context.Context, buf []byte, off int64) (res fuse.ReadResult, errno syscall.Errno) {
 	h.Mu.Lock()
-	clog.Global().Debugf("MCFileHandle.Read")
+	clog.UsingCtx(h.key).Debugf("MCFileHandle.Read")
 	defer func() {
 		if r := recover(); r != nil {
 			res = nil
@@ -143,14 +152,14 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 	}()
 
 	if h.Fd == -1 {
-		clog.Global().Debugf("h.Fd == -1 for %s\n", h.Path)
+		clog.UsingCtx(h.key).Debugf("h.Fd == -1 for %s\n", h.Path)
 		return syscall.EBADF
 	}
 
 	err := syscall.Close(h.Fd)
 	h.Fd = -1
 	if err != nil {
-		clog.Global().Debugf("MCFileHandle.Release syscall.Close failed %s: %s\n", h.Path, err)
+		clog.UsingCtx(h.key).Debugf("MCFileHandle.Release syscall.CloseWriter failed %s: %s\n", h.Path, err)
 		return fs.ToErrno(err)
 	}
 
@@ -173,7 +182,7 @@ func (h *MCFileHandle) Release(ctx context.Context) (errno syscall.Errno) {
 }
 
 func (h *MCFileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) (errno syscall.Errno) {
-	clog.Global().Debug("MCFileHandle.Setattr")
+	clog.UsingCtx(h.key).Debug("MCFileHandle.Setattr")
 	h.Mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
