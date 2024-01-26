@@ -39,37 +39,41 @@ func (l *ContextLogger) RemoveLoggingContext(ctx string) {
 	}
 
 	handler := loggerInterfaceToHandler(logger)
-	handler.Close()
+	handler.CloseWriter()
 }
 
-func (l *ContextLogger) SetLevel(ctx string, level log.Level) {
+func (l *ContextLogger) SetLevel(ctx string, level log.Level) (log.Level, error) {
 	switch ctx {
 	case GlobalLoggerCtx:
+		previousLevel := l.GlobalLogger.Level
 		l.GlobalLogger.Level = level
+		return previousLevel, nil
 	default:
 		clogger := l.getContextLogger(ctx)
 		if clogger != nil {
+			previousLevel := clogger.Level
 			clogger.Level = level
+			return previousLevel, nil
 		}
+
+		return log.InfoLevel, fmt.Errorf("no such ctx %s", ctx)
 	}
 }
 
-func (l *ContextLogger) SetGlobalLoggerLevel(level log.Level) {
-	l.SetLevel(GlobalLoggerCtx, level)
+func (l *ContextLogger) SetGlobalLoggerLevel(level log.Level) (log.Level, error) {
+	return l.SetLevel(GlobalLoggerCtx, level)
 }
 
-func (l *ContextLogger) SetLevelFromString(ctx, s string) error {
+func (l *ContextLogger) SetLevelFromString(ctx, s string) (log.Level, error) {
 	level, err := log.ParseLevel(s)
 	if err != nil {
-		return err
+		return log.InfoLevel, err
 	}
 
-	l.SetLevel(ctx, level)
-
-	return nil
+	return l.SetLevel(ctx, level)
 }
 
-func (l *ContextLogger) SetGlobalLoggerLevelFromString(s string) error {
+func (l *ContextLogger) SetGlobalLoggerLevelFromString(s string) (log.Level, error) {
 	return l.SetLevelFromString(GlobalLoggerCtx, s)
 }
 
@@ -88,18 +92,32 @@ func (l *ContextLogger) SetGlobalOutput(w io.WriteCloser) error {
 }
 
 func (l *ContextLogger) UsingCtx(ctx string) *log.Entry {
-	logger := l.getContextLogger(ctx)
-	if logger == nil {
-		// Even if we didn't find a logger associated with the ctx we will use this
-		// ctx key.
-		if ctx == "" {
-			// If the ctx key is blank then set it to "global" so that there is
-			// a key associated with the ctx.
-			ctx = "global"
-		}
-		return l.GlobalLogger.WithField("ctx", ctx)
+	// Shortcut - if ctx == GlobalLoggerCtx then just the user global logger context.
+	if ctx == GlobalLoggerCtx {
+		return l.GlobalLogger.WithField("ctx", GlobalLoggerCtx)
 	}
-	return logger.WithField("ctx", ctx)
+
+	// Look up the logger by the context key. If no logger is found then use the
+	// global logger context.
+	logger := l.getContextLogger(ctx)
+	if logger != nil {
+		return logger.WithField("ctx", ctx)
+	}
+
+	// If we are here then ctx wasn't equal to GlobalLoggerCtx, and no logger context
+	// was found for the ctx given. In this case we use the global logger context, but
+	// we set ctx to the given key unless the given key is blank. If its blank set it
+	// to GlobalLoggerCtx.
+	//
+	// If possible we use the given ctx key, even if a logger wasn't found for it. This
+	// may help debugging by preserving some context that can be used when looking at
+	// the log.
+	if ctx == "" {
+		// If the ctx key is blank then set it to "global" so that there is
+		// a key associated with the ctx.
+		ctx = GlobalLoggerCtx
+	}
+	return l.GlobalLogger.WithField("ctx", ctx)
 }
 
 func (l *ContextLogger) Global() *log.Entry {
