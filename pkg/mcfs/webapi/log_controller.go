@@ -15,22 +15,19 @@ type LogController struct {
 	mu              sync.Mutex
 	CurrentLogLevel log.Level `json:"current_log_level"`
 	CurrentLogFile  string    `json:"current_log_file"`
-	currentHandler  *clog.Handler
 }
 
 // NewLogController creates a new LogController
 func NewLogController() *LogController {
-	handler := clog.NewHandler(os.Stdout)
-	log.SetHandler(handler)
-
 	return &LogController{
 		CurrentLogLevel: log.InfoLevel,
 		CurrentLogFile:  "stdout",
-		currentHandler:  handler,
 	}
 }
 
-func (c *LogController) SetLogging(ctx echo.Context) error {
+/////////////////// Handlers ///////////////////
+
+func (c *LogController) SetLoggingHandler(ctx echo.Context) error {
 	var req struct {
 		LogLevel  string `json:"log_level"`
 		LogOutput string `json:"log_output"`
@@ -52,14 +49,14 @@ func (c *LogController) SetLogging(ctx echo.Context) error {
 		// Reset logging level to original level since we couldn't perform
 		// both setting the level and the output.
 		c.CurrentLogLevel = oldLevel
-		log.SetLevel(c.CurrentLogLevel)
+		_, _ = clog.SetGlobalLoggerLevel(c.CurrentLogLevel)
 		return err
 	}
 
 	return ctx.JSON(http.StatusOK, c)
 }
 
-func (c *LogController) SetLogLevel(ctx echo.Context) error {
+func (c *LogController) SetLogLevelHandler(ctx echo.Context) error {
 	var req struct {
 		LogLevel string `json:"log_level"`
 	}
@@ -78,19 +75,7 @@ func (c *LogController) SetLogLevel(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, c)
 }
 
-func (c *LogController) setLoggingLevel(logLevel string) error {
-	level, err := log.ParseLevel(logLevel)
-	if err != nil {
-		return errors.Wrapf(err, "SetLogLevelController: Invalid log level %s", logLevel)
-	}
-
-	c.CurrentLogLevel = level
-	log.SetLevel(c.CurrentLogLevel)
-
-	return nil
-}
-
-func (c *LogController) SetLogOutput(ctx echo.Context) error {
+func (c *LogController) SetLogOutputHandler(ctx echo.Context) error {
 	var req struct {
 		LogOutput string `json:"log_output"`
 	}
@@ -109,46 +94,45 @@ func (c *LogController) SetLogOutput(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, c)
 }
 
-func (c *LogController) setLoggingOutput(logOutput string) error {
-	if logOutput == "stdout" || logOutput == "stderr" {
-		c.closeCurrentLogHandler()
-		writer := os.Stdout
-		if logOutput == "stderr" {
-			writer = os.Stderr
-		}
+func (c *LogController) ShowCurrentLoggingHandler(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, c)
+}
 
-		c.CurrentLogFile = logOutput
-		c.currentHandler = clog.NewHandler(writer)
-		log.SetHandler(c.currentHandler)
+/////////////////// Utility Functions ///////////////////
 
-		return nil
-	}
-
-	// If we are here then a file was specified. We need to verify that
-	// we can write to the file.
-
-	f, err := os.Create(logOutput)
+func (c *LogController) setLoggingLevel(logLevel string) error {
+	level, err := clog.SetGlobalLoggerLevelFromString(logLevel)
 	if err != nil {
-		return errors.Wrapf(err, "Failed to open LogOutput %s", logOutput)
+		return errors.Wrapf(err, "SetLogLevelController: Invalid log level %s", logLevel)
 	}
 
-	c.closeCurrentLogHandler()
-	c.CurrentLogFile = logOutput
-	c.currentHandler = clog.NewHandler(f)
-	log.SetHandler(c.currentHandler)
+	c.CurrentLogLevel = level
 
 	return nil
 }
 
-func (c *LogController) ShowCurrentLogging(ctx echo.Context) error {
-	return ctx.JSON(http.StatusOK, c)
-}
+func (c *LogController) setLoggingOutput(logOutput string) error {
+	var (
+		writer *os.File
+		err    error
+	)
 
-func (c *LogController) closeCurrentLogHandler() {
-	switch c.CurrentLogFile {
-	case "stdout", "stderr":
-		// no need to close
+	switch logOutput {
+	case "stdout":
+		writer = os.Stdout
+	case "stderr":
+		writer = os.Stderr
 	default:
-		_ = c.currentHandler.Writer.Close()
+		writer, err = os.Create(logOutput)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to open LogOutput %s", logOutput)
+		}
 	}
+
+	if err = clog.SetGlobalOutput(writer); err != nil {
+		return errors.Wrapf(err, "failed to set output to %s", logOutput)
+	}
+
+	c.CurrentLogFile = logOutput
+	return nil
 }
