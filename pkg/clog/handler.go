@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/materials-commons/hydra/pkg/obj"
 )
 
 type Handler struct {
@@ -46,15 +47,16 @@ func (h *Handler) SetOutput(w io.WriteCloser) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	_ = h.Writer.Close()
+	h.CloseWriter()
+
 	h.Writer = w
 }
 
-func (h *Handler) Close() {
+func (h *Handler) CloseWriter() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.Writer == nil {
+	if obj.IsNil(h.Writer) {
 		return
 	}
 
