@@ -48,10 +48,10 @@ var rootCmd = &cobra.Command{
 		g := e.Group("/api")
 
 		logController := webapi.NewLogController()
-		g.POST("/set-logging-level", logController.SetLogLevel)
-		g.POST("/set-logging-output", logController.SetLogOutput)
-		g.POST("/set-logging", logController.SetLogging)
-		g.GET("/show-logging", logController.ShowCurrentLogging)
+		g.POST("/set-logging-level", logController.SetLogLevelHandler)
+		g.POST("/set-logging-output", logController.SetLogOutputHandler)
+		g.POST("/set-logging", logController.SetLoggingHandler)
+		g.GET("/show-logging", logController.ShowCurrentLoggingHandler)
 
 		transferRequestsActivityController := webapi.NewTransferRequestsController(activityCounterMonitor, stors.TransferRequestStor)
 		g.GET("/list-transfer-request-status", transferRequestsActivityController.ListTransferRequestStatus)
