@@ -90,6 +90,13 @@ func (l *ContextLogger) SetGlobalOutput(w io.WriteCloser) error {
 func (l *ContextLogger) UsingCtx(ctx string) *log.Entry {
 	logger := l.getContextLogger(ctx)
 	if logger == nil {
+		// Even if we didn't find a logger associated with the ctx we will use this
+		// ctx key.
+		if ctx == "" {
+			// If the ctx key is blank then set it to "global" so that there is
+			// a key associated with the ctx.
+			ctx = "global"
+		}
 		return l.GlobalLogger.WithField("ctx", ctx)
 	}
 	return logger.WithField("ctx", ctx)
