@@ -130,7 +130,7 @@ func (h *mcfsHandler) Filewrite(r *sftp.Request) (io.WriterAt, error) {
 		return nil, err
 	}
 
-	// Since this file was opened for writing we need to track its checksum, and for MCFile.Close() let
+	// Since this file was opened for writing we need to track its checksum, and for MCFile.CloseWriter() let
 	// it know whether it needs to update statistics about the file (only when openForWrite is true).
 	mcFile.openForWrite = true
 	mcFile.hasher = md5.New()
