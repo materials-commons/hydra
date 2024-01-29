@@ -53,7 +53,7 @@ func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.C
 
 func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) error {
 	var req struct {
-		TransferRequestUUID string `json:transfer_request_uuid`
+		TransferRequestUUID string `json:"transfer_request_uuid""`
 	}
 
 	if err := ctx.Bind(&req); err != nil {
