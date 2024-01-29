@@ -40,10 +40,11 @@ func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *m
 	p, _ := f.pathParser.Parse(path)
 	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(p.TransferBase())
 	return NewMCFileHandle(fd, flags).
+		WithPathParser(f.pathParser).
 		WithPath(path).
 		WithFile(file).
 		WithActivityCounter(activityCounter).
 		WithTransferStateTracker(f.transferStateTracker).
-		WithMCFSApi(f.mcfsapi).
-		WithPathParser(f.pathParser)
+		WithMCFSApi(f.mcfsapi)
+
 }
