@@ -334,7 +334,9 @@ func incrementProjectFileTypeCountAndFilesCount(db *gorm.DB, projectID int, file
 
 func (s *GormTransferRequestStor) GetTransferRequestByUUID(transferUUID string) (*mcmodel.TransferRequest, error) {
 	var transferRequest mcmodel.TransferRequest
-	err := s.db.Where("uuid = ?", transferUUID).First(&transferRequest).Error
+	err := s.db.Preload("GlobusTransfer").
+		Where("uuid = ?", transferUUID).
+		First(&transferRequest).Error
 	if err != nil {
 		return nil, err
 	}
