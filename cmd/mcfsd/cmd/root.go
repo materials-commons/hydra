@@ -80,7 +80,7 @@ var rootCmd = &cobra.Command{
 		rawfs := fs.NewNodeFS(mcfs, &fs.Options{})
 		fuseServer, err := fuse.NewServer(rawfs, args[0], &fuse.MountOptions{Name: "mcfs"})
 		if err != nil {
-			log.Fatalf("Unable to fuse server: %s", err)
+			log.Fatalf("Unable to create fuse server: %s", err)
 		}
 
 		go fuseServer.Serve()
