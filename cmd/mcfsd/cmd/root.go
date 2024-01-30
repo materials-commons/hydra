@@ -53,16 +53,17 @@ var rootCmd = &cobra.Command{
 		g.POST("/set-logging", logController.SetLoggingHandler)
 		g.GET("/show-logging", logController.ShowCurrentLoggingHandler)
 
-		transferRequestsActivityController := webapi.NewTransferRequestsController(activityCounterMonitor, stors.TransferRequestStor)
-		g.GET("/list-transfer-request-status", transferRequestsActivityController.ListTransferRequestStatus)
+		knownFilesTracker := mcfs.NewTransferStateTracker()
+
+		transferRequestsActivityController := webapi.NewTransferRequestsController(activityCounterMonitor, knownFilesTracker, stors.TransferRequestStor)
+		g.GET("/transfers", transferRequestsActivityController.IndexTransferRequestStatus)
+		g.GET("/transfers/:uuid/status", transferRequestsActivityController.GetStatusForTransferRequest)
 
 		go func() {
 			if err := e.Start("localhost:1350"); err != nil {
 				log.Fatalf("Unable to start web server: %s", err)
 			}
 		}()
-
-		knownFilesTracker := mcfs.NewTransferStateTracker()
 
 		pathParser := mcpath.NewTransferPathParser(stors)
 		mcapi := mcfs.NewLocalMCFSApi(stors, knownFilesTracker, pathParser, mcfsDir)

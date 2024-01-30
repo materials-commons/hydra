@@ -20,8 +20,9 @@ type TransferRequestsController struct {
 	tracker             *mcfs.TransferStateTracker
 }
 
-func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
-	return &TransferRequestsController{activity: activity, transferRequestStor: transferRequestStor}
+func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, tracker *mcfs.TransferStateTracker,
+	transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
+	return &TransferRequestsController{activity: activity, transferRequestStor: transferRequestStor, tracker: tracker}
 }
 
 type TransferRequestStatus struct {
@@ -35,6 +36,7 @@ type TransferRequestStatus struct {
 const TransferRequestActive = "active"
 const TransferRequestInactive = "inactive"
 const TransferRequestStatusUnknown = "unknown"
+const TransferRequestNoActivityState = "nostate"
 
 func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.Context) error {
 	allTransferRequestsByStatus := c.getStatusForAllTransferRequests()
@@ -53,7 +55,7 @@ func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.C
 
 func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) error {
 	var req struct {
-		TransferRequestUUID string `json:"transfer_request_uuid""`
+		TransferRequestUUID string `json:"transfer_request_uuid"`
 	}
 
 	if err := ctx.Bind(&req); err != nil {
@@ -74,7 +76,34 @@ func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) erro
 	return nil
 }
 
-func (c *TransferRequestsController) ListTransferRequestStatus(ctx echo.Context) error {
+func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Context) error {
+	transferUUID := ctx.Param("uuid")
+	ac := c.activity.GetActivityCounter(fmt.Sprintf("/%s", transferUUID))
+
+	var (
+		activity *TransferRequestStatus
+		err      error
+	)
+
+	if ac == nil {
+		activity.Status = TransferRequestNoActivityState
+		return ctx.JSON(http.StatusOK, activity)
+	}
+
+	activity.TransferRequest, err = c.transferRequestStor.GetTransferRequestByUUID(activity.transferRequestUUID)
+	if err != nil {
+		activity.Status = TransferRequestStatusUnknown
+	} else {
+		activity.Status = TransferRequestActive
+	}
+
+	activity.LastActivityTime = ac.LastChanged.Format(time.RFC850)
+	activity.ActivityCount = ac.LastSeenActivityCount
+
+	return ctx.JSON(http.StatusOK, activity)
+}
+
+func (c *TransferRequestsController) IndexTransferRequestStatus(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, c.getStatusForAllTransferRequests())
 }
 
@@ -98,7 +127,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 		activity.TransferRequest, err = c.transferRequestStor.GetTransferRequestByUUID(activity.transferRequestUUID)
 		if err != nil {
 			activity.Status = TransferRequestStatusUnknown
-			log.Errorf("TransferRequestsController.ListTransferRequestStatus TransferRequest %s: %s", activity.transferRequestUUID, err)
+			log.Errorf("TransferRequestsController.IndexTransferRequestStatus TransferRequest %s: %s", activity.transferRequestUUID, err)
 		}
 	}
 
@@ -107,7 +136,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	// inactive transfer requests into the transferRequests map.
 	allTransferRequests, err := c.transferRequestStor.ListTransferRequests()
 	if err != nil {
-		log.Errorf("TransferRequestsController.ListTransferRequestStatus unable to retrieve all transfer requests: %s", err)
+		log.Errorf("TransferRequestsController.IndexTransferRequestStatus unable to retrieve all transfer requests: %s", err)
 	}
 
 	for _, transferRequest := range allTransferRequests {
