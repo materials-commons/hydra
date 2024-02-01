@@ -18,17 +18,17 @@ type FileHandleFactory interface {
 // an activity counter and a tracker for files that are or were opened.
 type MCFileHandlerFactory struct {
 	mcfsapi                MCFSApi
-	activityCounterFactory *ActivityCounterMonitor
+	activityCounterMonitor *ActivityCounterMonitor
 	transferStateTracker   *TransferStateTracker
 	pathParser             mcpath.Parser
 }
 
 // NewMCFileHandlerFactory creates a new MCFileHandlerFactory.
 func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *TransferStateTracker, pathParser mcpath.Parser,
-	activityCounterFactory *ActivityCounterMonitor) *MCFileHandlerFactory {
+	activityCounterMonitor *ActivityCounterMonitor) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcfsapi:                mcfsapi,
-		activityCounterFactory: activityCounterFactory,
+		activityCounterMonitor: activityCounterMonitor,
 		transferStateTracker:   transferStateTracker,
 		pathParser:             pathParser,
 	}
@@ -38,7 +38,7 @@ func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *TransferStat
 // known files tracker and MCFSApi.
 func (f *MCFileHandlerFactory) NewFileHandle(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 	p, _ := f.pathParser.Parse(path)
-	activityCounter := f.activityCounterFactory.GetOrCreateActivityCounter(p.TransferBase())
+	activityCounter := f.activityCounterMonitor.GetOrCreateActivityCounter(p.TransferKey())
 	return NewMCFileHandle(fd, flags).
 		WithPathParser(f.pathParser).
 		WithPath(path).
