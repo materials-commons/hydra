@@ -1,6 +1,7 @@
 package mcfs
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,7 @@ func NewActivityCounter() *ActivityCounter {
 
 // IncrementActivityCount atomically updates the activityCount
 func (c *ActivityCounter) IncrementActivityCount() {
+	fmt.Println("IncrementActivityCount")
 	atomic.AddInt64(&(c.activityCount), 1)
 }
 
@@ -44,24 +46,24 @@ func (m *ActivityCounterMonitor) Start() {
 
 }
 
-func (m *ActivityCounterMonitor) GetOrCreateActivityCounter(path string) *ActivityCounter {
+func (m *ActivityCounterMonitor) GetOrCreateActivityCounter(key string) *ActivityCounter {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	activityCounter, found := m.activityCounters[path]
+	activityCounter, found := m.activityCounters[key]
 	if !found {
 		activityCounter = NewActivityCounter()
-		m.activityCounters[path] = activityCounter
+		m.activityCounters[key] = activityCounter
 	}
 
 	return activityCounter
 }
 
-func (m *ActivityCounterMonitor) GetActivityCounter(path string) *ActivityCounter {
+func (m *ActivityCounterMonitor) GetActivityCounter(key string) *ActivityCounter {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	activityCounter, found := m.activityCounters[path]
+	activityCounter, found := m.activityCounters[key]
 
 	if !found {
 		return nil
