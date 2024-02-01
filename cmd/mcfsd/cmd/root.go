@@ -88,7 +88,6 @@ var rootCmd = &cobra.Command{
 			log.Fatalf("Mount failed: %s", err)
 		}
 
-		log.Info("Past WaitMount")
 		fuseServer.Wait()
 	},
 }
