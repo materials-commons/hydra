@@ -30,6 +30,7 @@ type TransferRequestStatus struct {
 	TransferRequest     *mcmodel.TransferRequest `json:"transfer_request"`
 	ActivityCount       int64                    `json:"activity_count"`
 	LastActivityTime    string                   `json:"last_activity_time"`
+	ActivityFound       bool                     `json:"activity_found"`
 	Status              string                   `json:"status"`
 }
 
@@ -87,8 +88,11 @@ func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Contex
 
 	if ac == nil {
 		activity.Status = TransferRequestNoActivityState
+		activity.ActivityFound = false
 		return ctx.JSON(http.StatusOK, activity)
 	}
+
+	activity.ActivityFound = true
 
 	activity.TransferRequest, err = c.transferRequestStor.GetTransferRequestByUUID(activity.transferRequestUUID)
 	if err != nil {
@@ -116,6 +120,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 			transferRequestUUID: transferRequestUUID,
 			ActivityCount:       ac.LastSeenActivityCount,
 			LastActivityTime:    ac.LastChanged.Format(time.RFC850),
+			ActivityFound:       true,
 		}
 		transferRequests[activity.transferRequestUUID] = activity
 	})
@@ -142,8 +147,9 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	for _, transferRequest := range allTransferRequests {
 		if _, ok := transferRequests[transferRequest.UUID]; !ok {
 			// Didn't find this request so let's add it to hashmap
+			tr := transferRequest
 			activity := &TransferRequestStatus{
-				TransferRequest:  &transferRequest,
+				TransferRequest:  &tr,
 				LastActivityTime: "unknown",
 				ActivityCount:    0,
 				Status:           TransferRequestInactive,
