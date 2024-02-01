@@ -79,7 +79,7 @@ func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) erro
 
 func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Context) error {
 	transferUUID := ctx.Param("uuid")
-	ac := c.activity.GetActivityCounter(fmt.Sprintf("/%s", transferUUID))
+	ac := c.activity.GetActivityCounter(transferUUID)
 
 	var (
 		activity *TransferRequestStatus
