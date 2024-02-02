@@ -28,7 +28,7 @@ func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, tracke
 type TransferRequestStatus struct {
 	transferRequestUUID string
 	TransferRequest     *mcmodel.TransferRequest `json:"transfer_request"`
-	ActivityCount       int64                    `json:"activity_count"`
+	ActivityCount       uint64                   `json:"activity_count"`
 	LastActivityTime    string                   `json:"last_activity_time"`
 	ActivityFound       bool                     `json:"activity_found"`
 	Status              string                   `json:"status"`
@@ -102,7 +102,7 @@ func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Contex
 	}
 
 	activity.LastActivityTime = ac.LastChanged.Format(time.RFC850)
-	activity.ActivityCount = ac.LastSeenActivityCount
+	activity.ActivityCount = ac.GetActivityCount()
 
 	return ctx.JSON(http.StatusOK, activity)
 }
@@ -118,7 +118,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	c.activity.ForEach(func(transferRequestUUID string, ac *mcfs.ActivityCounter) {
 		activity := &TransferRequestStatus{
 			transferRequestUUID: transferRequestUUID,
-			ActivityCount:       ac.LastSeenActivityCount,
+			ActivityCount:       ac.GetActivityCount(),
 			LastActivityTime:    ac.LastChanged.Format(time.RFC850),
 			ActivityFound:       true,
 		}

@@ -1,7 +1,6 @@
 package mcfs
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,8 +10,8 @@ import (
 // LastSeenActivityCount and LastChanged are meant to be used by a monitor for tracking how
 // activity has changed.
 type ActivityCounter struct {
-	activityCount         int64
-	LastSeenActivityCount int64
+	activityCount         atomic.Uint64
+	LastSeenActivityCount uint64
 	LastChanged           time.Time
 }
 
@@ -25,8 +24,11 @@ func NewActivityCounter() *ActivityCounter {
 
 // IncrementActivityCount atomically updates the activityCount
 func (c *ActivityCounter) IncrementActivityCount() {
-	fmt.Println("IncrementActivityCount")
-	atomic.AddInt64(&(c.activityCount), 1)
+	c.activityCount.Add(1)
+}
+
+func (c *ActivityCounter) GetActivityCount() uint64 {
+	return c.activityCount.Load()
 }
 
 type ActivityCounterMonitor struct {
