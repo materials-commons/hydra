@@ -45,15 +45,13 @@ func (l *ContextLogger) RemoveLoggingContext(ctx string) {
 func (l *ContextLogger) SetLevel(ctx string, level log.Level) (log.Level, error) {
 	switch ctx {
 	case GlobalLoggerCtx:
-		previousLevel := l.GlobalLogger.Level
 		l.GlobalLogger.Level = level
-		return previousLevel, nil
+		return level, nil
 	default:
 		clogger := l.getContextLogger(ctx)
 		if clogger != nil {
-			previousLevel := clogger.Level
 			clogger.Level = level
-			return previousLevel, nil
+			return level, nil
 		}
 
 		return log.InfoLevel, fmt.Errorf("no such ctx %s", ctx)
