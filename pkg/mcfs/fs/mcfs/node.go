@@ -2,6 +2,7 @@ package mcfs
 
 import (
 	"context"
+	"fmt"
 	"hash/fnv"
 	"os"
 	"os/user"
@@ -284,15 +285,18 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	}
 
 	if omode == syscall.O_WRONLY || omode == syscall.O_RDWR {
+		fmt.Println("omode == O_WRONLY || omode == O_RDWR")
 		if isNewFile {
+			fmt.Println("isNewFile")
 			flags = flags &^ syscall.O_CREAT
 		}
 	}
 
 	filePath := f.ToUnderlyingFilePath(n.RootData.mcfsRoot)
+	clog.Global().Debugf("call syscall.Open (%s) with flags (%v) %s\n", path, flags, filePath)
 	fd, err := syscall.Open(filePath, int(flags), 0755)
 	if err != nil {
-		clog.Global().Debugf("syscall.Open (%s) %s: %s\n", path, filePath, err)
+		clog.Global().Debugf("syscall.Open (%s) (%v) %s: %s\n", path, flags, filePath, err)
 		return nil, 0, fs.ToErrno(err)
 	}
 

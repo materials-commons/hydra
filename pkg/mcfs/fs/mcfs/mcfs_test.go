@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -17,6 +16,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFlags(t *testing.T) {
+	flagsForAppend := 33793
+
+	topFlagsMask := 0x00000001
+
+	fmt.Println("flagsForAppend & topFlagsMask =", flagsForAppend&topFlagsMask)
+	fmt.Println("O_RDONLY & topFlagsMask =", syscall.O_RDONLY&topFlagsMask)
+	fmt.Println("O_RDWR & topFlagsMask =", syscall.O_RDWR&topFlagsMask)
+	fmt.Println("O_WRONLY & topFlagsMask =", syscall.O_WRONLY&topFlagsMask)
+
+	if flagSet(flagsForAppend, syscall.O_APPEND) {
+		fmt.Println("flagsForAppend has O_APPEND set")
+	}
+
+	if flagSet(flagsForAppend, syscall.O_RDONLY) {
+		fmt.Println("flagsForAppend O_RDONLY set")
+	}
+
+	flagsForWrite := 32769
+
+	if flagSet(flagsForWrite, syscall.O_APPEND) {
+		fmt.Println("flagsForWrite has O_APPEND set")
+	}
+
+	if flagSet(flagsForWrite, syscall.O_RDONLY) {
+		fmt.Println("flagsForWrite O_RDONLY set")
+	}
+}
 
 func TestListingTransferRequestProjects(t *testing.T) {
 	tc := newTestCase(t, &fsTestOptions{})
@@ -486,21 +514,21 @@ func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
 	require.NoError(t, err)
 
 	// Stored by transfer request path
-	activityCounter, found := tc.factory.activityCounterFactory.activityCounters[filepath.Join("/", tc.transferRequest.UUID)]
+	activityCounter, found := tc.factory.activityCounterMonitor.activityCounters[filepath.Join("/", tc.transferRequest.UUID)]
 	require.True(t, found)
 
-	count := atomic.LoadInt64(&(activityCounter.activityCount))
-	require.Equal(t, int64(1), count)
+	count := activityCounter.GetActivityCount()
+	require.Equal(t, uint64(1), count)
 
 	_, _ = io.WriteString(fh, "world")
-	count = atomic.LoadInt64(&(activityCounter.activityCount))
-	require.Equal(t, int64(2), count)
+	count = activityCounter.GetActivityCount()
+	require.Equal(t, uint64(2), count)
 	require.NoError(t, fh.Close())
 
 	_, err = os.ReadFile(path)
 	require.NoErrorf(t, err, "Got error opening for truncate: %s", err)
-	count = atomic.LoadInt64(&(activityCounter.activityCount))
-	require.Equal(t, int64(3), count)
+	count = activityCounter.GetActivityCount()
+	require.Equal(t, uint64(3), count)
 }
 
 func TestFileOpenAppend(t *testing.T) {
