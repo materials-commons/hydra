@@ -68,7 +68,8 @@ func (s *GormTransferRequestFileStor) GetTransferRequestFileByPathForTransferReq
 	}
 
 	var transferRequestFile mcmodel.TransferRequestFile
-	err = s.db.Where("transfer_request_id = ?", transferRequest.ID).
+	err = s.db.Preload("File.Directory").
+		Where("transfer_request_id = ?", transferRequest.ID).
 		Where("directory_id = ?", dir.ID).
 		Where("name = ?", fileName).
 		First(&transferRequestFile).Error
