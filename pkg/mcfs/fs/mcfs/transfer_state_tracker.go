@@ -148,7 +148,7 @@ func (tracker *TransferStateTracker) WithLockHeld(transferRequestKey, path strin
 // Store grabs the mutex and stores the entry. It returns false if an
 // entry already existed (and doesn't update it), otherwise it returns
 // true and adds the path and a new AccessedFileState to the tracker.
-func (tracker *TransferStateTracker) Store(transferRequestKey, path string, file *mcmodel.File, state string) bool {
+func (tracker *TransferStateTracker) Store(transferRequestKey, path string, file *mcmodel.File, state string) (bool, *AccessedFileState) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
@@ -164,7 +164,7 @@ func (tracker *TransferStateTracker) Store(transferRequestKey, path string, file
 	if _, ok := transferRequestState.AccessedFileStates[path]; ok {
 		// An entry already exists. Don't create a new one
 		// and signal this case by returning false.
-		return false
+		return false, nil
 	}
 
 	// If we are here then path was not found. Create a new entry and
@@ -177,7 +177,7 @@ func (tracker *TransferStateTracker) Store(transferRequestKey, path string, file
 
 	transferRequestState.AccessedFileStates[path] = fileState
 
-	return true
+	return true, fileState
 }
 
 // GetFile will return the &mcmodel.File entry in the AccessedFileState if path
