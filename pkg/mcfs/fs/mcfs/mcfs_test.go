@@ -267,6 +267,57 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestHashIsCorrectlyComputed(t *testing.T) {
+	tc := newTestCase(t, &fsTestOptions{})
+	require.NotNil(t, tc)
+	fpath := tc.makeTransferRequestPath("create.txt")
+
+	// First write to a brand new file
+	fh, err := os.Create(fpath)
+	require.NoErrorf(t, err, "Unexpected error on os.Create(%s): %s", fpath, err)
+	str := "hello world"
+	numBytes, err := io.WriteString(fh, str)
+	require.NoError(t, fh.Close())
+	require.Equalf(t, numBytes, len(str), "Wrong length expected %d, got %d", numBytes, len(str))
+	hasher := md5.New()
+	_, _ = io.Copy(hasher, strings.NewReader(str))
+	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
+	f, err := tc.stors.FileStor.GetFileByPath(tc.proj.ID, "/create.txt")
+	require.NoErrorf(t, err, "Failed getting file")
+	require.True(t, f.Current)
+	require.Equal(t, checksum, f.Checksum)
+
+	// Ok, now lets append to the file, and check that the checksum is correct
+	fh, err = os.OpenFile(fpath, os.O_RDWR|os.O_APPEND, 0755)
+	require.NoError(t, err)
+	_, err = io.WriteString(fh, "world")
+	require.NoError(t, err)
+	require.NoError(t, fh.Close())
+	hasher = md5.New()
+	_, _ = io.Copy(hasher, strings.NewReader(fmt.Sprintf("%s%s", str, "world")))
+	checksum = fmt.Sprintf("%x", hasher.Sum(nil))
+	f, err = tc.stors.FileStor.GetFileByPath(tc.proj.ID, "/create.txt")
+
+	require.NoErrorf(t, err, "Failed getting file")
+	require.True(t, f.Current)
+	require.Equal(t, checksum, f.Checksum)
+
+	// Finally lets open the file for writing, thus destroying its contents and writing
+	// new contents, and check that the hash gets set correctly.
+	fh, err = os.OpenFile(fpath, os.O_RDWR, 0755)
+	require.NoError(t, err)
+	_, err = io.WriteString(fh, "world")
+	require.NoError(t, err)
+	require.NoError(t, fh.Close())
+	hasher = md5.New()
+	_, _ = io.Copy(hasher, strings.NewReader("world"))
+	checksum = fmt.Sprintf("%x", hasher.Sum(nil))
+	f, err = tc.stors.FileStor.GetFileByPath(tc.proj.ID, "/create.txt")
+	require.NoErrorf(t, err, "Failed getting file")
+	require.True(t, f.Current)
+	require.Equal(t, checksum, f.Checksum)
+}
+
 func TestOpen(t *testing.T) {
 	tc := newTestCase(t, &fsTestOptions{})
 	require.NotNil(t, tc)
