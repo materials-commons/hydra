@@ -263,7 +263,8 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	return n.NewInode(ctx, node, stableAttr), fhandle, 0, fs.OK
 }
 
-// Open will open an existing file.
+// Open will open an existing file. It will create a new file if the underlying mcfsapi.Open indicates
+// a new version was created.
 func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	defer func() {
 		if r := recover(); r != nil {
