@@ -56,20 +56,6 @@ type AccessedFileState struct {
 	HashInvalid bool
 
 	FileState string
-
-	// Sequence is used when hashInvalid is set to true. The sequence is used by
-	// the thread that is recomputing a file hash by reading the entire file.
-	// It's possible that a process could seek into a file, causing hashInvalid
-	// to be set to true. Then close the file, which causes a thread to launch
-	// to compute the checksum. Then while the thread is computing the checksum
-	// it could reopen the file and start writing to it again, then close it
-	// which would cause a second thread to launch to compute the checksum. The
-	// sequence is used to determine if a thread should update the checksum. If
-	// a thread completes computing the checksum but finds that the sequence has
-	// changed from the one passed to the thread then it knows another thread is
-	// computing a more up-to-date checksum. Only the thread that has a sequence
-	// matching the sequence in the AccessedFileState entry will update the checksum.
-	Sequence int
 }
 
 func NewTransferStateTracker() *TransferStateTracker {

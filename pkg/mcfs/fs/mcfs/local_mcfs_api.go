@@ -52,6 +52,37 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 	return f, err
 }
 
+// createNewFile will create a new mcmodel.File entry for the directory associated
+// with the Node. It will create the directory where the file can be written to.
+func (fsapi *LocalMCFSApi) createNewFile(p mcpath.Path) (*mcmodel.File, error) {
+	dir, err := fsapi.stors.FileStor.GetDirByPath(p.ProjectID(), filepath.Dir(p.ProjectPath()))
+	if err != nil {
+		return nil, err
+	}
+
+	tr, err := fsapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(p.ProjectID(), p.UserID())
+	if err != nil {
+		return nil, err
+	}
+
+	name := filepath.Base(p.ProjectPath())
+
+	file := &mcmodel.File{
+		ProjectID:   p.ProjectID(),
+		Name:        name,
+		DirectoryID: dir.ID,
+		Size:        0,
+		Checksum:    "",
+		MimeType:    determineMimeType(name),
+		OwnerID:     p.UserID(),
+		Current:     false,
+	}
+
+	return fsapi.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
+}
+
+// Open will open a file. It will create a new version if opening a new file for write. An open in Append
+// mode should only happen after a new file has been created (ie, a TransferRequestFile created in the database).
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
 	parsedPath, err := fsapi.pathParser.Parse(path)
 	if err != nil {
@@ -66,12 +97,13 @@ func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewF
 	case isReadonly(flags):
 		return fsapi.openReadonly(path, flags, parsedPath)
 	case flagSet(flags, syscall.O_APPEND):
-		return fsapi.openWithAppend(path, flags, parsedPath)
+		return fsapi.openForAppend(path, flags, parsedPath)
 	default:
-		return fsapi.openWithWrite(path, flags, parsedPath)
+		return fsapi.openForWrite(path, flags, parsedPath)
 	}
 }
 
+// openReadonly handles requests for opens that will only read the file.
 func (fsapi *LocalMCFSApi) openReadonly(path string, _ int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
 	key := parsedPath.TransferKey()
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s readonly", path)
@@ -80,7 +112,9 @@ func (fsapi *LocalMCFSApi) openReadonly(path string, _ int, parsedPath mcpath.Pa
 	return f, false, err
 }
 
-func (fsapi *LocalMCFSApi) openWithAppend(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
+// openForAppend means the file is being opened with the O_APPEND mode set. It will reconstruct the file state, including
+// the hash if the internal state is missing.
+func (fsapi *LocalMCFSApi) openForAppend(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
 	key := parsedPath.TransferKey()
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s withAppend", path)
 
@@ -125,7 +159,10 @@ func (fsapi *LocalMCFSApi) openWithAppend(path string, flags int, parsedPath mcp
 	return transferRequestFile.File, false, nil
 }
 
-func (fsapi *LocalMCFSApi) openWithWrite(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
+// openForWrite opens a file in O_WRONLY or O_RDWR mode. It checks if there is existing state and resets the hash
+// if there is. This happens because a write mode is likely overwriting file contents. If this is the first time
+// the file is being opened then a new version will be created.
+func (fsapi *LocalMCFSApi) openForWrite(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
 	key := parsedPath.TransferKey()
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s withAppend", path)
 
@@ -139,7 +176,7 @@ func (fsapi *LocalMCFSApi) openWithWrite(path string, flags int, parsedPath mcpa
 
 	// If we are here then there was no transfer state. So, lets see if we can
 	// find one. It's possible there is no TransferRequestFile. This happens
-	// when a open for write request is made for an existing project file. In
+	// when an open for write request is made for an existing project file. In
 	// that case we need to create a new version.
 
 	// First lets do the simple case and check if there is an existing TransferRequestFile.
@@ -147,7 +184,8 @@ func (fsapi *LocalMCFSApi) openWithWrite(path string, flags int, parsedPath mcpa
 	projPath := parsedPath.ProjectPath()
 	transferRequestFile, err := fsapi.stors.TransferRequestFileStor.GetTransferRequestFileByPathForTransferRequest(projPath, transferRequest)
 	if err == nil {
-		// Found a transferRequestFile. So let's create a new state for it and return its mcmodel.File
+		// Found a transferRequestFile. So let's create a new state for it and then use the mcmodel.File that
+		// is referenced by the TransferRequestFile.
 		fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, FileStateOpen)
 		return transferRequestFile.File, false, nil
 	}
@@ -159,36 +197,7 @@ func (fsapi *LocalMCFSApi) openWithWrite(path string, flags int, parsedPath mcpa
 		fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
 	}
 
-	return f, false, err
-}
-
-// createNewFile will create a new mcmodel.File entry for the directory associated
-// with the Node. It will create the directory where the file can be written to.
-func (fsapi *LocalMCFSApi) createNewFile(p mcpath.Path) (*mcmodel.File, error) {
-	dir, err := fsapi.stors.FileStor.GetDirByPath(p.ProjectID(), filepath.Dir(p.ProjectPath()))
-	if err != nil {
-		return nil, err
-	}
-
-	tr, err := fsapi.stors.TransferRequestStor.GetTransferRequestForProjectAndUser(p.ProjectID(), p.UserID())
-	if err != nil {
-		return nil, err
-	}
-
-	name := filepath.Base(p.ProjectPath())
-
-	file := &mcmodel.File{
-		ProjectID:   p.ProjectID(),
-		Name:        name,
-		DirectoryID: dir.ID,
-		Size:        0,
-		Checksum:    "",
-		MimeType:    determineMimeType(name),
-		OwnerID:     p.UserID(),
-		Current:     false,
-	}
-
-	return fsapi.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
+	return f, true, err
 }
 
 // createNewFileVersion creates a new file version if there isn't already a version of the file
@@ -244,10 +253,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	checksum := ""
 	var err error
 	if fileState.HashInvalid {
-		var sequence int
-		fileState.Sequence = fileState.Sequence + 1
-		sequence = fileState.Sequence
-		go fsapi.computeAndUpdateChecksum(path, fileState.File, size, sequence)
+		fsapi.computeAndUpdateChecksum(path, fileState, size)
 	} else {
 		checksum = fmt.Sprintf("%x", fileState.Hasher.Sum(nil))
 		err = fsapi.stors.TransferRequestStor.MarkFileReleased(fileState.File, checksum, parsedPath.ProjectID(), int64(size))
@@ -268,8 +274,17 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	return nil
 }
 
-func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File, size uint64, sequence int) {
-	hasher := md5.New()
+// computeAndUpdateChecksum will recompute a files checksum when the current state of the checksum is marked as
+// invalid. An invalid state occurs when the filesystem no longer knows the file state. This happens when using
+// truncate or seek, as the state of the hash was built up over the previous states.
+//
+// This function will create a new Hasher in the fileState and then read the existing file to determine the hash.
+// It then set HashInvalid to false, so that new writes (appends) to the file can use the existing state. Note
+// that for
+func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, fileState *AccessedFileState, size uint64) {
+	fileState.Hasher = md5.New()
+	f := fileState.File
+
 	fh, err := os.Open(f.ToUnderlyingFilePath(fsapi.mcfsRoot))
 	if err != nil {
 		// log that we couldn't compute the hash
@@ -278,22 +293,16 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 
 	defer fh.Close()
 
-	_, _ = io.Copy(hasher, fh)
-	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
+	_, _ = io.Copy(fileState.Hasher, fh)
+	checksum := fmt.Sprintf("%x", fileState.Hasher.Sum(nil))
 
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 
 	fsapi.transferStateTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(fileState *AccessedFileState) {
-		if fileState.Sequence == sequence {
-			// This check ensures that another thread wasn't kicked off to compute the checksum. This could
-			// happen if the file was closed with an invalid checksum, a thread was kicked off, and then while
-			// the thread was computing the checksum, another open/close happened that kicked off another
-			// checksum computation. If the sequence is equal, then this is the thread that needs to update
-			// the checksum and size.
-			if err := fsapi.stors.FileStor.UpdateMetadataForFileAndProject(f, checksum, int64(size)); err != nil {
-				// log that we couldn't update the database
-				return
-			}
+		fileState.HashInvalid = false
+		if err := fsapi.stors.FileStor.UpdateMetadataForFileAndProject(f, checksum, int64(size)); err != nil {
+			// log that we couldn't update the database
+			return
 		}
 	})
 }
