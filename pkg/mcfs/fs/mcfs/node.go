@@ -2,7 +2,6 @@ package mcfs
 
 import (
 	"context"
-	"fmt"
 	"hash/fnv"
 	"os"
 	"os/user"
@@ -285,9 +284,7 @@ func (n *Node) Open(_ context.Context, flags uint32) (fh fs.FileHandle, fuseFlag
 	}
 
 	if omode == syscall.O_WRONLY || omode == syscall.O_RDWR {
-		fmt.Println("omode == O_WRONLY || omode == O_RDWR")
 		if isNewFile {
-			fmt.Println("isNewFile")
 			flags = flags &^ syscall.O_CREAT
 		}
 	}
