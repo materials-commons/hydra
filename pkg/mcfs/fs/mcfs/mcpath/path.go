@@ -26,6 +26,7 @@ type Path interface {
 	FullPath() string
 	TransferBase() string
 	PathType() PathType
+	TransferRequest() *mcmodel.TransferRequest
 	Lookup() (*mcmodel.File, error)
 	List() ([]mcmodel.File, error)
 }

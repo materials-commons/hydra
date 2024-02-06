@@ -40,6 +40,7 @@ type ProjectStor interface {
 type TransferRequestFileStor interface {
 	DeleteTransferFileRequestByPath(ownerID, projectID int, path string) error
 	GetTransferFileRequestByPath(ownerID, projectID int, path string) (*mcmodel.TransferRequestFile, error)
+	GetTransferRequestFileByPathForTransferRequest(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.TransferRequestFile, error)
 	DeleteTransferRequestFile(transferRequestFile *mcmodel.TransferRequestFile) error
 }
 

@@ -63,6 +63,13 @@ func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewF
 		return f, false, nil
 	}
 
+	transferRequestFile, err := fsapi.stors.TransferRequestFileStor.GetTransferRequestFileByPathForTransferRequest(parsedPath.ProjectPath(), parsedPath.TransferRequest())
+	if err != nil {
+
+	}
+
+	_ = transferRequestFile
+
 	// If we are here then there is no state for the file. However there could be a TransferRequestFile for it. This
 	// happens when the file system is shutdown and the upload session hasn't been closed out.
 	//fsapi.stors.TransferRequestStor.GetFileByPath()

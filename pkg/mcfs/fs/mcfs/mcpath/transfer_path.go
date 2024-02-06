@@ -62,6 +62,10 @@ func (p *TransferPath) PathType() PathType {
 	return p.pathType
 }
 
+func (p *TransferPath) TransferRequest() *mcmodel.TransferRequest {
+	return p.transferRequest
+}
+
 func (p *TransferPath) Lookup() (*mcmodel.File, error) {
 	switch p.pathType {
 	case BadPathType:

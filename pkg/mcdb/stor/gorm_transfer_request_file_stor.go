@@ -57,6 +57,24 @@ func (s *GormTransferRequestFileStor) GetTransferFileRequestByPath(ownerID, proj
 	return &transferRequestFile, err
 }
 
+func (s *GormTransferRequestFileStor) GetTransferRequestFileByPathForTransferRequest(path string, transferRequest *mcmodel.TransferRequest) (*mcmodel.TransferRequestFile, error) {
+	dirPath := filepath.Dir(path)
+	fileName := filepath.Base(path)
+
+	dir, err := s.fileStore.GetDirByPath(transferRequest.ProjectID, dirPath)
+	if err != nil {
+		log.Errorf("Unable to find directory for path %s in project %d: %s", dirPath, transferRequest.ProjectID, err)
+		return nil, err
+	}
+
+	var transferRequestFile mcmodel.TransferRequestFile
+	err = s.db.Where("transfer_request_id = ?", transferRequest.ID).
+		Where("directory_id = ?", dir.ID).
+		Where("name = ?", fileName).
+		First(&transferRequestFile).Error
+	return &transferRequestFile, err
+}
+
 func (s *GormTransferRequestFileStor) DeleteTransferRequestFile(transferRequestFile *mcmodel.TransferRequestFile) error {
 	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Delete(transferRequestFile).Error

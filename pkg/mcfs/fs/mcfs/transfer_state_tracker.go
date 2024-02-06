@@ -191,6 +191,16 @@ func (tracker *TransferStateTracker) GetFile(transferRequestKey, path string) *m
 	return nil
 }
 
+func (tracker *TransferStateTracker) GetFileWithHashReset(transferRequestKey, path string) *mcmodel.File {
+	fileEntry := tracker.Get(transferRequestKey, path)
+	if fileEntry != nil {
+		fileEntry.Hasher = md5.New()
+		return fileEntry.File
+	}
+
+	return nil
+}
+
 // Get will return the AccessedFileState entry if path exists. Otherwise, it will return nil.
 func (tracker *TransferStateTracker) Get(transferRequestKey, path string) *AccessedFileState {
 	tracker.mu.Lock()

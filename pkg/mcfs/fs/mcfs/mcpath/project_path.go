@@ -78,6 +78,10 @@ func (p *ProjectPath) TransferBase() string {
 	return p.transferBase
 }
 
+func (p *ProjectPath) TransferRequest() *mcmodel.TransferRequest {
+	return nil
+}
+
 func (p *ProjectPath) PathType() PathType {
 	return p.pathType
 }
