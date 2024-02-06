@@ -53,53 +53,113 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 }
 
 func (fsapi *LocalMCFSApi) Open(path string, flags int) (f *mcmodel.File, isNewFile bool, err error) {
-	parsedPath, _ := fsapi.pathParser.Parse(path)
+	parsedPath, err := fsapi.pathParser.Parse(path)
+	if err != nil {
+		clog.Global().Debugf("LocalMCFSApi Open failed on pathParser.Parse %s/%v: %s", path, flags, err)
+		return nil, false, err
+	}
+
 	key := parsedPath.TransferKey()
-	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s", path)
-	f = fsapi.transferStateTracker.GetFile(parsedPath.TransferKey(), parsedPath.ProjectPath())
+	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s/%v", path, flags)
+
+	switch {
+	case isReadonly(flags):
+		return fsapi.openReadonly(path, flags, parsedPath)
+	case flagSet(flags, syscall.O_APPEND):
+		return fsapi.openWithAppend(path, flags, parsedPath)
+	default:
+		return fsapi.openWithWrite(path, flags, parsedPath)
+	}
+}
+
+func (fsapi *LocalMCFSApi) openReadonly(path string, _ int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
+	key := parsedPath.TransferKey()
+	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s readonly", path)
+	f, err = fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), parsedPath.ProjectPath())
+
+	return f, false, err
+}
+
+func (fsapi *LocalMCFSApi) openWithAppend(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
+	key := parsedPath.TransferKey()
+	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s withAppend", path)
+
+	// Attempt to find the state and reset the hash.
+	f = fsapi.transferStateTracker.GetFile(key, parsedPath.ProjectPath())
 	if f != nil {
-		// Existing file found
-		clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s found existing in transferStateTracker: %#v", path, f)
+		// We found an existing state, so there is no recovery that needs to be done.
 		return f, false, nil
 	}
 
-	transferRequestFile, err := fsapi.stors.TransferRequestFileStor.GetTransferRequestFileByPathForTransferRequest(parsedPath.ProjectPath(), parsedPath.TransferRequest())
+	// If we are here then an attempt was made to open an existing file in append mode, but there is
+	// no state be tracked. This happens when the file system has been restarted. There should be an
+	// existing TransferRequestFile. We can look that up and rebuild the state. Since this being opened
+	// in append mode we will also need to recompute the hash up to this point. For large files this
+	// could take a bit of time to re-read the whole file and compute the hash over the existing bytes.
+
+	transferRequest := parsedPath.TransferRequest()
+	projPath := parsedPath.ProjectPath()
+	transferRequestFile, err := fsapi.stors.TransferRequestFileStor.GetTransferRequestFileByPathForTransferRequest(projPath, transferRequest)
 	if err != nil {
-
+		// A request was made to open a file and there is no TransferRequestFile. This shouldn't happen!!
+		clog.UsingCtx(key).Errorf("Open withAppend on path %s, no TransferRequestFile found: %s", path, err)
+		return nil, false, err
 	}
 
-	_ = transferRequestFile
+	// Found an existing transferRequestFile, so lets build out new state to track it.
 
-	// If we are here then there is no state for the file. However there could be a TransferRequestFile for it. This
-	// happens when the file system is shutdown and the upload session hasn't been closed out.
-	//fsapi.stors.TransferRequestStor.GetFileByPath()
+	// Create the state
+	_, state := fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, FileStateOpen)
 
-	//switch {
-	//case flagSet(flags, syscall.O_APPEND):
-	//	return fsapi.handleOpenForAppend(path, flags, f)
-	//}
-
-	if flagSet(flags, syscall.O_APPEND) {
-
+	// Recompute hash using the hasher that was created when the new state was created
+	fh, err := os.Open(transferRequestFile.File.ToUnderlyingFilePath(fsapi.mcfsRoot))
+	if err != nil {
+		// This shouldn't happen. If it does we should probably remove the state...
+		// TODO: What to do with state when this error occurs.
+		return nil, false, err
 	}
 
-	if flags == syscall.O_RDONLY {
-		// If we are here then this is a request to **ONLY** open file for read. The file
-		// needs to exist.
-		clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s readonly", path)
-		f, err = fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), parsedPath.ProjectPath())
-		return f, false, err
+	defer fh.Close()
+	_, _ = io.Copy(state.Hasher, fh)
+
+	return transferRequestFile.File, false, nil
+}
+
+func (fsapi *LocalMCFSApi) openWithWrite(path string, flags int, parsedPath mcpath.Path) (f *mcmodel.File, isNewFile bool, err error) {
+	key := parsedPath.TransferKey()
+	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s withAppend", path)
+
+	// Request to open the file for write, but not append. In this case we reset
+	// the hash state.
+	f = fsapi.transferStateTracker.GetFileWithHashReset(key, parsedPath.ProjectPath())
+	if f != nil {
+		// We found an existing state, so there is no recovery that needs to be done.
+		return f, false, nil
 	}
 
-	// If we are here then the file wasn't found in the list of already opened
-	// files, so we need to create the file.
+	// If we are here then there was no transfer state. So, lets see if we can
+	// find one. It's possible there is no TransferRequestFile. This happens
+	// when a open for write request is made for an existing project file. In
+	// that case we need to create a new version.
+
+	// First lets do the simple case and check if there is an existing TransferRequestFile.
+	transferRequest := parsedPath.TransferRequest()
+	projPath := parsedPath.ProjectPath()
+	transferRequestFile, err := fsapi.stors.TransferRequestFileStor.GetTransferRequestFileByPathForTransferRequest(projPath, transferRequest)
+	if err == nil {
+		// Found a transferRequestFile. So let's create a new state for it and return its mcmodel.File
+		fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, FileStateOpen)
+		return transferRequestFile.File, false, nil
+	}
+
+	// No TransferRequestFile, so we need to create a new file version.
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s create new file version", path)
 	f, err = fsapi.createNewFileVersion(parsedPath)
 	if err != nil {
 		fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
 	}
 
-	return f, true, err
+	return f, false, err
 }
 
 // createNewFile will create a new mcmodel.File entry for the directory associated
@@ -216,6 +276,8 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, f *mcmodel.File
 		return
 	}
 
+	defer fh.Close()
+
 	_, _ = io.Copy(hasher, fh)
 	checksum := fmt.Sprintf("%x", hasher.Sum(nil))
 
@@ -309,6 +371,20 @@ func (fsapi *LocalMCFSApi) FTruncate(path string, size uint64) (error, *syscall.
 
 func flagSet(flags, flagToCheck int) bool {
 	return flags&flagToCheck == flagToCheck
+}
+
+func isReadonly(flags int) bool {
+	switch {
+	case flagSet(flags, syscall.O_WRONLY):
+		return false
+	case flagSet(flags, syscall.O_RDWR):
+		return false
+	default:
+		// For open one of O_WRONLY, O_RDWR or O_RDONLY must be set. If
+		// we are here then neither O_WRONLY nor O_RDWR was set, so O_RDONLY
+		// must be true.
+		return true
+	}
 }
 
 // determineMimeType ... Move this into a utility package.
