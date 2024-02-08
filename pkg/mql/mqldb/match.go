@@ -130,12 +130,20 @@ func stringsMatchIgnoringCase(val1, val2 string) bool {
 	return strings.Compare(lvVal1, lvVal2) == 0
 }
 
+func substrMatchIgnoringCase(what, substr string) bool {
+	whatlc := strings.ToLower(what)
+	substrlc := strings.ToLower(substr)
+	return strings.Contains(whatlc, substrlc)
+}
+
 func evalStringMatch(val1, val2, operation string) bool {
 	switch operation {
 	case "=":
 		return stringsMatchIgnoringCase(val1, val2)
 	case "<>":
 		return !stringsMatchIgnoringCase(val1, val2)
+	case "substr":
+		return substrMatchIgnoringCase(val1, val2)
 	default:
 		return false
 	}
