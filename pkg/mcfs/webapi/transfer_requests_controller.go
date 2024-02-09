@@ -101,7 +101,7 @@ func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Contex
 		activity.Status = TransferRequestActive
 	}
 
-	activity.LastActivityTime = ac.LastChanged.Format(time.RFC850)
+	activity.LastActivityTime = ac.GetLastChanged().Format(time.RFC850)
 	activity.ActivityCount = ac.GetActivityCount()
 
 	return ctx.JSON(http.StatusOK, activity)
@@ -119,7 +119,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 		activity := &TransferRequestStatus{
 			transferRequestUUID: transferRequestUUID,
 			ActivityCount:       ac.GetActivityCount(),
-			LastActivityTime:    ac.LastChanged.Format(time.RFC850),
+			LastActivityTime:    ac.GetLastChanged().Format(time.RFC850),
 			ActivityFound:       true,
 		}
 		transferRequests[activity.transferRequestUUID] = activity

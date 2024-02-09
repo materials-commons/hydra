@@ -1,9 +1,12 @@
 package mcfs
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/materials-commons/hydra/pkg/ctx"
 )
 
 // ActivityCounter tracks activity against an object. It atomically updates activityCount. The
@@ -11,14 +14,17 @@ import (
 // activity has changed.
 type ActivityCounter struct {
 	activityCount         atomic.Uint64
-	LastSeenActivityCount uint64
-	LastChanged           time.Time
+	lastSeenActivityCount atomic.Uint64
+	lastChanged           time.Time
+
+	// Protects LastChanged
+	mu sync.RWMutex
 }
 
 // NewActivityCounter creates a new ActivityCounter with LastChanged set to the current time.
 func NewActivityCounter() *ActivityCounter {
 	return &ActivityCounter{
-		LastChanged: time.Now(),
+		lastChanged: time.Now(),
 	}
 }
 
@@ -31,54 +37,113 @@ func (c *ActivityCounter) GetActivityCount() uint64 {
 	return c.activityCount.Load()
 }
 
+func (c *ActivityCounter) GetLastSeenActivityCount() uint64 {
+	return c.lastSeenActivityCount.Load()
+}
+
+func (c *ActivityCounter) SetLastSeenActivityCount(val uint64) {
+	c.lastSeenActivityCount.Store(val)
+}
+
+func (c *ActivityCounter) GetLastChanged() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.lastChanged
+}
+
+func (c *ActivityCounter) SetLastChanged(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.lastChanged = t
+}
+
+type ExpiredActivityHandlerFN func(activityKey string)
+
 type ActivityCounterMonitor struct {
-	activityCounters   map[string]*ActivityCounter
-	inactivityDuration time.Duration
-	mu                 sync.Mutex
+	activityCounters       sync.Map
+	inactivityDuration     time.Duration
+	expiredActivityHandler ExpiredActivityHandlerFN
 }
 
 func NewActivityCounterMonitor(inactivityDuration time.Duration) *ActivityCounterMonitor {
 	return &ActivityCounterMonitor{
-		activityCounters:   make(map[string]*ActivityCounter),
 		inactivityDuration: inactivityDuration,
 	}
 }
 
-func (m *ActivityCounterMonitor) Start() {
+func (m *ActivityCounterMonitor) Start(ctx context.Context) {
+	for {
+		if canceled := m.loadAndCheckEachActivityCounter(ctx); canceled {
+			break
+		}
 
+		select {
+		case <-ctx.Done():
+			break
+		case <-time.After(20 * time.Second):
+		}
+	}
+}
+
+func (m *ActivityCounterMonitor) loadAndCheckEachActivityCounter(c context.Context) bool {
+	isDone := false
+	now := time.Now()
+
+	m.activityCounters.Range(func(key, value any) bool {
+		if ctx.IsDone(c) {
+			isDone = true
+			return false
+		}
+
+		ac, ok := value.(*ActivityCounter)
+		if !ok {
+			return true
+		}
+		currentActivityCount := ac.GetActivityCount()
+		lastSeenActivityCount := ac.GetLastSeenActivityCount()
+
+		switch {
+		case currentActivityCount == lastSeenActivityCount:
+			lastChanged := ac.GetLastChanged()
+			allowedInactive := lastChanged.Add(m.inactivityDuration)
+			if now.After(allowedInactive) {
+				m.expiredActivityHandler(key.(string))
+			}
+
+		default:
+			ac.SetLastChanged(now)
+			ac.SetLastSeenActivityCount(currentActivityCount)
+		}
+
+		return true
+	})
+
+	return isDone
 }
 
 func (m *ActivityCounterMonitor) GetOrCreateActivityCounter(key string) *ActivityCounter {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	activityCounter := NewActivityCounter()
+	ac, _ := m.activityCounters.LoadOrStore(key, activityCounter)
 
-	activityCounter, found := m.activityCounters[key]
-	if !found {
-		activityCounter = NewActivityCounter()
-		m.activityCounters[key] = activityCounter
-	}
-
-	return activityCounter
+	return ac.(*ActivityCounter)
 }
 
 func (m *ActivityCounterMonitor) GetActivityCounter(key string) *ActivityCounter {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	activityCounter, found := m.activityCounters[key]
-
+	activityCounter, found := m.activityCounters.Load(key)
 	if !found {
 		return nil
 	}
 
-	return activityCounter
+	return activityCounter.(*ActivityCounter)
 }
 
 func (m *ActivityCounterMonitor) ForEach(fn func(key string, ac *ActivityCounter)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for key, activityCounter := range m.activityCounters {
-		fn(key, activityCounter)
-	}
+	m.activityCounters.Range(func(key, value any) bool {
+		kstr := key.(string)
+		ac := value.(*ActivityCounter)
+		fn(kstr, ac)
+		return true
+	})
 }
