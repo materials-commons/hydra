@@ -3,6 +3,7 @@ package mcfs
 import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 )
 
@@ -18,14 +19,14 @@ type FileHandleFactory interface {
 // an activity counter and a tracker for files that are or were opened.
 type MCFileHandlerFactory struct {
 	mcfsapi                MCFSApi
-	activityCounterMonitor *ActivityCounterMonitor
-	transferStateTracker   *TransferStateTracker
+	activityCounterMonitor *fsstate.ActivityCounterMonitor
+	transferStateTracker   *fsstate.TransferStateTracker
 	pathParser             mcpath.Parser
 }
 
 // NewMCFileHandlerFactory creates a new MCFileHandlerFactory.
-func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *TransferStateTracker, pathParser mcpath.Parser,
-	activityCounterMonitor *ActivityCounterMonitor) *MCFileHandlerFactory {
+func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *fsstate.TransferStateTracker, pathParser mcpath.Parser,
+	activityCounterMonitor *fsstate.ActivityCounterMonitor) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcfsapi:                mcfsapi,
 		activityCounterMonitor: activityCounterMonitor,

@@ -4,22 +4,20 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 
-	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 )
 
 type TransferPathParser struct {
-	mu               sync.Mutex
-	transferRequests map[string]*mcmodel.TransferRequest
-	stors            *stor.Stors
+	trCache *fsstate.TransferRequestCache
+	stors   *stor.Stors
 }
 
-func NewTransferPathParser(stors *stor.Stors) ParserReleaser {
+func NewTransferPathParser(stors *stor.Stors, trCache *fsstate.TransferRequestCache) ParserReleaser {
 	return &TransferPathParser{
-		transferRequests: make(map[string]*mcmodel.TransferRequest),
-		stors:            stors,
+		stors:   stors,
+		trCache: trCache,
 	}
 }
 
@@ -44,28 +42,11 @@ func (p *TransferPathParser) Parse(path string) (Path, error) {
 }
 
 func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID string) (Path, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if tr := p.transferRequests[transferUUID]; tr != nil {
-		transferPath := &TransferPath{
-			pathType:        ContextPathType,
-			projectPath:     "/",
-			fullPath:        path,
-			transferBase:    path,
-			transferRequest: tr,
-			stors:           p.stors,
-		}
-		return transferPath, nil
-	}
-
-	// transferUUID wasn't in p.transferRequests, so we need to look it up
-	tr, err := p.stors.TransferRequestStor.GetTransferRequestByUUID(transferUUID)
+	tr, err := p.trCache.GetTransferRequestByUUID(transferUUID)
 	if err != nil {
 		return &TransferPath{pathType: BadPathType}, err
 	}
 
-	p.transferRequests[transferUUID] = tr
 	transferPath := &TransferPath{
 		pathType:        ContextPathType,
 		projectPath:     "/",
@@ -74,14 +55,10 @@ func (p *TransferPathParser) handleTransferUUIDPath(path string, transferUUID st
 		transferRequest: tr,
 		stors:           p.stors,
 	}
-
 	return transferPath, nil
 }
 
 func (p *TransferPathParser) handleProjectPath(path string, pathParts []string) (Path, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	// A fully formed path looks as follows:
 	// pathParts[0] = ""
 	// pathParts[1] = transfer-uuid
@@ -90,9 +67,8 @@ func (p *TransferPathParser) handleProjectPath(path string, pathParts []string) 
 	// If we are here then the transfer-uuid needs to exist in p.transferRequests. If it doesn't
 	// then this is invalid. There is no need to go to the database because that look up should
 	// have already happened.
-	tr := p.transferRequests[pathParts[1]]
-	if tr == nil {
-		// This is an error because the transfer request uuid is not known
+	tr, err := p.trCache.GetTransferRequestByUUID(pathParts[1])
+	if err != nil {
 		return &TransferPath{pathType: BadPathType}, fmt.Errorf("unknown transfer request uuid %s", pathParts[1])
 	}
 
@@ -109,10 +85,8 @@ func (p *TransferPathParser) handleProjectPath(path string, pathParts []string) 
 	return transferPath, nil
 }
 
+// TODO: Can this be removed?
 func (p *TransferPathParser) Release(path string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	pathParts := strings.Split(path, "/")
 	// A fully formed path looks as follows:
 	// pathParts[0] = ""
@@ -124,6 +98,6 @@ func (p *TransferPathParser) Release(path string) {
 		return
 	}
 
-	transferUUID := pathParts[1]
-	delete(p.transferRequests, transferUUID)
+	//transferUUID := pathParts[1]
+	//delete(p.transferRequests, transferUUID)
 }

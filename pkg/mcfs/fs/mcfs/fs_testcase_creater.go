@@ -13,6 +13,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -57,7 +58,7 @@ type fsTestCase struct {
 	transferRequest *mcmodel.TransferRequest
 
 	// The transferStateTracker used in the test case
-	transferStateTracker *TransferStateTracker
+	transferStateTracker *fsstate.TransferStateTracker
 
 	// The factory for creating new MCFileHandles
 	factory *MCFileHandlerFactory
@@ -195,7 +196,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		t.Fatal(err)
 	}
 
-	tc.transferStateTracker = NewTransferStateTracker()
+	tc.transferStateTracker = fsstate.NewTransferStateTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
 	var pathParser mcpath.Parser
 	if opts.newPathParser != nil {
@@ -204,7 +205,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		pathParser = mcpath.NewTransferPathParser(stors)
 	}
 	mcapi := NewLocalMCFSApi(stors, tc.transferStateTracker, pathParser, opts.mcfsDir)
-	activityCounterMonitor := NewActivityCounterMonitor(time.Second * 2)
+	activityCounterMonitor := fsstate.NewActivityCounterMonitor(time.Second * 2)
 	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.transferStateTracker, pathParser, activityCounterMonitor)
 	tc.factory = newHandleFactory
 

@@ -11,6 +11,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 )
 
@@ -19,9 +20,9 @@ type MCFileHandle struct {
 	expectedOffset       int64
 	Path                 string
 	File                 *mcmodel.File
-	activityCounter      *ActivityCounter
+	activityCounter      *fsstate.ActivityCounter
 	mcfsapi              MCFSApi
-	transferStateTracker *TransferStateTracker
+	transferStateTracker *fsstate.TransferStateTracker
 	pathParser           mcpath.Parser
 	key                  string // The pathParser.TransferKey() to use for logging
 }
@@ -61,7 +62,7 @@ func (h *MCFileHandle) WithPathParser(p mcpath.Parser) *MCFileHandle {
 	return h
 }
 
-func (h *MCFileHandle) WithActivityCounter(activityCounter *ActivityCounter) *MCFileHandle {
+func (h *MCFileHandle) WithActivityCounter(activityCounter *fsstate.ActivityCounter) *MCFileHandle {
 	h.activityCounter = activityCounter
 	return h
 }
@@ -71,7 +72,7 @@ func (h *MCFileHandle) WithMCFSApi(mcfsapi MCFSApi) *MCFileHandle {
 	return h
 }
 
-func (h *MCFileHandle) WithTransferStateTracker(tracker *TransferStateTracker) *MCFileHandle {
+func (h *MCFileHandle) WithTransferStateTracker(tracker *fsstate.TransferStateTracker) *MCFileHandle {
 	h.transferStateTracker = tracker
 	return h
 }

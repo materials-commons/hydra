@@ -14,6 +14,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 )
 
@@ -23,12 +24,12 @@ import (
 type LocalMCFSApi struct {
 	//
 	stors                *stor.Stors
-	transferStateTracker *TransferStateTracker
+	transferStateTracker *fsstate.TransferStateTracker
 	pathParser           mcpath.Parser
 	mcfsRoot             string
 }
 
-func NewLocalMCFSApi(stors *stor.Stors, tracker *TransferStateTracker, pathParser mcpath.Parser, mcfsRoot string) *LocalMCFSApi {
+func NewLocalMCFSApi(stors *stor.Stors, tracker *fsstate.TransferStateTracker, pathParser mcpath.Parser, mcfsRoot string) *LocalMCFSApi {
 	return &LocalMCFSApi{
 		stors:                stors,
 		transferStateTracker: tracker,
@@ -47,7 +48,7 @@ func (fsapi *LocalMCFSApi) Create(path string) (*mcmodel.File, error) {
 	}
 
 	f, err := fsapi.createNewFile(parsedPath)
-	fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
+	fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, fsstate.FileStateOpen)
 
 	return f, err
 }
@@ -143,7 +144,7 @@ func (fsapi *LocalMCFSApi) openForAppend(path string, flags int, parsedPath mcpa
 	// Found an existing transferRequestFile, so lets build out new state to track it.
 
 	// Create the state
-	_, state := fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, FileStateOpen)
+	_, state := fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, fsstate.FileStateOpen)
 
 	// Recompute hash using the hasher that was created when the new state was created
 	fh, err := os.Open(transferRequestFile.File.ToUnderlyingFilePath(fsapi.mcfsRoot))
@@ -186,7 +187,7 @@ func (fsapi *LocalMCFSApi) openForWrite(path string, flags int, parsedPath mcpat
 	if err == nil {
 		// Found a transferRequestFile. So let's create a new state for it and then use the mcmodel.File that
 		// is referenced by the TransferRequestFile.
-		fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, FileStateOpen)
+		fsapi.transferStateTracker.Store(key, projPath, transferRequestFile.File, fsstate.FileStateOpen)
 		return transferRequestFile.File, false, nil
 	}
 
@@ -194,7 +195,7 @@ func (fsapi *LocalMCFSApi) openForWrite(path string, flags int, parsedPath mcpat
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s create new file version", path)
 	f, err = fsapi.createNewFileVersion(parsedPath)
 	if err != nil {
-		fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, FileStateOpen)
+		fsapi.transferStateTracker.Store(parsedPath.TransferKey(), parsedPath.ProjectPath(), f, fsstate.FileStateOpen)
 	}
 
 	return f, true, err
@@ -249,7 +250,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 		return syscall.ENOENT
 	}
 
-	fileState.FileState = FileStateClosed
+	fileState.FileState = fsstate.FileStateClosed
 	checksum := ""
 	var err error
 	if fileState.HashInvalid {
@@ -281,7 +282,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 // This function will create a new Hasher in the fileState and then read the existing file to determine the hash.
 // It then set HashInvalid to false, so that new writes (appends) to the file can use the existing state. Note
 // that for
-func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, fileState *AccessedFileState, size uint64) {
+func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, fileState *fsstate.AccessedFileState, size uint64) {
 	fileState.Hasher = md5.New()
 	f := fileState.File
 
@@ -298,7 +299,7 @@ func (fsapi *LocalMCFSApi) computeAndUpdateChecksum(path string, fileState *Acce
 
 	parsedPath, _ := fsapi.pathParser.Parse(path)
 
-	fsapi.transferStateTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(fileState *AccessedFileState) {
+	fsapi.transferStateTracker.WithLockHeld(parsedPath.TransferKey(), parsedPath.ProjectPath(), func(fileState *fsstate.AccessedFileState) {
 		fileState.HashInvalid = false
 		if err := fsapi.stors.FileStor.UpdateMetadataForFileAndProject(f, checksum, int64(size)); err != nil {
 			// log that we couldn't update the database

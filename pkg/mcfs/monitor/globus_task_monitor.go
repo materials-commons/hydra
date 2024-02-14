@@ -7,7 +7,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/globus"
-	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 )
 
 type GlobusUploadMonitor struct {
@@ -15,10 +15,10 @@ type GlobusUploadMonitor struct {
 	//globusUploads       *store.GlobusUploadsStore
 	endpointID           string
 	finishedGlobusTasks  map[string]time.Time
-	transferStateTracker *mcfs.TransferStateTracker
+	transferStateTracker *fsstate.TransferStateTracker
 }
 
-func NewGlobusUploadMonitor(client *globus.Client, endpointID string, transferStateTracker *mcfs.TransferStateTracker) *GlobusUploadMonitor {
+func NewGlobusUploadMonitor(client *globus.Client, endpointID string, transferStateTracker *fsstate.TransferStateTracker) *GlobusUploadMonitor {
 	return &GlobusUploadMonitor{
 		client:               client,
 		endpointID:           endpointID,

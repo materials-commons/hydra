@@ -1,6 +1,3 @@
-/*
-Copyright © 2023 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -16,6 +13,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
 	"github.com/materials-commons/hydra/pkg/mcfs/webapi"
 	"github.com/spf13/cobra"
@@ -38,7 +36,9 @@ var rootCmd = &cobra.Command{
 
 		db := mcdb.MustConnectToDB()
 		stors := stor.NewGormStors(db, mcfsDir)
-		activityCounterMonitor := mcfs.NewActivityCounterMonitor(time.Hour * 2)
+		fsState := fsstate.NewFSState(fsstate.NewTransferStateTracker(),
+			fsstate.NewTransferRequestCache(stors.TransferRequestStor),
+			fsstate.NewActivityCounterMonitor(time.Hour*2))
 
 		e := echo.New()
 		e.HideBanner = true
@@ -53,9 +53,7 @@ var rootCmd = &cobra.Command{
 		g.POST("/set-logging", logController.SetLoggingHandler)
 		g.GET("/show-logging", logController.ShowCurrentLoggingHandler)
 
-		knownFilesTracker := mcfs.NewTransferStateTracker()
-
-		transferRequestsActivityController := webapi.NewTransferRequestsController(activityCounterMonitor, knownFilesTracker, stors.TransferRequestStor)
+		transferRequestsActivityController := webapi.NewTransferRequestsController(fsState.ActivityCounterMonitor, fsState.TransferStateTracker, stors.TransferRequestStor)
 		g.GET("/transfers", transferRequestsActivityController.IndexTransferRequestStatus)
 		g.GET("/transfers/:uuid/status", transferRequestsActivityController.GetStatusForTransferRequest)
 
@@ -65,9 +63,9 @@ var rootCmd = &cobra.Command{
 			}
 		}()
 
-		pathParser := mcpath.NewTransferPathParser(stors)
-		mcapi := mcfs.NewLocalMCFSApi(stors, knownFilesTracker, pathParser, mcfsDir)
-		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, knownFilesTracker, pathParser, activityCounterMonitor)
+		pathParser := mcpath.NewTransferPathParser(stors, fsState.TransferRequestCache)
+		mcapi := mcfs.NewLocalMCFSApi(stors, fsState.TransferStateTracker, pathParser, mcfsDir)
+		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, fsState.TransferStateTracker, pathParser, fsState.ActivityCounterMonitor)
 		newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 			return handleFactory.NewFileHandle(fd, flags, path, file)
 		}

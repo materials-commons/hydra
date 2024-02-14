@@ -10,6 +10,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -81,7 +82,8 @@ func TestTransferPathParser_Parse(t *testing.T) {
 		},
 	}
 
-	transferPathParser := NewTransferPathParser(tc.stors)
+	cache := fsstate.NewTransferRequestCache(tc.stors.TransferRequestStor)
+	transferPathParser := NewTransferPathParser(tc.stors, cache)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tp, err := transferPathParser.Parse(test.path)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +16,7 @@ func TestMCApi_Create(t *testing.T) {
 	//transferRequests := []mcmodel.TransferRequest{
 	//	{ID: 234, ProjectID: 123, OwnerID: 301},
 	//}
-	transferStateTracker := NewTransferStateTracker()
+	transferStateTracker := fsstate.NewTransferStateTracker()
 	_, stors := newTestStor(t, "", "/tmp/mcfs")
 	mcapi := NewLocalMCFSApi(stors, transferStateTracker, nil, "/tmp/mcfs")
 

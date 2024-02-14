@@ -10,17 +10,17 @@ import (
 	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
-	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
+	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 )
 
 type TransferRequestsController struct {
-	activity            *mcfs.ActivityCounterMonitor
+	activity            *fsstate.ActivityCounterMonitor
 	transferRequestStor stor.TransferRequestStor
 	globusClient        *globus.Client
-	tracker             *mcfs.TransferStateTracker
+	tracker             *fsstate.TransferStateTracker
 }
 
-func NewTransferRequestsController(activity *mcfs.ActivityCounterMonitor, tracker *mcfs.TransferStateTracker,
+func NewTransferRequestsController(activity *fsstate.ActivityCounterMonitor, tracker *fsstate.TransferStateTracker,
 	transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
 	return &TransferRequestsController{activity: activity, transferRequestStor: transferRequestStor, tracker: tracker}
 }
@@ -115,7 +115,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	transferRequests := make(map[string]*TransferRequestStatus)
 
 	// Get all transfer requests that have seen some activity
-	c.activity.ForEach(func(transferRequestUUID string, ac *mcfs.ActivityCounter) {
+	c.activity.ForEach(func(transferRequestUUID string, ac *fsstate.ActivityCounter) {
 		activity := &TransferRequestStatus{
 			transferRequestUUID: transferRequestUUID,
 			ActivityCount:       ac.GetActivityCount(),

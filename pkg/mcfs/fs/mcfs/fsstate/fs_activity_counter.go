@@ -1,4 +1,4 @@
-package mcfs
+package fsstate
 
 import (
 	"context"
