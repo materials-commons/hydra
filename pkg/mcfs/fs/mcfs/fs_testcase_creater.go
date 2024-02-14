@@ -198,11 +198,12 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 
 	tc.transferStateTracker = fsstate.NewTransferStateTracker()
 	stors := stor.NewGormStors(tc.db, tc.mcfsDir)
+	cache := fsstate.NewTransferRequestCache(stors.TransferRequestStor)
 	var pathParser mcpath.Parser
 	if opts.newPathParser != nil {
 		pathParser = opts.newPathParser(stors)
 	} else {
-		pathParser = mcpath.NewTransferPathParser(stors)
+		pathParser = mcpath.NewTransferPathParser(stors, cache)
 	}
 	mcapi := NewLocalMCFSApi(stors, tc.transferStateTracker, pathParser, opts.mcfsDir)
 	activityCounterMonitor := fsstate.NewActivityCounterMonitor(time.Second * 2)

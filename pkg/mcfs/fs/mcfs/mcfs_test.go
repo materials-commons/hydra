@@ -565,8 +565,8 @@ func TestActivityCounterIsIncrementedOnReadsAndWrites(t *testing.T) {
 	require.NoError(t, err)
 
 	// Stored by transfer request path
-	activityCounter, found := tc.factory.activityCounterMonitor.activityCounters[tc.transferRequest.UUID]
-	require.True(t, found)
+	activityCounter := tc.factory.activityCounterMonitor.GetActivityCounter(tc.transferRequest.UUID)
+	require.NotNil(t, activityCounter)
 
 	count := activityCounter.GetActivityCount()
 	require.Equal(t, uint64(1), count)
