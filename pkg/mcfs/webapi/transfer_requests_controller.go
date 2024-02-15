@@ -14,15 +14,13 @@ import (
 )
 
 type TransferRequestsController struct {
-	activity            *fsstate.ActivityCounterMonitor
 	transferRequestStor stor.TransferRequestStor
 	globusClient        *globus.Client
-	tracker             *fsstate.TransferStateTracker
+	fsState             *fsstate.FSState
 }
 
-func NewTransferRequestsController(activity *fsstate.ActivityCounterMonitor, tracker *fsstate.TransferStateTracker,
-	transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
-	return &TransferRequestsController{activity: activity, transferRequestStor: transferRequestStor, tracker: tracker}
+func NewTransferRequestsController(globusClient *globus.Client, fsState *fsstate.FSState, transferRequestStor stor.TransferRequestStor) *TransferRequestsController {
+	return &TransferRequestsController{transferRequestStor: transferRequestStor, globusClient: globusClient, fsState: fsState}
 }
 
 type TransferRequestStatus struct {
@@ -39,7 +37,7 @@ const TransferRequestInactive = "inactive"
 const TransferRequestStatusUnknown = "unknown"
 const TransferRequestNoActivityState = "nostate"
 
-func (c *TransferRequestsController) CloseAllInactiveTransferRequests(ctx echo.Context) error {
+func (c *TransferRequestsController) CloseAllInactiveTransferRequests(_ echo.Context) error {
 	allTransferRequestsByStatus := c.getStatusForAllTransferRequests()
 
 	var inactiveRequests []*TransferRequestStatus
@@ -72,14 +70,14 @@ func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) erro
 		return fmt.Errorf("transfer request state is '%s', should be 'closing'", tr.State)
 	}
 
-	c.tracker.DeleteBase(tr.UUID)
+	c.fsState.TransferStateTracker.DeleteBase(tr.UUID)
 
 	return nil
 }
 
 func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Context) error {
 	transferUUID := ctx.Param("uuid")
-	ac := c.activity.GetActivityCounter(transferUUID)
+	ac := c.fsState.ActivityTracker.GetActivityCounter(transferUUID)
 
 	var (
 		activity *TransferRequestStatus
@@ -115,7 +113,7 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	transferRequests := make(map[string]*TransferRequestStatus)
 
 	// Get all transfer requests that have seen some activity
-	c.activity.ForEach(func(transferRequestUUID string, ac *fsstate.ActivityCounter) {
+	c.fsState.ActivityTracker.ForEach(func(transferRequestUUID string, ac *fsstate.ActivityCounter) {
 		activity := &TransferRequestStatus{
 			transferRequestUUID: transferRequestUUID,
 			ActivityCount:       ac.GetActivityCount(),

@@ -206,7 +206,7 @@ func newTestCase(t *testing.T, opts *fsTestOptions) *fsTestCase {
 		pathParser = mcpath.NewTransferPathParser(stors, cache)
 	}
 	mcapi := NewLocalMCFSApi(stors, tc.transferStateTracker, pathParser, opts.mcfsDir)
-	activityCounterMonitor := fsstate.NewActivityCounterMonitor(time.Second * 2)
+	activityCounterMonitor := fsstate.NewActivityTracker()
 	newHandleFactory := NewMCFileHandlerFactory(mcapi, tc.transferStateTracker, pathParser, activityCounterMonitor)
 	tc.factory = newHandleFactory
 

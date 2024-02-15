@@ -211,7 +211,7 @@ func (c *Client) reauthAndRedoDelete(request *resty.Request, url string, notErro
 		return err
 	}
 
-	resp, err := request.Post(url)
+	resp, err := request.Delete(url)
 	// Some Globus Delete calls return 404 when the item to be deleted doesn't exist
 	if notError404 && resp.RawResponse.StatusCode == 404 {
 		return nil

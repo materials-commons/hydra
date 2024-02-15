@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"os"
-	"time"
 
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
@@ -38,7 +38,7 @@ var rootCmd = &cobra.Command{
 		stors := stor.NewGormStors(db, mcfsDir)
 		fsState := fsstate.NewFSState(fsstate.NewTransferStateTracker(),
 			fsstate.NewTransferRequestCache(stors.TransferRequestStor),
-			fsstate.NewActivityCounterMonitor(time.Hour*2))
+			fsstate.NewActivityTracker())
 
 		e := echo.New()
 		e.HideBanner = true
@@ -53,7 +53,8 @@ var rootCmd = &cobra.Command{
 		g.POST("/set-logging", logController.SetLoggingHandler)
 		g.GET("/show-logging", logController.ShowCurrentLoggingHandler)
 
-		transferRequestsActivityController := webapi.NewTransferRequestsController(fsState.ActivityCounterMonitor, fsState.TransferStateTracker, stors.TransferRequestStor)
+		globusClient, _ := globus.CreateConfidentialClient("", "")
+		transferRequestsActivityController := webapi.NewTransferRequestsController(globusClient, fsState, stors.TransferRequestStor)
 		g.GET("/transfers", transferRequestsActivityController.IndexTransferRequestStatus)
 		g.GET("/transfers/:uuid/status", transferRequestsActivityController.GetStatusForTransferRequest)
 
@@ -65,7 +66,7 @@ var rootCmd = &cobra.Command{
 
 		pathParser := mcpath.NewTransferPathParser(stors, fsState.TransferRequestCache)
 		mcapi := mcfs.NewLocalMCFSApi(stors, fsState.TransferStateTracker, pathParser, mcfsDir)
-		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, fsState.TransferStateTracker, pathParser, fsState.ActivityCounterMonitor)
+		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, fsState.TransferStateTracker, pathParser, fsState.ActivityTracker)
 		newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
 			return handleFactory.NewFileHandle(fd, flags, path, file)
 		}

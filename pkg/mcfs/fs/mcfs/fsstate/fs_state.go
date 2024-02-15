@@ -1,16 +1,16 @@
 package fsstate
 
 type FSState struct {
-	ActivityCounterMonitor *ActivityCounterMonitor
-	TransferStateTracker   *TransferStateTracker
-	TransferRequestCache   *TransferRequestCache
+	ActivityTracker      *ActivityTracker
+	TransferStateTracker *TransferStateTracker
+	TransferRequestCache *TransferRequestCache
 }
 
-func NewFSState(tstateTracker *TransferStateTracker, trCache *TransferRequestCache, acm *ActivityCounterMonitor) *FSState {
+func NewFSState(tstateTracker *TransferStateTracker, trCache *TransferRequestCache, activityTracker *ActivityTracker) *FSState {
 	return &FSState{
-		TransferStateTracker:   tstateTracker,
-		TransferRequestCache:   trCache,
-		ActivityCounterMonitor: acm,
+		TransferStateTracker: tstateTracker,
+		TransferRequestCache: trCache,
+		ActivityTracker:      activityTracker,
 	}
 }
 

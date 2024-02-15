@@ -19,14 +19,14 @@ type FileHandleFactory interface {
 // an activity counter and a tracker for files that are or were opened.
 type MCFileHandlerFactory struct {
 	mcfsapi                MCFSApi
-	activityCounterMonitor *fsstate.ActivityCounterMonitor
+	activityCounterMonitor *fsstate.ActivityTracker
 	transferStateTracker   *fsstate.TransferStateTracker
 	pathParser             mcpath.Parser
 }
 
 // NewMCFileHandlerFactory creates a new MCFileHandlerFactory.
 func NewMCFileHandlerFactory(mcfsapi MCFSApi, transferStateTracker *fsstate.TransferStateTracker, pathParser mcpath.Parser,
-	activityCounterMonitor *fsstate.ActivityCounterMonitor) *MCFileHandlerFactory {
+	activityCounterMonitor *fsstate.ActivityTracker) *MCFileHandlerFactory {
 	return &MCFileHandlerFactory{
 		mcfsapi:                mcfsapi,
 		activityCounterMonitor: activityCounterMonitor,
