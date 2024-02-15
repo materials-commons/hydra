@@ -12,7 +12,7 @@ import (
 type ActivityCounter struct {
 	activityCount         atomic.Uint64
 	lastSeenActivityCount atomic.Uint64
-	lastChanged           time.Time
+	lastChangedAt         time.Time
 
 	// Protects LastChanged
 	mu sync.RWMutex
@@ -21,7 +21,7 @@ type ActivityCounter struct {
 // NewActivityCounter creates a new ActivityCounter with LastChanged set to the current time.
 func NewActivityCounter() *ActivityCounter {
 	return &ActivityCounter{
-		lastChanged: time.Now(),
+		lastChangedAt: time.Now(),
 	}
 }
 
@@ -42,16 +42,16 @@ func (c *ActivityCounter) SetLastSeenActivityCount(val uint64) {
 	c.lastSeenActivityCount.Store(val)
 }
 
-func (c *ActivityCounter) GetLastChanged() time.Time {
+func (c *ActivityCounter) GetLastChangedAt() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.lastChanged
+	return c.lastChangedAt
 }
 
-func (c *ActivityCounter) SetLastChanged(t time.Time) {
+func (c *ActivityCounter) SetLastChangedAt(t time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.lastChanged = t
+	c.lastChangedAt = t
 }

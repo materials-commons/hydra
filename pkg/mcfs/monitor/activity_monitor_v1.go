@@ -18,27 +18,27 @@ func IncrementActivity() {
 	atomic.AddInt64(&activityCount, 1)
 }
 
-type ActivityMonitor struct {
+type ActivityMonitorV1 struct {
 	lastSeenActivityCount int64
 	lastChanged           time.Time
 	db                    *gorm.DB
 	transferRequest       mcmodel.TransferRequest
 }
 
-func NewActivityMonitor(db *gorm.DB, transferRequest mcmodel.TransferRequest) *ActivityMonitor {
-	return &ActivityMonitor{
+func NewActivityMonitorV1(db *gorm.DB, transferRequest mcmodel.TransferRequest) *ActivityMonitorV1 {
+	return &ActivityMonitorV1{
 		db:              db,
 		transferRequest: transferRequest,
 		lastChanged:     time.Now(),
 	}
 }
 
-func (m *ActivityMonitor) Start(ctx context.Context) {
+func (m *ActivityMonitorV1) Start(ctx context.Context) {
 	log.Info("Starting activity monitor...")
 	go m.monitorActivity(ctx)
 }
 
-func (m *ActivityMonitor) monitorActivity(ctx context.Context) {
+func (m *ActivityMonitorV1) monitorActivity(ctx context.Context) {
 	for {
 		if m.loadAndCheckIfBridgeInactiveForTooLong() {
 			break
@@ -59,7 +59,7 @@ func (m *ActivityMonitor) monitorActivity(ctx context.Context) {
 	})
 }
 
-func (m *ActivityMonitor) loadAndCheckIfBridgeInactiveForTooLong() bool {
+func (m *ActivityMonitorV1) loadAndCheckIfBridgeInactiveForTooLong() bool {
 	currentActivityCount := atomic.LoadInt64(&activityCount)
 	now := time.Now()
 	if currentActivityCount == m.lastSeenActivityCount {

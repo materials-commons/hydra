@@ -19,5 +19,7 @@ func (s *FSState) GetCache() *TransferRequestCache {
 }
 
 func (s *FSState) RemoveTransferRequestState(uuid string) {
-
+	s.ActivityTracker.RemoveActivityFromTracking(uuid)
+	s.TransferStateTracker.DeleteBase(uuid)
+	s.TransferRequestCache.RemoveTransferRequestByUUID(uuid)
 }
