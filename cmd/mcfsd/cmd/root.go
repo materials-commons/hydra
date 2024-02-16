@@ -1,21 +1,17 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
 
 	"github.com/apex/log"
-	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/materials-commons/hydra/pkg/config"
 	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb"
-	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
-	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
-	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/mcpath"
-	"github.com/materials-commons/hydra/pkg/mcfs/webapi"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 )
@@ -28,67 +24,64 @@ var rootCmd = &cobra.Command{
 	Short: "Daemon for the mcfs file system",
 	Long:  `Daemon for the mcfs file system`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 1 {
-			log.Fatalf("No path specified for mount")
+		ctx := context.Background()
+		if err := Run(ctx, args, config.GetConfig()); err != nil {
+			log.Fatalf("mcfsd: %s", err)
 		}
-
-		readConfig()
-
-		db := mcdb.MustConnectToDB()
-		stors := stor.NewGormStors(db, mcfsDir)
-		fsState := fsstate.NewFSState(fsstate.NewTransferStateTracker(),
-			fsstate.NewTransferRequestCache(stors.TransferRequestStor),
-			fsstate.NewActivityTracker())
-
-		e := echo.New()
-		e.HideBanner = true
-		e.HidePort = true
-		e.Use(middleware.Recover())
-
-		g := e.Group("/api")
-
-		logController := webapi.NewLogController()
-		g.POST("/set-logging-level", logController.SetLogLevelHandler)
-		g.POST("/set-logging-output", logController.SetLogOutputHandler)
-		g.POST("/set-logging", logController.SetLoggingHandler)
-		g.GET("/show-logging", logController.ShowCurrentLoggingHandler)
-
-		globusClient, _ := globus.CreateConfidentialClient("", "")
-		transferRequestsActivityController := webapi.NewTransferRequestsController(globusClient, fsState, stors.TransferRequestStor)
-		g.GET("/transfers", transferRequestsActivityController.IndexTransferRequestStatus)
-		g.GET("/transfers/:uuid/status", transferRequestsActivityController.GetStatusForTransferRequest)
-
-		go func() {
-			if err := e.Start("localhost:1350"); err != nil {
-				log.Fatalf("Unable to start web server: %s", err)
-			}
-		}()
-
-		pathParser := mcpath.NewTransferPathParser(stors, fsState.TransferRequestCache)
-		mcapi := mcfs.NewLocalMCFSApi(stors, fsState.TransferStateTracker, pathParser, mcfsDir)
-		handleFactory := mcfs.NewMCFileHandlerFactory(mcapi, fsState.TransferStateTracker, pathParser, fsState.ActivityTracker)
-		newFileHandleFunc := func(fd, flags int, path string, file *mcmodel.File) fs.FileHandle {
-			return handleFactory.NewFileHandle(fd, flags, path, file)
-		}
-
-		mcfs, err := mcfs.CreateFS(mcfsDir, mcapi, newFileHandleFunc)
-		if err != nil {
-			log.Fatalf("Unable to create filesystem: %s", err)
-		}
-
-		rawfs := fs.NewNodeFS(mcfs, &fs.Options{})
-		fuseServer, err := fuse.NewServer(rawfs, args[0], &fuse.MountOptions{Name: "mcfs"})
-		if err != nil {
-			log.Fatalf("Unable to create fuse server: %s", err)
-		}
-
-		go fuseServer.Serve()
-		if err := fuseServer.WaitMount(); err != nil {
-			log.Fatalf("Mount failed: %s", err)
-		}
-
-		fuseServer.Wait()
 	},
+}
+
+func Run(c context.Context, args []string, config config.Configer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("no path specified for mount")
+	}
+
+	readConfig()
+
+	db := mcdb.MustConnectToDB()
+	stors := stor.NewGormStors(db, mcfsDir)
+	fsState := fsstate.NewFSState(fsstate.NewTransferStateTracker(),
+		fsstate.NewTransferRequestCache(stors.TransferRequestStor),
+		fsstate.NewActivityTracker())
+	globusClient, _ := globus.CreateConfidentialClient("", "")
+
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+
+	setupRoutes(RouteDependencies{
+		e:            e,
+		config:       config,
+		stors:        stors,
+		fsState:      fsState,
+		globusClient: globusClient,
+	})
+
+	go func() {
+		if err := e.Start("localhost:1350"); err != nil {
+			log.Fatalf("Unable to start web server: %s", err)
+		}
+	}()
+
+	fuseServer, err := createFS(FSDependencies{
+		stors:     stors,
+		fsState:   fsState,
+		mcfsDir:   config.GetKey("MCFS_DIR"),
+		mountPath: args[0],
+	})
+
+	if err != nil {
+		return err
+	}
+
+	go fuseServer.Serve()
+	if err := fuseServer.WaitMount(); err != nil {
+		log.Fatalf("Mount failed: %s", err)
+	}
+
+	fuseServer.Wait()
+
+	return nil
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

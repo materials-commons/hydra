@@ -99,7 +99,7 @@ func (c *TransferRequestsController) GetStatusForTransferRequest(ctx echo.Contex
 		activity.Status = TransferRequestActive
 	}
 
-	activity.LastActivityTime = ac.GetLastChanged().Format(time.RFC850)
+	activity.LastActivityTime = ac.GetLastChangedAt().Format(time.RFC850)
 	activity.ActivityCount = ac.GetActivityCount()
 
 	return ctx.JSON(http.StatusOK, activity)
@@ -113,14 +113,15 @@ func (c *TransferRequestsController) getStatusForAllTransferRequests() []*Transf
 	transferRequests := make(map[string]*TransferRequestStatus)
 
 	// Get all transfer requests that have seen some activity
-	c.fsState.ActivityTracker.ForEach(func(transferRequestUUID string, ac *fsstate.ActivityCounter) {
+	c.fsState.ActivityTracker.ForEach(func(transferRequestUUID string, ac *fsstate.ActivityCounter) error {
 		activity := &TransferRequestStatus{
 			transferRequestUUID: transferRequestUUID,
 			ActivityCount:       ac.GetActivityCount(),
-			LastActivityTime:    ac.GetLastChanged().Format(time.RFC850),
+			LastActivityTime:    ac.GetLastChangedAt().Format(time.RFC850),
 			ActivityFound:       true,
 		}
 		transferRequests[activity.transferRequestUUID] = activity
+		return nil
 	})
 
 	// For the active transfer requests retrieve the transfer request from the database
