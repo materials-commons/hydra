@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/materials-commons/hydra/pkg/clog"
+	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
@@ -15,10 +16,14 @@ type CloseActivityHandlerFN func(activityKey string)
 type TransferMonitorOptionFN func(*TransferMonitor)
 
 type TransferMonitor struct {
+	globusClient              *globus.Client
+	globusEndpointID          string
 	transferRequestStor       stor.TransferRequestStor
 	fsState                   *fsstate.FSState
 	allowedInactivityDuration time.Duration
 	closeTransferHandler      CloseActivityHandlerFN
+	transfersToProcess        []string
+	alreadySeenTasks          map[string]time.Time
 }
 
 func NewTransferMonitor(optFNs ...TransferMonitorOptionFN) *TransferMonitor {
@@ -52,6 +57,18 @@ func WithAllowedInactivityDuration(inactivityDuration time.Duration) TransferMon
 func WithCloseTransferHandler(f CloseActivityHandlerFN) TransferMonitorOptionFN {
 	return func(m *TransferMonitor) {
 		m.closeTransferHandler = f
+	}
+}
+
+func WithGlobusClient(gc *globus.Client) TransferMonitorOptionFN {
+	return func(m *TransferMonitor) {
+		m.globusClient = gc
+	}
+}
+
+func WithGlobusEndpointID(endpointID string) TransferMonitorOptionFN {
+	return func(m *TransferMonitor) {
+		m.globusEndpointID = endpointID
 	}
 }
 
@@ -131,7 +148,13 @@ func (m *TransferMonitor) checkAndCleanupInactiveTransfers() {
 			allowedInactive := lastChangedAt.Add(m.allowedInactivityDuration)
 			if now.After(allowedInactive) {
 				m.closeTransferHandler(transferUUID)
+				return nil
 			}
+
+			// If we are here then the transfer has been inactive for at least 20 seconds.
+			// Let's add the transfer to the list of transfers to check on globus to see
+			// if it's done.
+			m.transfersToProcess = append(m.transfersToProcess, transferUUID)
 
 		default:
 			activityCounter.SetLastChangedAt(now)
@@ -140,4 +163,62 @@ func (m *TransferMonitor) checkAndCleanupInactiveTransfers() {
 
 		return nil
 	})
+
+	if len(m.transfersToProcess) != 0 {
+		m.processSuccessfulGlobusTasks()
+	}
+}
+
+func (m *TransferMonitor) processSuccessfulGlobusTasks() {
+	// Remove old tasks we've seen before so the list doesn't continuously grow.
+	m.removeOldTasks()
+
+	// Build a filter to get all successful tasks that completed in the last hour
+	lastHour := time.Now().Add(time.Hour).Format(time.RFC3339)
+	taskFilter := map[string]string{
+		"filter_completion_time": lastHour,
+		"filter_status":          "SUCCEEDED",
+	}
+
+	tasks, err := m.globusClient.GetEndpointTaskList(m.globusEndpointID, taskFilter)
+	if err != nil {
+		clog.Global().Errorf("globus.GetEndpointTaskList returned the following error: %s - %#v", err, m.globusClient.GetGlobusErrorResponse())
+	}
+
+	for _, task := range tasks.Tasks {
+		_, ok := m.alreadySeenTasks[task.TaskID]
+		if ok {
+			continue
+		}
+
+		transfers, err := m.globusClient.GetTaskSuccessfulTransfers(task.TaskID, 0)
+		switch {
+		case err != nil:
+			clog.Global().Errorf("globus.GetTaskSuccessfulTransfers(%s) returned error %s - %#v", task.TaskID, err, m.globusClient.GetGlobusErrorResponse())
+			continue
+
+		case len(transfers.Transfers) == 0:
+			continue
+
+		default:
+			// No files transferred in this request
+
+		}
+	}
+
+	m.transfersToProcess = nil
+}
+
+func (m *TransferMonitor) removeOldTasks() {
+	// First remove all tasks that already been seen and are over
+	// 1 hour old
+	now := time.Now()
+	for k, v := range m.alreadySeenTasks {
+		allowedAge := v.Add(time.Hour)
+		if now.After(allowedAge) {
+			// if the time now is more than 1 hour later than the
+			// already seen tasks age + 1 hour, then delete it
+			delete(m.alreadySeenTasks, k)
+		}
+	}
 }
