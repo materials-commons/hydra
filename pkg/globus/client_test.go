@@ -3,7 +3,6 @@ package globus
 import (
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ func TestClient_GetIdentities(t *testing.T) {
 	client := createClient(t)
 	identities, err := client.GetIdentities([]string{"glenn.tarcea@gmail.com"})
 	assert.NoErrorf(t, err, "Unable to get identities: %s", err)
+	fmt.Printf("%#v\n", identities)
 	assert.Truef(t, len(identities.Identities) == 1, "Wrong identities length %d", len(identities.Identities))
 }
 
@@ -64,24 +64,27 @@ func TestGetTasks(t *testing.T) {
 	lastWeek := time.Now().AddDate(0, 0, -10).Format("2006-01-02")
 	fmt.Println("lastWeek", lastWeek)
 	tasks, err := client.GetEndpointTaskList(testEndpointID, map[string]string{
-		"filter_completion_time": lastWeek,
-		"filter_status":          "SUCCEEDED",
+		//"filter_completion_time": lastWeek,
+		"filter_status": "SUCCEEDED",
 	})
 	fmt.Println("GetEndpointTaskList err", err)
 	fmt.Printf("   tasks: %#v\n", tasks)
-	for _, task := range tasks.Tasks {
-		transfers, err := client.GetTaskSuccessfulTransfers(task.TaskID, 0)
-		fmt.Println("  GetTaskSuccessfulTransfers err", err)
-		fmt.Printf("    transfers: %#v\n", transfers)
-		transferItem := transfers.Transfers[0]
-		pieces := strings.Split(transferItem.DestinationPath, "/")
-		fmt.Println(len(pieces))
-		fmt.Printf("pieces[0] = '%s'\n", pieces[0])
-		fmt.Println("id =", pieces[2])
-	}
+	//for _, task := range tasks.Tasks {
+	//	transfers, err := client.GetTaskSuccessfulTransfers(task.TaskID, 0)
+	//	fmt.Println("  GetTaskSuccessfulTransfers err", err)
+	//	fmt.Printf("    transfers: %#v\n", transfers)
+	//	transferItem := transfers.Transfers[0]
+	//	pieces := strings.Split(transferItem.DestinationPath, "/")
+	//	fmt.Println(len(pieces))
+	//	fmt.Printf("pieces[0] = '%s'\n", pieces[0])
+	//	fmt.Println("id =", pieces[2])
+	//}
 }
 
 func createClient(t *testing.T) *Client {
+	os.Setenv("MC_CONFIDENTIAL_CLIENT_USER", "54de53f4-1eb5-456b-bcd2-68414351ec02")
+	os.Setenv("MC_CONFIDENTIAL_CLIENT_PW", "fs08VRoIh0dIpV8ybkDEDXnv3kC6nlFR0TrTNBYtNz4=")
+	os.Setenv("MC_CONFIDENTIAL_CLIENT_ENDPOINT", "0b2ada36-bf56-11ed-9614-4b6fcc022e5a")
 	globusCCUser := os.Getenv("MC_CONFIDENTIAL_CLIENT_USER")
 	globusCCToken := os.Getenv("MC_CONFIDENTIAL_CLIENT_PW")
 	testEndpointID = os.Getenv("MC_CONFIDENTIAL_CLIENT_ENDPOINT")

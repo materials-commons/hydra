@@ -60,6 +60,7 @@ type TransferRequestStor interface {
 
 type GlobusTransferStor interface {
 	CreateGlobusTransfer(globusTransfer *mcmodel.GlobusTransfer) (*mcmodel.GlobusTransfer, error)
+	GetGlobusTransferByGlobusIdentityID(globusIdentityID string) (*mcmodel.GlobusTransfer, error)
 }
 
 type UserStor interface {

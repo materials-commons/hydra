@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/materials-commons/hydra/pkg/clog"
@@ -109,7 +110,6 @@ func (fsapi *LocalMCFSApi) openReadonly(path string, _ int, parsedPath mcpath.Pa
 	key := parsedPath.TransferKey()
 	clog.UsingCtx(key).Debugf("LocalMCFSApi Open %s readonly", path)
 	f, err = fsapi.stors.FileStor.GetFileByPath(parsedPath.ProjectID(), parsedPath.ProjectPath())
-
 	return f, false, err
 }
 
@@ -251,6 +251,7 @@ func (fsapi *LocalMCFSApi) Release(path string, size uint64) error {
 	}
 
 	fileState.FileState = fsstate.FileStateClosed
+	fileState.LastClosedAt = time.Now()
 	checksum := ""
 	var err error
 	if fileState.HashInvalid {

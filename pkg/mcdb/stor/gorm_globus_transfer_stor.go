@@ -31,3 +31,13 @@ func (s *GormGlobusTransferStor) CreateGlobusTransfer(globusTransfer *mcmodel.Gl
 
 	return globusTransfer, nil
 }
+
+func (s *GormGlobusTransferStor) GetGlobusTransferByGlobusIdentityID(globusIdentityID string) (*mcmodel.GlobusTransfer, error) {
+	var globusTransfer mcmodel.GlobusTransfer
+	err := s.db.Where("globus_identity_id = ?", globusIdentityID).First(&globusTransfer).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &globusTransfer, nil
+}

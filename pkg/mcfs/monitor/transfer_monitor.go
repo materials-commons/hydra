@@ -19,15 +19,21 @@ type TransferMonitor struct {
 	globusClient              *globus.Client
 	globusEndpointID          string
 	transferRequestStor       stor.TransferRequestStor
+	globusTransferStor        stor.GlobusTransferStor
 	fsState                   *fsstate.FSState
 	allowedInactivityDuration time.Duration
+	globusTaskWindowDuration  time.Duration
 	closeTransferHandler      CloseActivityHandlerFN
 	transfersToProcess        []string
 	alreadySeenTasks          map[string]time.Time
 }
 
 func NewTransferMonitor(optFNs ...TransferMonitorOptionFN) *TransferMonitor {
-	tm := &TransferMonitor{}
+	// Set defaults
+	tm := &TransferMonitor{
+		globusTaskWindowDuration:  time.Hour,
+		allowedInactivityDuration: time.Hour * 24 * 7,
+	}
 
 	for _, optfn := range optFNs {
 		optfn(tm)
@@ -42,6 +48,12 @@ func WithTransferRequestStor(trStor stor.TransferRequestStor) TransferMonitorOpt
 	}
 }
 
+func WithGlobuTransferStor(gtStor stor.GlobusTransferStor) TransferMonitorOptionFN {
+	return func(m *TransferMonitor) {
+		m.globusTransferStor = gtStor
+	}
+}
+
 func WithFSState(fsState *fsstate.FSState) TransferMonitorOptionFN {
 	return func(m *TransferMonitor) {
 		m.fsState = fsState
@@ -51,6 +63,12 @@ func WithFSState(fsState *fsstate.FSState) TransferMonitorOptionFN {
 func WithAllowedInactivityDuration(inactivityDuration time.Duration) TransferMonitorOptionFN {
 	return func(m *TransferMonitor) {
 		m.allowedInactivityDuration = inactivityDuration
+	}
+}
+
+func WithGlobusTaskWindowDuration(taskWindowDuration time.Duration) TransferMonitorOptionFN {
+	return func(m *TransferMonitor) {
+		m.globusTaskWindowDuration = taskWindowDuration
 	}
 }
 
@@ -74,7 +92,8 @@ func WithGlobusEndpointID(endpointID string) TransferMonitorOptionFN {
 
 func (m *TransferMonitor) Run(c context.Context) {
 	for {
-		m.checkAndCleanupInactiveTransfers()
+		m.checkAndCleanupFinishedTransfers()
+		m.checkAndHandleInactiveTransfers()
 		select {
 		case <-c.Done():
 			break
@@ -83,7 +102,144 @@ func (m *TransferMonitor) Run(c context.Context) {
 	}
 }
 
-func (m *TransferMonitor) checkAndCleanupInactiveTransfers() {
+// checkAndCleanupFinishedTransfers cleans up the state for all finished transfers. This means all cleaning up
+// transfer_requests in the database and moving the files they refer to into the current files for a project.
+// The algorithm for determining if a transfer request has a number of limitations due to globus that it has
+// to work within. These limitations include:
+//  1. We can only find the path for files that have successfully transferred.
+//  2. The only thing an active transfer will tell us is the globus user that has an active request. There isn't
+//     other information we can use to determine which Materials Commons TransferRequest directory this transfer
+//     is associated with.
+//
+// Combined these make determining completed transfers difficult. The file system knows the following:
+//
+//  1. It knows what transfers have been active. This is because a globus transfer is limited to a directory
+//     that looks like /__transfer/<transfer-request-uuid>/<... rest of path>. The file system can track activity
+//     for that particular transfer by associating it with the <transfer-request-uuid>. This state is kept in
+//     the ActivityTracker.
+//
+//  2. The filesystem knows when a file was last closed. Just because the file was closed doesn't mean that
+//     globus is done writing to it. This is because Globus might open and close the file multiple times during
+//     a transfer. That said it is, however, a strong indicator that Globus is done.
+//
+// So to determine if Globus is done with a transfer we do the following:
+//
+//	Every XX seconds we wake up check the list of active transfers. This check is not very precise
+//	because Globus will only tell us which user has an active transfer, not where the transfer is
+//	going to. So, in order to process a users finished transfers that user must have no active
+//	transfers.
+//
+//	This limitation has the following implication: If a user has two projects they are doing transfers
+//	to (so two active TransferRequests), we cannot determine of these transfers are completed, and which
+//	are still active. So, all of a users transfers must complete before we can process their files. We
+//	also give the user the ability to mark a transfer as complete. Since the user has this knowledge,
+//	this gives them the option to mark a transfer as done so we can process the files faster.
+//
+//	Once a user has no active transfers we lock writes to the file system for the users transfers. Then
+//	we check to make sure no writes got through while we were performing the lock. Assuming that is the
+//	case then we process all their files and release the lock.
+//
+//	If a write did get through, that means there is now an active transfer. We release the lock and
+//	skip processing the user's files.
+//
+//	Lastly we need to clean up globus state, release ACLs, etc... There is a timing issue here because
+//	we may decide to perform the cleanup just as the user decides to do a transfer. To handle this
+//	case we send the user an email letting them know that they need to initiate a new globus transfer.
+//	This may still cause some support issues, but the window is small.
+func (m *TransferMonitor) checkAndCleanupFinishedTransfers() {
+	activeTasksFilter := map[string]string{
+		"filter_status": "ACTIVE",
+	}
+
+	activeTasksList, err := m.globusClient.GetEndpointTaskList(m.globusEndpointID, activeTasksFilter)
+	if err != nil {
+		clog.Global().Errorf("globus.GetEndpointTaskList returned the following error getting successful tasks: %s - %#v",
+			err, m.globusClient.GetGlobusErrorResponse())
+		return
+	}
+
+	// Now that we have a list of active tasks, go through the tasks and identify all the users that have
+	// an active transfer (according to Globus). Any TransferRequest that is owned by one of these users
+	// will be ignored. All other transfer requests are candidates for processing.
+
+	// A map of userid to nothing. We use a map to quickly look up user ids.
+	usersWithActiveTransfers := make(map[int]struct{})
+	for _, task := range activeTasksList.Tasks {
+		userID, err := m.globusOwnerID2MCUserID(task.OwnerID)
+		if err != nil {
+			// what do we do in this case?
+		}
+		usersWithActiveTransfers[userID] = struct{}{}
+	}
+
+	transferRequests, err := m.transferRequestStor.ListTransferRequests()
+	if err != nil {
+		// log err
+		return
+	}
+
+	for _, tr := range transferRequests {
+		if _, ok := usersWithActiveTransfers[tr.OwnerID]; ok {
+			// This transfer request is owned by a user who has an active transfer, so skip it
+			continue
+		}
+
+		if !m.lockAndCheckInactiveAfterLockTransferRequest(&tr) {
+			// If this failed then we asked the file system to lock activity, but between
+			// deciding to lock, and locking a write() got through, so skip processing
+			// this transfer request
+			continue
+		}
+
+		m.processTransferRequestFiles(&tr)
+		m.unlockTransferRequest(&tr)
+	}
+}
+
+func (m *TransferMonitor) globusOwnerID2MCUserID(globusUserUUID string) (int, error) {
+	globusTransfer, err := m.globusTransferStor.GetGlobusTransferByGlobusIdentityID(globusUserUUID)
+	return globusTransfer.OwnerID, err
+}
+
+func (m *TransferMonitor) lockAndCheckInactiveAfterLockTransferRequest(tr *mcmodel.TransferRequest) bool {
+	activityCounter := m.fsState.ActivityTracker.GetActivityCounter(tr.UUID)
+	if activityCounter == nil {
+		return false
+	}
+
+	currentCount := activityCounter.GetActivityCount()
+	activityCounter.PreventWrites()
+
+	// Give system a chance for any in process writes to complete and update
+	// the counter.
+	time.Sleep(10 * time.Millisecond)
+
+	// Check that something didn't sneak through
+	newCount := activityCounter.GetActivityCount()
+	if newCount == currentCount {
+		// No writes came through after setting PreventWrites()
+		return true
+	}
+
+	// Write(s) got through, unlock and return false
+	activityCounter.AllowWrites()
+	return false
+}
+
+func (m *TransferMonitor) processTransferRequestFiles(tr *mcmodel.TransferRequest) {
+
+}
+
+func (m *TransferMonitor) unlockTransferRequest(tr *mcmodel.TransferRequest) {
+	activityCounter := m.fsState.ActivityTracker.GetActivityCounter(tr.UUID)
+	if activityCounter == nil {
+		return
+	}
+
+	activityCounter.AllowWrites()
+}
+
+func (m *TransferMonitor) checkAndHandleInactiveTransfers() {
 	m.fsState.ActivityTracker.ForEach(func(transferUUID string, activityCounter *fsstate.ActivityCounter) error {
 		var (
 			err error
@@ -151,11 +307,6 @@ func (m *TransferMonitor) checkAndCleanupInactiveTransfers() {
 				return nil
 			}
 
-			// If we are here then the transfer has been inactive for at least 20 seconds.
-			// Let's add the transfer to the list of transfers to check on globus to see
-			// if it's done.
-			m.transfersToProcess = append(m.transfersToProcess, transferUUID)
-
 		default:
 			activityCounter.SetLastChangedAt(now)
 			activityCounter.SetLastSeenActivityCount(currentActivityCount)
@@ -164,61 +315,4 @@ func (m *TransferMonitor) checkAndCleanupInactiveTransfers() {
 		return nil
 	})
 
-	if len(m.transfersToProcess) != 0 {
-		m.processSuccessfulGlobusTasks()
-	}
-}
-
-func (m *TransferMonitor) processSuccessfulGlobusTasks() {
-	// Remove old tasks we've seen before so the list doesn't continuously grow.
-	m.removeOldTasks()
-
-	// Build a filter to get all successful tasks that completed in the last hour
-	lastHour := time.Now().Add(time.Hour).Format(time.RFC3339)
-	taskFilter := map[string]string{
-		"filter_completion_time": lastHour,
-		"filter_status":          "SUCCEEDED",
-	}
-
-	tasks, err := m.globusClient.GetEndpointTaskList(m.globusEndpointID, taskFilter)
-	if err != nil {
-		clog.Global().Errorf("globus.GetEndpointTaskList returned the following error: %s - %#v", err, m.globusClient.GetGlobusErrorResponse())
-	}
-
-	for _, task := range tasks.Tasks {
-		_, ok := m.alreadySeenTasks[task.TaskID]
-		if ok {
-			continue
-		}
-
-		transfers, err := m.globusClient.GetTaskSuccessfulTransfers(task.TaskID, 0)
-		switch {
-		case err != nil:
-			clog.Global().Errorf("globus.GetTaskSuccessfulTransfers(%s) returned error %s - %#v", task.TaskID, err, m.globusClient.GetGlobusErrorResponse())
-			continue
-
-		case len(transfers.Transfers) == 0:
-			continue
-
-		default:
-			// No files transferred in this request
-
-		}
-	}
-
-	m.transfersToProcess = nil
-}
-
-func (m *TransferMonitor) removeOldTasks() {
-	// First remove all tasks that already been seen and are over
-	// 1 hour old
-	now := time.Now()
-	for k, v := range m.alreadySeenTasks {
-		allowedAge := v.Add(time.Hour)
-		if now.After(allowedAge) {
-			// if the time now is more than 1 hour later than the
-			// already seen tasks age + 1 hour, then delete it
-			delete(m.alreadySeenTasks, k)
-		}
-	}
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"hash"
 	"sync"
+	"time"
 
 	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -55,6 +56,10 @@ type AccessedFileState struct {
 	// that happens the hash state is invalid.
 	HashInvalid bool
 
+	// Last time the file was closed
+	LastClosedAt time.Time
+
+	// Current state of the file - Open or Closed
 	FileState string
 }
 
