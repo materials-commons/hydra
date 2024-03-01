@@ -57,6 +57,9 @@ mcftservd:
 mcfsd:
 	(cd ./cmd/mcfsd; go build)
 
+mcdavd:
+	(cd ./cmd/mcdavd; go build)
+
 deploy-mcftservd: mcftservd
 	- sudo supervisorctl stop mcftservd:mcftservd_00
 	sudo cp cmd/mcftservd/mcftservd /usr/local/bin
