@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"github.com/apex/log"
+	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/scp"
-	"github.com/gliderlabs/ssh"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
