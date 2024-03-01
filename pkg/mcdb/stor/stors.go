@@ -67,6 +67,7 @@ type UserStor interface {
 	CreateUser(user *mcmodel.User) (*mcmodel.User, error)
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
+	GetUserByEmail(email string) (*mcmodel.User, error)
 }
 
 type Stors struct {

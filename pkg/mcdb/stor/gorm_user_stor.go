@@ -46,3 +46,12 @@ func (s *GormUserStor) GetUserBySlug(slug string) (*mcmodel.User, error) {
 	}
 	return &user, nil
 }
+
+func (s *GormUserStor) GetUserByEmail(email string) (*mcmodel.User, error) {
+	var user mcmodel.User
+	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
