@@ -16,29 +16,27 @@ import (
 )
 
 type UserFS struct {
-	fileStor              stor.FileStor
-	projectStor           stor.ProjectStor
-	projects              sync.Map
+	fileStor    stor.FileStor
+	projectStor stor.ProjectStor
+
+	// A cache of projects the user has access to
+	projects sync.Map
+
+	// projects that the user tried to access that they don't have access to
 	projectsWithoutAccess sync.Map
-	user                  *mcmodel.User
-	mcfsRoot              string
-}
 
-type File struct {
-	*os.File
-	fileStor stor.FileStor
-	f        *mcmodel.File
-}
+	// MC User this is associated with
+	user *mcmodel.User
 
-func (f *File) Close() error {
-	err := f.File.Close()
-	// Update metadata in materials commons
-	return err
-}
+	// Directory path to mcfs files
+	mcfsRoot string
 
-func (f *File) Write(p []byte) (n int, err error) {
-	// write to hash
-	return f.File.Write(p)
+	// filesWritten keeps track of files that the user has written to. Because
+	// we don't know when a user is done writing to a file, only the first time
+	// a write() is done to a file do we create a new version. After that, all
+	// subsequent writes are done to the same file. This map can be reset by
+	// a user from the UI, or the CLI when they know they want a new version.
+	filesWritten sync.Map
 }
 
 // slashClean is equivalent to but slightly more efficient than

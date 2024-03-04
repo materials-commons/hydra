@@ -4,7 +4,9 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -26,13 +28,16 @@ var rootCmd = &cobra.Command{
 				if err != nil {
 					fmt.Printf("WebDAV %s: %s, ERROR: %s\n", r.Method, r.URL, err)
 				} else {
-					fmt.Printf("WebDAV %s: %s \n", r.Method, r.URL)
+					b, _ := io.ReadAll(r.Body)
+					fmt.Printf("WebDAV %s: %s %s\n", r.Method, r.URL, string(b))
 				}
 			},
 		}
 
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("In HandleFunc")
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(body))
+			fmt.Printf("In HandleFunc, %s body = '%s'\n", r.Method, string(body))
 			username, password, _ := r.BasicAuth()
 			if username == "webdav@umich.edu" && password == "abc123" {
 				w.Header().Set("Timeout", "99999999")
