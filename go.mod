@@ -14,14 +14,16 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.6
 	github.com/saracen/walker v0.1.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.12.0
 	github.com/stretchr/testify v1.8.4
 	github.com/subosito/gotenv v1.6.0
-	golang.org/x/crypto v0.11.0
-	golang.org/x/sys v0.10.0
+	golang.org/x/crypto v0.19.0
+	golang.org/x/net v0.12.0
+	golang.org/x/sys v0.17.0
 	gorm.io/driver/mysql v1.5.1
 	gorm.io/driver/sqlite v1.5.3
 	gorm.io/gorm v1.25.4
@@ -57,7 +59,6 @@ require (
 	github.com/muesli/termenv v0.15.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
@@ -66,9 +67,8 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
