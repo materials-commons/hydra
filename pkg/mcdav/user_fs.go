@@ -7,12 +7,13 @@ import (
 	"path"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
-	"golang.org/x/net/webdav"
+	"github.com/materials-commons/hydra/pkg/webdav"
 )
 
 type UserFS struct {
@@ -49,21 +50,51 @@ func slashClean(name string) string {
 	return path.Clean(name)
 }
 
-func NewUserFS() *UserFS {
-	return &UserFS{}
+type UserFSOpts struct {
+	MCFSRoot    string
+	User        *mcmodel.User
+	ProjectStor stor.ProjectStor
+	FileStor    stor.FileStor
+}
+
+func NewUserFS(opts *UserFSOpts) *UserFS {
+	return &UserFS{
+		mcfsRoot:    opts.MCFSRoot,
+		user:        opts.User,
+		projectStor: opts.ProjectStor,
+		fileStor:    opts.FileStor,
+	}
 }
 
 func (fs *UserFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+	fmt.Println("fs.Mkdir", name)
 	return fmt.Errorf("method Mkdir not implemented")
 }
 
 func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.FileMode) (webdav.File, error) {
-	project, err := fs.getProject(path)
+	fmt.Println("fs.OpenFile", path)
+
+	if path == "/" {
+		// Listing root
+		mcfile := &MCFile{
+			File:        nil,
+			fileStor:    fs.fileStor,
+			projectStor: fs.projectStor,
+			mcfile:      nil,
+			user:        fs.user,
+		}
+
+		fmt.Println("OpenFile returning from /")
+		return mcfile, nil
+	} else if true {
+		return nil, fmt.Errorf("method OpenFile not implemented")
+	}
+	project, projectSlug, err := fs.getProject(path)
 	if err != nil {
 		return nil, err
 	}
 
-	filePath := mc.RemoveProjectSlugFromPath(path, mc.GetProjectSlugFromPath(path))
+	filePath := mc.RemoveProjectSlugFromPath(path, projectSlug)
 	file, err := fs.fileStor.GetFileByPath(project.ID, filePath)
 	if err != nil {
 		return nil, err
@@ -77,15 +108,38 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.F
 }
 
 func (fs *UserFS) RemoveAll(ctx context.Context, name string) error {
+	fmt.Println("fs.RemoveAll", name)
 	return fmt.Errorf("method RemoveAll not implemented")
 }
 
 func (fs *UserFS) Rename(ctx context.Context, oldName, newName string) error {
+	fmt.Println("fs.Rename", oldName, newName)
 	return fmt.Errorf("method Rename not implemented")
 }
 
-func (fs *UserFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	return nil, fmt.Errorf("method Stat not implemented")
+func (fs *UserFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	fmt.Println("fs.Stat", path)
+	if path == "/" {
+		// Listing root. Create a fake entry.
+		f := mcmodel.File{
+			MimeType:  "directory",
+			Name:      "/",
+			Size:      0,
+			UpdatedAt: time.Now(),
+		}
+		return f.ToFileInfo(), nil
+	}
+	project, projectSlug, err := fs.getProject(path)
+	if err != nil {
+		return nil, err
+	}
+	projectPath := mc.RemoveProjectSlugFromPath(path, projectSlug)
+	f, err := fs.fileStor.GetFileByPath(project.ID, projectPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.ToFileInfo(), nil
 }
 
 // getProject retrieves the project from the path. The r.Filepath contains the project slug as
@@ -98,7 +152,7 @@ func (fs *UserFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 // project cache (mcfsHandler.projects or mcfsHandler.projectsWithoutAccess).
 //
 // TODO: This code is copied from the mcsftp.Handler. Refactor so both share a common base
-func (fs *UserFS) getProject(path string) (*mcmodel.Project, error) {
+func (fs *UserFS) getProject(path string) (*mcmodel.Project, string, error) {
 	projectSlug := mc.GetProjectSlugFromPath(path)
 
 	// Check if we previously found this project.
@@ -114,15 +168,15 @@ func (fs *UserFS) getProject(path string) (*mcmodel.Project, error) {
 			fs.projects.Delete(projectSlug)
 			fs.projectsWithoutAccess.Store(projectSlug, true)
 			log.Errorf("error casting to project for slug %s", projectSlug)
-			return nil, fmt.Errorf("no such project: %s", projectSlug)
+			return nil, "", fmt.Errorf("no such project: %s", projectSlug)
 		}
 
-		return p, nil
+		return p, projectSlug, nil
 	}
 
 	// Check if we tried to load the project in the past and failed.
 	if _, ok := fs.projectsWithoutAccess.Load(projectSlug); ok {
-		return nil, fmt.Errorf("no such project: %s", projectSlug)
+		return nil, "", fmt.Errorf("no such project: %s", projectSlug)
 	}
 
 	// If we are here then we've never tried loading the project.
@@ -135,13 +189,13 @@ func (fs *UserFS) getProject(path string) (*mcmodel.Project, error) {
 	if project, err = mc.GetAndValidateProjectFromPath(path, fs.user.ID, fs.projectStor); err != nil {
 		// Error looking up or validating access. Mark this project slug as invalid.
 		fs.projectsWithoutAccess.Store(projectSlug, true)
-		return nil, err
+		return nil, "", err
 	}
 
 	// Found the project and user has access so put in the projects cache.
 	fs.projects.Store(projectSlug, project)
 
-	return project, nil
+	return project, projectSlug, nil
 }
 
 // TODO flagSet and isReadonly are from mcfs. Move these into a fsutil directory or something to share

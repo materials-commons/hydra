@@ -10,8 +10,13 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/apex/log"
+	"github.com/materials-commons/hydra/pkg/mcdav"
+	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
+	"github.com/materials-commons/hydra/pkg/webdav"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/webdav"
+	"github.com/subosito/gotenv"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -20,9 +25,31 @@ var rootCmd = &cobra.Command{
 	Short: "Run a WebDav server for Materials Commons",
 	Long:  `Run a WebDav server for Materials Commons`,
 	Run: func(cmd *cobra.Command, args []string) {
+		dotenvFilePath := os.Getenv("MC_DOTENV_PATH")
+		if dotenvFilePath == "" {
+			log.Fatalf("MC_DOTENV_PATH not set or blank")
+		}
+
+		if err := gotenv.Load(dotenvFilePath); err != nil {
+			log.Fatalf("Failed loading configuration file %s: %s", dotenvFilePath, err)
+		}
+
+		db := mcdb.MustConnectToDB()
+		userStor := stor.NewGormUserStor(db)
+		user, err := userStor.GetUserByEmail("gtarcea@umich.edu")
+		if err != nil {
+			log.Fatalf("Failed getting user gtarcea@umich.edu: %s", err)
+		}
+		userFS := mcdav.NewUserFS(&mcdav.UserFSOpts{
+			MCFSRoot:    os.Getenv("MCFS_DIR"),
+			ProjectStor: stor.NewGormProjectStor(db),
+			FileStor:    stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
+			User:        user,
+		})
 		webdavSrv := &webdav.Handler{
-			Prefix:     "/webdav",
-			FileSystem: webdav.Dir("/home/gtarcea/Downloads"),
+			Prefix: "/webdav",
+			//FileSystem: webdav.Dir("/home/gtarcea/Downloads"),
+			FileSystem: userFS,
 			LockSystem: webdav.NewMemLS(),
 			Logger: func(r *http.Request, err error) {
 				if err != nil {
