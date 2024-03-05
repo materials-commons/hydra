@@ -1,8 +1,10 @@
 package stor
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/gosimple/slug"
 	"github.com/hashicorp/go-uuid"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
@@ -39,6 +41,10 @@ func (s *GormProjectStor) CreateProject(project *mcmodel.Project) (*mcmodel.Proj
 		return nil, err
 	}
 
+	slugOfName := slug.Make(project.Name)
+	project.Slug = slugOfName
+	slugNext := 1
+
 	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
 		team := &mcmodel.Team{
 			Name:    fmt.Sprintf("Team for %s", project.Name),
@@ -56,8 +62,20 @@ func (s *GormProjectStor) CreateProject(project *mcmodel.Project) (*mcmodel.Proj
 
 		project.TeamID = team.ID
 
-		if err = tx.Create(project).Error; err != nil {
-			return err
+	CreateLoop:
+		for {
+			err = tx.Create(project).Error
+			switch {
+			case err == nil:
+				break CreateLoop
+			case errors.Is(err, gorm.ErrForeignKeyViolated):
+				// If there is a foreign key violation we assume there was a collision on the slug.
+				// Add an incrementing integer to the slug name and try again.
+				project.Slug = fmt.Sprintf("%s-%d", slugOfName, slugNext)
+				slugNext = slugNext + 1
+			default:
+				return err
+			}
 		}
 
 		// Create the root directory for the project.

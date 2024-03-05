@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -76,35 +77,132 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.F
 
 	if path == "/" {
 		// Listing root
+		f := &mcmodel.File{
+			MimeType:  "directory",
+			Name:      "/",
+			Size:      0,
+			UpdatedAt: time.Now(),
+			Path:      "/",
+		}
 		mcfile := &MCFile{
 			File:        nil,
 			fileStor:    fs.fileStor,
 			projectStor: fs.projectStor,
-			mcfile:      nil,
+			mcfile:      f,
 			user:        fs.user,
 		}
 
-		fmt.Println("OpenFile returning from /")
 		return mcfile, nil
-	} else if true {
-		return nil, fmt.Errorf("method OpenFile not implemented")
 	}
+
 	project, projectSlug, err := fs.getProject(path)
 	if err != nil {
 		return nil, err
 	}
 
-	filePath := mc.RemoveProjectSlugFromPath(path, projectSlug)
-	file, err := fs.fileStor.GetFileByPath(project.ID, filePath)
-	if err != nil {
-		return nil, err
+	if pathIsOnlyForProjectSlug(path) {
+		f := &mcmodel.File{
+			MimeType:  "directory",
+			Name:      projectSlug,
+			Size:      0,
+			UpdatedAt: time.Now(),
+			Path:      path,
+			ProjectID: project.ID,
+		}
+
+		mcfile := &MCFile{
+			File:        nil,
+			fileStor:    fs.fileStor,
+			projectStor: fs.projectStor,
+			mcfile:      f,
+			user:        fs.user,
+		}
+
+		return mcfile, nil
 	}
 
+	// If we are here then this is an open on a file.
+
+	filePath := mc.RemoveProjectSlugFromPath(path, projectSlug)
+
+	file, err := fs.fileStor.GetFileByPath(project.ID, filePath)
+	if err != nil {
+		// File not found. If this is to read the file, then it's an error, otherwise we need
+		// to create the file.
+		if isReadonly(flag) {
+			return nil, err
+		}
+
+		// if we are here then the lookup failed, but this is for a write() to the file, so create
+		// a new one.
+		dirPath := filepath.Dir(filePath)
+
+		dir, err := fs.fileStor.GetDirByPath(project.ID, dirPath)
+		if err != nil {
+			return nil, err
+		}
+
+		name := filepath.Base(filePath)
+		file, err = fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeType(name))
+		if err != nil {
+			return nil, err
+		}
+
+		err = file.MkdirUnderlyingPath(fs.mcfsRoot)
+		if err != nil {
+			// What to do with the already created database file entry?
+			return nil, err
+		}
+
+		// Create empty file
+		f, err := os.Create(file.ToUnderlyingFilePath(fs.mcfsRoot))
+		if err != nil {
+			// What to do with the already created database file entry?
+			return nil, err
+		}
+
+		mcfile := &MCFile{
+			File:        f,
+			fileStor:    fs.fileStor,
+			projectStor: fs.projectStor,
+			mcfile:      file,
+			user:        fs.user,
+		}
+
+		return mcfile, nil
+	}
+
+	if file.IsDir() {
+		mcfile := &MCFile{
+			File:        nil,
+			fileStor:    fs.fileStor,
+			projectStor: fs.projectStor,
+			mcfile:      file,
+			user:        fs.user,
+		}
+
+		return mcfile, nil
+	}
+
+	// If we are here then the file exists, so open it for either read or write.
 	if isReadonly(flag) {
 		return os.Open(file.ToUnderlyingFilePath(fs.mcfsRoot))
 	}
 
-	return nil, fmt.Errorf("method OpenFile not implemented")
+	f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), flag, 0777)
+	if err != nil {
+		return nil, err
+	}
+
+	mcfile := &MCFile{
+		File:        f,
+		fileStor:    fs.fileStor,
+		projectStor: fs.projectStor,
+		mcfile:      file,
+		user:        fs.user,
+	}
+
+	return mcfile, nil
 }
 
 func (fs *UserFS) RemoveAll(ctx context.Context, name string) error {
@@ -126,13 +224,34 @@ func (fs *UserFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 			Name:      "/",
 			Size:      0,
 			UpdatedAt: time.Now(),
+			Path:      "/",
 		}
 		return f.ToFileInfo(), nil
 	}
+
 	project, projectSlug, err := fs.getProject(path)
 	if err != nil {
 		return nil, err
 	}
+
+	if pathIsOnlyForProjectSlug(path) {
+		f := mcmodel.File{
+			MimeType:  "directory",
+			Name:      projectSlug,
+			Size:      0,
+			UpdatedAt: time.Now(),
+			Path:      path,
+			ProjectID: project.ID,
+		}
+
+		return f.ToFileInfo(), nil
+	}
+
+	// If we are here then the stat is on a path like the following:
+	//  /<proj-slug>/..., for example, given project slug proj1
+	//  /proj1/dir/something.txt
+	// The stat is on /dir/something.txt in project with slug proj1
+	//
 	projectPath := mc.RemoveProjectSlugFromPath(path, projectSlug)
 	f, err := fs.fileStor.GetFileByPath(project.ID, projectPath)
 	if err != nil {

@@ -39,8 +39,12 @@ func (f *MCFile) ContentType(ctx context.Context) (string, error) {
 }
 
 func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
-	fmt.Println("MCFile.Readdir")
-	if f.mcfile == nil {
+	fmt.Printf("MCFile.Readdir %#v\n", f.mcfile)
+	if !f.mcfile.IsDir() {
+		return nil, os.ErrInvalid
+	}
+
+	if f.mcfile.Path == "/" {
 		// When mcfile is nil that means we are reading "/", so present a list of projects
 		projects, err := f.projectStor.GetProjectsForUser(f.user.ID)
 		if err != nil {
@@ -55,6 +59,7 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 				MimeType:  "directory",
 				Size:      uint64(project.Size),
 				Path:      filepath.Join("/", project.Slug),
+				ProjectID: project.ID,
 				UpdatedAt: project.UpdatedAt,
 			}
 			projectList = append(projectList, f.ToFileInfo())
@@ -63,13 +68,33 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 		return projectList, nil
 	}
 
-	return nil, fmt.Errorf("method Readdir not implemented on non-nil mcfile")
+	// If we are here then list the project files/directory for the given directory
+	pathToUse := f.mcfile.Path
+	if pathIsOnlyForProjectSlug(pathToUse) {
+		// Path is something like /project-slug, so turn this into "/" for the given
+		// project. All other real project directory paths will have the correct path.
+		// It's only these mcdav made up /project-slug entries that have a path we
+		// need to account for and correct.
+		pathToUse = "/"
+	}
+
+	entries, err := f.fileStor.ListDirectoryByPath(f.mcfile.ProjectID, pathToUse)
+	if err != nil {
+		return nil, err
+	}
+
+	var fileList []os.FileInfo
+	for _, entry := range entries {
+		fileList = append(fileList, entry.ToFileInfo())
+	}
+
+	return fileList, nil
 }
 
 func (f *MCFile) Stat() (fs.FileInfo, error) {
 	if f.mcfile == nil {
-		fmt.Println("calling stat on /")
+		return nil, fs.ErrInvalid
 	}
 
-	return nil, fmt.Errorf("method Stat not implemented on MCFile")
+	return f.mcfile.ToFileInfo(), nil
 }

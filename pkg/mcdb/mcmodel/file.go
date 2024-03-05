@@ -30,6 +30,10 @@ type File struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
+func (f File) MkdirUnderlyingPath(mcfsDir string) error {
+	return os.MkdirAll(f.ToUnderlyingDirPath(mcfsDir), 0755)
+}
+
 func (File) TableName() string {
 	return "files"
 }

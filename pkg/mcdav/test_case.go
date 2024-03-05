@@ -1,6 +1,7 @@
 package mcdav
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -12,24 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestCanStatRoot(t *testing.T) {
-	tc := newMCFileTestCase(t)
-	_ = tc
-}
-
-func TestCanStatAProject(t *testing.T) {
-	t.Fatalf("not implemented")
-}
-
-func TestCanStatAFile(t *testing.T) {
-	t.Fatalf("not implemented")
-}
-
-func TestCanListProjectsInRoot(t *testing.T) {
-	t.Fatalf("not implemented")
-}
-
-type mcfileTestCase struct {
+type testCase struct {
 	*testing.T
 	stors   *stor.Stors
 	db      *gorm.DB
@@ -39,16 +23,18 @@ type mcfileTestCase struct {
 	rootDir *mcmodel.File
 	dir1    *mcmodel.File
 	f       *mcmodel.File
+	userFS  *UserFS
+	ctx     context.Context
 }
 
-func newMCFileTestCase(t *testing.T) *mcfileTestCase {
+func newTestCase(t *testing.T) *testCase {
 	dsn := mcdb.SqliteInMemoryDSN
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
 	sqlitedb, err := db.DB()
 	sqlitedb.SetMaxOpenConns(1)
 	err = mcdb.RunMigrations(db)
-	tc := &mcfileTestCase{
+	tc := &testCase{
 		db:      db,
 		T:       t,
 		mcfsDir: "/tmp/mcfs",
@@ -62,10 +48,19 @@ func newMCFileTestCase(t *testing.T) *mcfileTestCase {
 
 	tc.populateDatabase()
 
+	tc.userFS = NewUserFS(&UserFSOpts{
+		MCFSRoot:    tc.mcfsDir,
+		User:        tc.user,
+		ProjectStor: tc.stors.ProjectStor,
+		FileStor:    tc.stors.FileStor,
+	})
+
+	tc.ctx = context.Background()
+
 	return tc
 }
 
-func (tc *mcfileTestCase) populateDatabase() {
+func (tc *testCase) populateDatabase() {
 	var err error
 
 	tc.stors = stor.NewGormStors(tc.db, tc.mcfsDir)
@@ -77,7 +72,7 @@ func (tc *mcfileTestCase) populateDatabase() {
 
 	proj := &mcmodel.Project{Name: "Proj1", OwnerID: user.ID}
 
-	proj, err = tc.stors.ProjectStor.CreateProject(proj)
+	tc.proj, err = tc.stors.ProjectStor.CreateProject(proj)
 	require.NoErrorf(tc.T, err, "Failed creating proj: %s", err)
 
 	tc.rootDir, err = tc.stors.FileStor.GetDirByPath(proj.ID, "/")
