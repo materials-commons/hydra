@@ -4,9 +4,6 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"bytes"
-	"fmt"
-	"io"
 	"net/http"
 	"os"
 
@@ -63,10 +60,12 @@ var rootCmd = &cobra.Command{
 		}
 
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			r.Body = io.NopCloser(bytes.NewBuffer(body))
-			fmt.Printf("In HandleFunc, %s body = '%s'\n", r.Method, string(body))
+			//body, _ := io.ReadAll(r.Body)
+			//r.Body = io.NopCloser(bytes.NewBuffer(body))
+			//fmt.Printf("In HandleFunc, %s body = '%s'\n", r.Method, string(body))
 			username, password, _ := r.BasicAuth()
+
+			// TODO: Remove fake password and user when we implement per user login and handlers
 			if username == "webdav@umich.edu" && password == "abc123" {
 				w.Header().Set("Timeout", "99999999")
 				webdavSrv.ServeHTTP(w, r)
