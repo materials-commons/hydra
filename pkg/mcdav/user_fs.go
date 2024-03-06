@@ -65,9 +65,22 @@ func NewUserFS(opts *UserFSOpts) *UserFS {
 	}
 }
 
-func (fs *UserFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
-	fmt.Println("fs.Mkdir", name)
-	return fmt.Errorf("method Mkdir not implemented")
+func (fs *UserFS) Mkdir(ctx context.Context, path string, perm os.FileMode) error {
+	//fmt.Println("fs.Mkdir", path)
+	project, projectSlug, err := fs.getProject(path)
+	if err != nil {
+		return err
+	}
+
+	dirPath := mc.RemoveProjectSlugFromPath(path, projectSlug)
+	parentDir, err := fs.fileStor.GetFileByPath(project.ID, filepath.Dir(dirPath))
+	if err != nil {
+		return err
+	}
+
+	_, err = fs.fileStor.CreateDirectory(parentDir.ID, project.ID, fs.user.ID, dirPath, filepath.Base(dirPath))
+
+	return err
 }
 
 func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.FileMode) (webdav.File, error) {
