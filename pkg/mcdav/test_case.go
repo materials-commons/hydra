@@ -84,6 +84,9 @@ func (tc *testCase) populateDatabase() {
 	tc.f, err = tc.stors.FileStor.CreateFile("test.txt", proj.ID, tc.dir1.ID, tc.user.ID, "text/text")
 	require.NoErrorf(tc.T, err, "Failed creating file test.txt in dir %s: %s", tc.dir1.Path, err)
 
+	tc.f, err = tc.stors.FileStor.SetFileAsCurrent(tc.f)
+	require.NoErrorf(tc.T, err, "Failed setting file to current: %s", err)
+
 	err = tc.f.MkdirUnderlyingPath(tc.mcfsDir)
 	require.NoErrorf(tc.T, err, "Failed creating underlying directory for file %s: %s", tc.f.ToUnderlyingDirPath(tc.mcfsDir), err)
 

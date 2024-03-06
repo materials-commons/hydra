@@ -70,7 +70,9 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 
 	// If we are here then list the project files/directory for the given directory
 	pathToUse := f.mcfile.Path
-	if pathIsOnlyForProjectSlug(pathToUse) {
+	fmt.Printf("pathToUse (%s), mcfile = %#v\n", pathToUse, f.mcfile)
+	// if mcfile.ID == 0 then this isn't a real directory, but is either / or /<project-slug>.
+	if f.mcfile.ID == 0 { //&& pathIsOnlyForProjectSlug(pathToUse) {
 		// Path is something like /project-slug, so turn this into "/" for the given
 		// project. All other real project directory paths will have the correct path.
 		// It's only these mcdav made up /project-slug entries that have a path we
@@ -78,6 +80,7 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 		pathToUse = "/"
 	}
 
+	fmt.Printf(" Readdir call ListDirectoryByPath(%d, %s)\n", f.mcfile.ProjectID, pathToUse)
 	entries, err := f.fileStor.ListDirectoryByPath(f.mcfile.ProjectID, pathToUse)
 	if err != nil {
 		return nil, err

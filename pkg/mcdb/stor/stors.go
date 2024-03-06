@@ -13,6 +13,7 @@ type FileStor interface {
 	GetFileByID(fileID int) (*mcmodel.File, error)
 	GetFileByUUID(fileUUID string) (*mcmodel.File, error)
 	UpdateMetadataForFileAndProject(file *mcmodel.File, checksum string, totalBytes int64) error
+	SetFileAsCurrent(file *mcmodel.File) (*mcmodel.File, error)
 	CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error)
 	GetDirByPath(projectID int, path string) (*mcmodel.File, error)
 	CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error)

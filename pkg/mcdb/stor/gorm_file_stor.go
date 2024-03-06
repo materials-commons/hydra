@@ -2,6 +2,7 @@ package stor
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,8 @@ func (s *GormFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, check
 		err := tx.Model(&mcmodel.File{}).
 			Where("directory_id = ?", file.DirectoryID).
 			Where("name = ?", file.Name).
+			Where("deleted_at IS NULL").
+			Where("dataset_id IS NULL").
 			Update("current", false).Error
 
 		if err != nil {
@@ -79,6 +82,32 @@ func (s *GormFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, check
 
 		return tx.Model(&project).Updates(&mcmodel.Project{Size: project.Size + totalBytes}).Error
 	})
+}
+
+func (s *GormFileStor) SetFileAsCurrent(file *mcmodel.File) (*mcmodel.File, error) {
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		// To set file as the current (ie viewable) version we first need to set all its previous
+		// versions to have current set to false.
+		err := tx.Model(&mcmodel.File{}).
+			Where("directory_id = ?", file.DirectoryID).
+			Where("name = ?", file.Name).
+			Where("deleted_at IS NULL").
+			Where("dataset_id IS NULL").
+			Update("current", false).Error
+
+		if err != nil {
+			return err
+		}
+
+		return tx.Model(file).Updates(&mcmodel.File{Current: true}).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	file.Current = true
+	return file, nil
 }
 
 func (s *GormFileStor) CreateFile(name string, projectID, directoryID, ownerID int, mimeType string) (*mcmodel.File, error) {
@@ -210,6 +239,7 @@ func (s *GormFileStor) CreateDirIfNotExists(parentDirID int, path, name string, 
 }
 
 func (s *GormFileStor) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
+	fmt.Println("ListDirectoryByPath:", path)
 	dir, err := s.GetDirByPath(projectID, path)
 	if err != nil {
 		return nil, err
@@ -271,11 +301,13 @@ func (s *GormFileStor) GetOrCreateDirPath(projectID, ownerID int, path string) (
 }
 
 func (s *GormFileStor) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
+	fmt.Println("GetFileByPath:", path)
 	if path == "/" {
 		return s.GetDirByPath(projectID, path)
 	}
 
 	dirPath := filepath.Dir(path)
+	fmt.Println("   dirPath:", dirPath)
 	dir, err := s.GetDirByPath(projectID, dirPath)
 	if err != nil {
 		return nil, err
