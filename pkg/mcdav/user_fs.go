@@ -2,6 +2,7 @@ package mcdav
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"os"
 	"path"
@@ -33,12 +34,9 @@ type UserFS struct {
 	// Directory path to mcfs files
 	mcfsRoot string
 
-	// filesWritten keeps track of files that the user has written to. Because
-	// we don't know when a user is done writing to a file, only the first time
-	// a write() is done to a file do we create a new version. After that, all
-	// subsequent writes are done to the same file. This map can be reset by
-	// a user from the UI, or the CLI when they know they want a new version.
-	filesWritten sync.Map
+	// knownFiles is a list of files (*mcmodel.File) that the system has created. When the user writes to a file
+	// they will write to the underlying file represented by this file.
+	knownFiles sync.Map
 }
 
 // slashClean is equivalent to but slightly more efficient than
@@ -72,8 +70,8 @@ func (fs *UserFS) Mkdir(ctx context.Context, name string, perm os.FileMode) erro
 	return fmt.Errorf("method Mkdir not implemented")
 }
 
-func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.FileMode) (webdav.File, error) {
-	fmt.Println("fs.OpenFile", path)
+func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.FileMode) (webdav.File, error) {
+	log.Infof("fs.OpenFile(%s, %o)\n", path, flags)
 
 	if path == "/" {
 		// Listing root
@@ -129,48 +127,15 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.F
 	if err != nil {
 		// File not found. If this is to read the file, then it's an error, otherwise we need
 		// to create the file.
-		if isReadonly(flag) {
+		if isReadonly(flags) {
 			return nil, err
 		}
 
-		// if we are here then the lookup failed, but this is for a write() to the file, so create
-		// a new one.
-		dirPath := filepath.Dir(filePath)
-
-		dir, err := fs.fileStor.GetDirByPath(project.ID, dirPath)
-		if err != nil {
-			return nil, err
-		}
-
-		name := filepath.Base(filePath)
-		file, err = fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeType(name))
-		if err != nil {
-			return nil, err
-		}
-
-		err = file.MkdirUnderlyingPath(fs.mcfsRoot)
-		if err != nil {
-			// What to do with the already created database file entry?
-			return nil, err
-		}
-
-		// Create empty file
-		f, err := os.Create(file.ToUnderlyingFilePath(fs.mcfsRoot))
-		if err != nil {
-			// What to do with the already created database file entry?
-			return nil, err
-		}
-
-		mcfile := &MCFile{
-			File:        f,
-			fileStor:    fs.fileStor,
-			projectStor: fs.projectStor,
-			mcfile:      file,
-			user:        fs.user,
-		}
-
-		return mcfile, nil
+		// Couldn't find the file, so create a new one.
+		return fs.createFile(filePath, project)
 	}
+
+	// found file, check if its a directory reference
 
 	if file.IsDir() {
 		mcfile := &MCFile{
@@ -184,13 +149,62 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.F
 		return mcfile, nil
 	}
 
-	// If we are here then the file exists, so open it for either read or write.
-	if isReadonly(flag) {
+	// If we are here then the file exists. For readonly we just open the file.
+	if isReadonly(flags) {
 		return os.Open(file.ToUnderlyingFilePath(fs.mcfsRoot))
 	}
 
-	f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), flag, 0777)
+	return fs.createFile(filePath, project)
+}
+
+func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.File, error) {
+	knownFile, ok := fs.knownFiles.Load(filePath)
+	if ok {
+		// This file has already been created.
+		file := knownFile.(*mcmodel.File)
+		f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return nil, err
+		}
+
+		mcfile := &MCFile{
+			File:        f,
+			fileStor:    fs.fileStor,
+			projectStor: fs.projectStor,
+			mcfile:      file,
+			user:        fs.user,
+			hasher:      md5.New(),
+		}
+
+		return mcfile, nil
+	}
+	// if we are here then the lookup failed or this is a write() to an existing file. In either case
+	// create a new file or version.
+	dirPath := filepath.Dir(filePath)
+
+	dir, err := fs.fileStor.GetDirByPath(project.ID, dirPath)
 	if err != nil {
+		return nil, err
+	}
+
+	name := filepath.Base(filePath)
+	file, err := fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeType(name))
+	if err != nil {
+		return nil, err
+	}
+
+	file, err = fs.fileStor.SetFileAsCurrent(file)
+
+	err = file.MkdirUnderlyingPath(fs.mcfsRoot)
+	if err != nil {
+		// What to do with the already created database file entry?
+		return nil, err
+	}
+
+	// Create empty file
+	f, err := os.Create(file.ToUnderlyingFilePath(fs.mcfsRoot))
+	if err != nil {
+		// What to do with the already created database file entry?
 		return nil, err
 	}
 
@@ -200,7 +214,10 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flag int, perm os.F
 		projectStor: fs.projectStor,
 		mcfile:      file,
 		user:        fs.user,
+		hasher:      md5.New(),
 	}
+
+	fs.knownFiles.Store(filePath, file)
 
 	return mcfile, nil
 }
@@ -216,7 +233,6 @@ func (fs *UserFS) Rename(ctx context.Context, oldName, newName string) error {
 }
 
 func (fs *UserFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
-	fmt.Println("fs.Stat", path)
 	if path == "/" {
 		// Listing root. Create a fake entry.
 		f := mcmodel.File{

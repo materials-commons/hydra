@@ -1,8 +1,11 @@
 package mcdav
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"hash"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,29 +20,53 @@ type MCFile struct {
 	projectStor stor.ProjectStor
 	mcfile      *mcmodel.File
 	user        *mcmodel.User
+	hasher      hash.Hash
 }
 
 func (f *MCFile) Close() error {
 	if f.File == nil {
 		return nil
 	}
-	err := f.File.Close()
-	// Update metadata in materials commons
-	return err
+
+	// All MCFile entries are files that were opened for write. So lets update the metadata.
+
+	var size int64 = 0
+	finfo, err := f.File.Stat()
+	if err == nil {
+		size = finfo.Size()
+	}
+
+	closeErr := f.File.Close()
+
+	checksum := fmt.Sprintf("%x", f.hasher.Sum(nil))
+
+	// TODO: Instead call f.fileStor.DoneWritingToFile here. I'll need the conversion stor inorder to do this.
+	if err := f.fileStor.UpdateMetadataForFileAndProject(f.mcfile, checksum, size); err != nil {
+		// log that we couldn't update the database
+	}
+
+	return closeErr
 }
 
 func (f *MCFile) Write(p []byte) (n int, err error) {
-	// write to hash
-	return f.File.Write(p)
+	if f.File == nil {
+		return 0, os.ErrInvalid
+	}
+
+	if n, err = f.File.Write(p); err != nil {
+		return 0, err
+	}
+
+	_, _ = io.Copy(f.hasher, bytes.NewBuffer(p[:n]))
+
+	return n, err
 }
 
 func (f *MCFile) ContentType(ctx context.Context) (string, error) {
-	fmt.Println("Calling MCFile.ContentType")
 	return f.mcfile.MimeType, nil
 }
 
 func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
-	fmt.Printf("MCFile.Readdir %#v\n", f.mcfile)
 	if !f.mcfile.IsDir() {
 		return nil, os.ErrInvalid
 	}
@@ -70,9 +97,8 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 
 	// If we are here then list the project files/directory for the given directory
 	pathToUse := f.mcfile.Path
-	fmt.Printf("pathToUse (%s), mcfile = %#v\n", pathToUse, f.mcfile)
 	// if mcfile.ID == 0 then this isn't a real directory, but is either / or /<project-slug>.
-	if f.mcfile.ID == 0 { //&& pathIsOnlyForProjectSlug(pathToUse) {
+	if f.mcfile.ID == 0 {
 		// Path is something like /project-slug, so turn this into "/" for the given
 		// project. All other real project directory paths will have the correct path.
 		// It's only these mcdav made up /project-slug entries that have a path we
@@ -80,7 +106,6 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 		pathToUse = "/"
 	}
 
-	fmt.Printf(" Readdir call ListDirectoryByPath(%d, %s)\n", f.mcfile.ProjectID, pathToUse)
 	entries, err := f.fileStor.ListDirectoryByPath(f.mcfile.ProjectID, pathToUse)
 	if err != nil {
 		return nil, err

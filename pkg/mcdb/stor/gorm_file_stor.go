@@ -2,7 +2,6 @@ package stor
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,7 +61,7 @@ func (s *GormFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, check
 			return err
 		}
 
-		// Now we can update the meta data on the current file. This includes, the size, current, and if there is
+		// Now we can update the metadata on the current file. This includes, the size, current, and if there is
 		// a new computed checksum, also update the checksum field.
 		fileMetadata := mcmodel.File{
 			Size:     uint64(finfo.Size()),
@@ -82,6 +81,35 @@ func (s *GormFileStor) UpdateMetadataForFileAndProject(file *mcmodel.File, check
 
 		return tx.Model(&project).Updates(&mcmodel.Project{Size: project.Size + totalBytes}).Error
 	})
+}
+
+func (s *GormFileStor) UpdateFile(file, updates *mcmodel.File) (*mcmodel.File, error) {
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Model(file).Updates(updates).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func (s *GormFileStor) SetUsesToNull(file *mcmodel.File) (*mcmodel.File, error) {
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Model(file).
+			Select("uses_uuid", "uses_id").
+			Updates(map[string]interface{}{"uses_uuid": gorm.Expr("NULL"), "uses_id": gorm.Expr("NULL")}).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	file.UsesID = 0
+	file.UsesUUID = ""
+
+	return file, err
 }
 
 func (s *GormFileStor) SetFileAsCurrent(file *mcmodel.File) (*mcmodel.File, error) {
@@ -239,7 +267,6 @@ func (s *GormFileStor) CreateDirIfNotExists(parentDirID int, path, name string, 
 }
 
 func (s *GormFileStor) ListDirectoryByPath(projectID int, path string) ([]mcmodel.File, error) {
-	fmt.Println("ListDirectoryByPath:", path)
 	dir, err := s.GetDirByPath(projectID, path)
 	if err != nil {
 		return nil, err
@@ -301,13 +328,11 @@ func (s *GormFileStor) GetOrCreateDirPath(projectID, ownerID int, path string) (
 }
 
 func (s *GormFileStor) GetFileByPath(projectID int, path string) (*mcmodel.File, error) {
-	fmt.Println("GetFileByPath:", path)
 	if path == "/" {
 		return s.GetDirByPath(projectID, path)
 	}
 
 	dirPath := filepath.Dir(path)
-	fmt.Println("   dirPath:", dirPath)
 	dir, err := s.GetDirByPath(projectID, dirPath)
 	if err != nil {
 		return nil, err

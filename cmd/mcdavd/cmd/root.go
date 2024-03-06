@@ -46,6 +46,7 @@ var rootCmd = &cobra.Command{
 			FileStor:    stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
 			User:        user,
 		})
+		_ = userFS
 		webdavSrv := &webdav.Handler{
 			Prefix: "/webdav",
 			//FileSystem: webdav.Dir("/home/gtarcea/Downloads"),
