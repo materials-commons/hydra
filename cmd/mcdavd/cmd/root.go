@@ -52,14 +52,14 @@ var rootCmd = &cobra.Command{
 			//FileSystem: webdav.Dir("/home/gtarcea/Downloads"),
 			FileSystem: userFS,
 			LockSystem: webdav.NewMemLS(),
-			Logger: func(r *http.Request, err error) {
-				if err != nil {
-					fmt.Printf("WebDAV %s: %s, ERROR: %s\n", r.Method, r.URL, err)
-				} else {
-					b, _ := io.ReadAll(r.Body)
-					fmt.Printf("WebDAV %s: %s %s\n", r.Method, r.URL, string(b))
-				}
-			},
+			//Logger: func(r *http.Request, err error) {
+			//	if err != nil {
+			//		fmt.Printf("WebDAV %s: %s, ERROR: %s\n", r.Method, r.URL, err)
+			//	} else {
+			//		//b, _ := io.ReadAll(r.Body)
+			//		fmt.Printf("WebDAV %s: %s\n", r.Method, r.URL)
+			//	}
+			//},
 		}
 
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
