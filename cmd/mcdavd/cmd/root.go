@@ -6,6 +6,7 @@ package cmd
 import (
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdav"
@@ -14,9 +15,14 @@ import (
 	"github.com/materials-commons/hydra/pkg/webdav"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
+	"golang.org/x/crypto/bcrypt"
 )
 
-// rootCmd represents the base command when called without any subcommands
+type UserEntry struct {
+	webdavSrv *webdav.Handler
+	password  string
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "mcdavd",
 	Short: "Run a WebDav server for Materials Commons",
@@ -33,48 +39,71 @@ var rootCmd = &cobra.Command{
 
 		db := mcdb.MustConnectToDB()
 		userStor := stor.NewGormUserStor(db)
-		user, err := userStor.GetUserByEmail("gtarcea@umich.edu")
-		if err != nil {
-			log.Fatalf("Failed getting user gtarcea@umich.edu: %s", err)
-		}
-		userFS := mcdav.NewUserFS(&mcdav.UserFSOpts{
-			MCFSRoot:    os.Getenv("MCFS_DIR"),
-			ProjectStor: stor.NewGormProjectStor(db),
-			FileStor:    stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
-			User:        user,
-		})
-		_ = userFS
-		webdavSrv := &webdav.Handler{
-			Prefix: "/webdav",
-			//FileSystem: webdav.Dir("/home/gtarcea/Downloads"),
-			FileSystem: userFS,
-			LockSystem: webdav.NewMemLS(),
-			//Logger: func(r *http.Request, err error) {
-			//	if err != nil {
-			//		fmt.Printf("WebDAV %s: %s, ERROR: %s\n", r.Method, r.URL, err)
-			//	} else {
-			//		//b, _ := io.ReadAll(r.Body)
-			//		fmt.Printf("WebDAV %s: %s\n", r.Method, r.URL)
-			//	}
-			//},
-		}
+
+		var userEntryByEmail sync.Map
 
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			//body, _ := io.ReadAll(r.Body)
-			//r.Body = io.NopCloser(bytes.NewBuffer(body))
-			//fmt.Printf("In HandleFunc, %s body = '%s'\n", r.Method, string(body))
 			username, password, _ := r.BasicAuth()
 
-			// TODO: Remove fake password and user when we implement per user login and handlers
-			if username == "webdav@umich.edu" && password == "abc123" {
+			var userEntry *UserEntry
+
+			entry, ok := userEntryByEmail.Load(username)
+			if ok {
+				userEntry = entry.(*UserEntry)
+				if password == userEntry.password {
+					// same password so we don't need to check it, so just serve
+					w.Header().Set("Timeout", "99999999")
+					userEntry.webdavSrv.ServeHTTP(w, r)
+					return
+				} else {
+					// Wrong password
+					w.Header().Set("WWW-Authenticate", `Basic realm="BASIC WebDAV REALM"`)
+					w.WriteHeader(401)
+					_, _ = w.Write([]byte("401 Unauthorized\n"))
+				}
+			} else {
+				// Didn't find the entry, so lets get everything setup.
+				user, err := userStor.GetUserByEmail(username)
+				if err != nil {
+					log.Errorf("Failed getting user %s: %s", username, err)
+					w.Header().Set("WWW-Authenticate", `Basic realm="BASIC WebDAV REALM"`)
+					w.WriteHeader(401)
+					_, _ = w.Write([]byte("401 Unauthorized\n"))
+					return
+				}
+
+				// make sure that the password is correct
+				if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+					w.Header().Set("WWW-Authenticate", `Basic realm="BASIC WebDAV REALM"`)
+					w.WriteHeader(401)
+					_, _ = w.Write([]byte("401 Unauthorized\n"))
+					return
+				}
+
+				userFS := mcdav.NewUserFS(&mcdav.UserFSOpts{
+					MCFSRoot:    os.Getenv("MCFS_DIR"),
+					ProjectStor: stor.NewGormProjectStor(db),
+					FileStor:    stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
+					User:        user,
+				})
+
+				webdavSrv := &webdav.Handler{
+					Prefix:     "/webdav",
+					FileSystem: userFS,
+					LockSystem: webdav.NewMemLS(),
+				}
+
+				userEntry := &UserEntry{
+					webdavSrv: webdavSrv,
+					password:  password,
+				}
+
+				userEntryByEmail.Store(username, userEntry)
+
 				w.Header().Set("Timeout", "99999999")
-				webdavSrv.ServeHTTP(w, r)
+				userEntry.webdavSrv.ServeHTTP(w, r)
 				return
 			}
-
-			w.Header().Set("WWW-Authenticate", `Basic realm="BASIC WebDAV REALM"`)
-			w.WriteHeader(401)
-			_, _ = w.Write([]byte("401 Unauthorized\n"))
 		})
 
 		_ = http.ListenAndServe(":8555", nil)
