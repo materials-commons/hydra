@@ -84,7 +84,7 @@ func (fs *UserFS) Mkdir(ctx context.Context, path string, perm os.FileMode) erro
 }
 
 func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.FileMode) (webdav.File, error) {
-	log.Infof("fs.OpenFile(%s, %o)\n", path, flags)
+	//log.Infof("fs.OpenFile(%s, %o)\n", path, flags)
 
 	if path == "/" {
 		// Listing root
