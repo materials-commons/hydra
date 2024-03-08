@@ -19,8 +19,9 @@ import (
 type MCFile struct {
 	// If there is a real file, then this will be non-nil
 	*os.File
-	fileStor    stor.FileStor
-	projectStor stor.ProjectStor
+	fileStor       stor.FileStor
+	projectStor    stor.ProjectStor
+	conversionStor stor.ConversionStor
 
 	// The materials commons file entry, or a fake on for a project or "/"
 	mcfile *mcmodel.File
@@ -54,9 +55,14 @@ func (f *MCFile) Close() error {
 
 	checksum := fmt.Sprintf("%x", f.hasher.Sum(nil))
 
-	// TODO:  Also submit the file for conversion if it should be converted.
 	if err := f.fileStor.UpdateMetadataForFileAndProject(f.mcfile, checksum, size); err != nil {
 		// log that we couldn't update the database
+	}
+
+	if f.mcfile.IsConvertible() {
+		if _, err := f.conversionStor.AddFileToConvert(f.mcfile); err != nil {
+			// log that couldn't update the database.
+		}
 	}
 
 	return closeErr

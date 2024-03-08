@@ -23,8 +23,9 @@ import (
 // project. For example /aging-1234/mydir/file.txt represents the path /mydir/file.txt in the
 // project identified by the slug aging-1234.
 type UserFS struct {
-	fileStor    stor.FileStor
-	projectStor stor.ProjectStor
+	fileStor       stor.FileStor
+	projectStor    stor.ProjectStor
+	conversionStor stor.ConversionStor
 
 	// A cache of projects the user has access to
 	projects sync.Map
@@ -45,19 +46,21 @@ type UserFS struct {
 
 // UserFSOpts are the arguments for creating a new UserFS.
 type UserFSOpts struct {
-	MCFSRoot    string
-	User        *mcmodel.User
-	ProjectStor stor.ProjectStor
-	FileStor    stor.FileStor
+	MCFSRoot       string
+	User           *mcmodel.User
+	ProjectStor    stor.ProjectStor
+	FileStor       stor.FileStor
+	ConversionStor stor.ConversionStor
 }
 
 // NewUserFS creates a new UserFS. All the fields in UserFSOpts must be filled in. This is not checked.
 func NewUserFS(opts *UserFSOpts) *UserFS {
 	return &UserFS{
-		mcfsRoot:    opts.MCFSRoot,
-		user:        opts.User,
-		projectStor: opts.ProjectStor,
-		fileStor:    opts.FileStor,
+		mcfsRoot:       opts.MCFSRoot,
+		user:           opts.User,
+		projectStor:    opts.ProjectStor,
+		fileStor:       opts.FileStor,
+		conversionStor: opts.ConversionStor,
 	}
 }
 
@@ -98,11 +101,12 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 			Path:      "/",
 		}
 		mcfile := &MCFile{
-			File:        nil, // There is no real underlying File to open.
-			fileStor:    fs.fileStor,
-			projectStor: fs.projectStor,
-			mcfile:      f,
-			user:        fs.user,
+			File:           nil, // There is no real underlying File to open.
+			fileStor:       fs.fileStor,
+			projectStor:    fs.projectStor,
+			conversionStor: fs.conversionStor,
+			mcfile:         f,
+			user:           fs.user,
 		}
 
 		return mcfile, nil
@@ -128,11 +132,12 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 		}
 
 		mcfile := &MCFile{
-			File:        nil,
-			fileStor:    fs.fileStor,
-			projectStor: fs.projectStor,
-			mcfile:      f,
-			user:        fs.user,
+			File:           nil,
+			fileStor:       fs.fileStor,
+			projectStor:    fs.projectStor,
+			conversionStor: fs.conversionStor,
+			mcfile:         f,
+			user:           fs.user,
 		}
 
 		return mcfile, nil
@@ -170,11 +175,12 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 
 	if file.IsDir() {
 		mcfile := &MCFile{
-			File:        nil,
-			fileStor:    fs.fileStor,
-			projectStor: fs.projectStor,
-			mcfile:      file,
-			user:        fs.user,
+			File:           nil,
+			fileStor:       fs.fileStor,
+			projectStor:    fs.projectStor,
+			conversionStor: fs.conversionStor,
+			mcfile:         file,
+			user:           fs.user,
 		}
 
 		return mcfile, nil
@@ -204,12 +210,13 @@ func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.
 		}
 
 		mcfile := &MCFile{
-			File:        f,
-			fileStor:    fs.fileStor,
-			projectStor: fs.projectStor,
-			mcfile:      file,
-			user:        fs.user,
-			hasher:      md5.New(),
+			File:           f,
+			fileStor:       fs.fileStor,
+			projectStor:    fs.projectStor,
+			conversionStor: fs.conversionStor,
+			mcfile:         file,
+			user:           fs.user,
+			hasher:         md5.New(),
 		}
 
 		return mcfile, nil
@@ -251,12 +258,13 @@ func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.
 	}
 
 	mcfile := &MCFile{
-		File:        f,
-		fileStor:    fs.fileStor,
-		projectStor: fs.projectStor,
-		mcfile:      file,
-		user:        fs.user,
-		hasher:      md5.New(),
+		File:           f,
+		fileStor:       fs.fileStor,
+		projectStor:    fs.projectStor,
+		conversionStor: fs.conversionStor,
+		mcfile:         file,
+		user:           fs.user,
+		hasher:         md5.New(),
 	}
 
 	// place in knownFiles so subsequent attempts to write will reuse this entry.

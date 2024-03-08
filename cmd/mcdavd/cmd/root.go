@@ -81,10 +81,11 @@ var rootCmd = &cobra.Command{
 				}
 
 				userFS := mcdav.NewUserFS(&mcdav.UserFSOpts{
-					MCFSRoot:    os.Getenv("MCFS_DIR"),
-					ProjectStor: stor.NewGormProjectStor(db),
-					FileStor:    stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
-					User:        user,
+					MCFSRoot:       os.Getenv("MCFS_DIR"),
+					ProjectStor:    stor.NewGormProjectStor(db),
+					FileStor:       stor.NewGormFileStor(db, os.Getenv("MCFS_DIR")),
+					ConversionStor: stor.NewGormConversionStor(db),
+					User:           user,
 				})
 
 				webdavSrv := &webdav.Handler{
