@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -18,6 +17,11 @@ import (
 	"github.com/materials-commons/hydra/pkg/webdav"
 )
 
+// A UserFS represents a virtual fs to a users files and projects. It uses the Materials Commons
+// file and project stors to determine projects, files and access. A UserFS is represented in
+// a path as /<project-slug>/<rest-of-path>, where <project-slug> is the unique slug for a given
+// project. For example /aging-1234/mydir/file.txt represents the path /mydir/file.txt in the
+// project identified by the slug aging-1234.
 type UserFS struct {
 	fileStor    stor.FileStor
 	projectStor stor.ProjectStor
@@ -39,16 +43,7 @@ type UserFS struct {
 	knownFiles sync.Map
 }
 
-// slashClean is equivalent to but slightly more efficient than
-// path.Clean("/" + name).
-// From Golang source for x/net/webdav package
-func slashClean(name string) string {
-	if name == "" || name[0] != '/' {
-		name = "/" + name
-	}
-	return path.Clean(name)
-}
-
+// UserFSOpts are the arguments for creating a new UserFS.
 type UserFSOpts struct {
 	MCFSRoot    string
 	User        *mcmodel.User
@@ -56,6 +51,7 @@ type UserFSOpts struct {
 	FileStor    stor.FileStor
 }
 
+// NewUserFS creates a new UserFS. All the fields in UserFSOpts must be filled in. This is not checked.
 func NewUserFS(opts *UserFSOpts) *UserFS {
 	return &UserFS{
 		mcfsRoot:    opts.MCFSRoot,
@@ -65,6 +61,7 @@ func NewUserFS(opts *UserFSOpts) *UserFS {
 	}
 }
 
+// Mkdir creates a new directory. It determines the project and path from the path.
 func (fs *UserFS) Mkdir(ctx context.Context, path string, perm os.FileMode) error {
 	//fmt.Println("fs.Mkdir", path)
 	project, projectSlug, err := fs.getProject(path)
@@ -83,11 +80,16 @@ func (fs *UserFS) Mkdir(ctx context.Context, path string, perm os.FileMode) erro
 	return err
 }
 
+// OpenFile opens a file project file. It also handles virtual objects that don't actually but are represented
+// in the path. For example "/", which is the base directory, and can be used by WebDAV to get a list of all
+// the project slugs (represented as directories) for a given user. The same for /<project-slug> which
+// represents a particular project with <project-slug> as its slug identifier.
 func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.FileMode) (webdav.File, error) {
 	//log.Infof("fs.OpenFile(%s, %o)\n", path, flags)
 
 	if path == "/" {
-		// Listing root
+		// Listing root, create a fake mcmodel.File object to represent this. MCFile will see this
+		// and known to list projects for the user when Readdir() is called.
 		f := &mcmodel.File{
 			MimeType:  "directory",
 			Name:      "/",
@@ -96,7 +98,7 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 			Path:      "/",
 		}
 		mcfile := &MCFile{
-			File:        nil,
+			File:        nil, // There is no real underlying File to open.
 			fileStor:    fs.fileStor,
 			projectStor: fs.projectStor,
 			mcfile:      f,
@@ -106,11 +108,15 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 		return mcfile, nil
 	}
 
+	// At this point the path looks like /<project-slug>/<... rest of path ...>. The means the path
+	// represents a real project through the project slug.
+
 	project, projectSlug, err := fs.getProject(path)
 	if err != nil {
 		return nil, err
 	}
 
+	// Check if path is only /<project-slug/, and if so create a fake entry to represent this.
 	if pathIsOnlyForProjectSlug(path) {
 		f := &mcmodel.File{
 			MimeType:  "directory",
@@ -132,9 +138,21 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 		return mcfile, nil
 	}
 
-	// If we are here then this is an open on a file.
+	// If we are here then the path points to a real project file.
 
+	// Remove the projectSlug from the path to get to the project path.
 	filePath := mc.RemoveProjectSlugFromPath(path, projectSlug)
+
+	// We are going to attempt to find the file. There are a few different cases to handle, they are
+	//   1. OpenFile on an existing file for read/write
+	//          If this happens we check if there is a previous reference in knownFiles, if not create one,
+	//          otherwise return the one we found. Also open or create the underlying file.
+	//   2. OpenFile on an existing file for read-only
+	//          If the file can't be found this is an error, since it doesn't make sense to create a non-existing
+	//          file for read-only access.
+	//   3. OpenFile on an existing directory.
+	//          If this can't be found, then this is an error, as Mkdir is a different call. Otherwise, create
+	//          directory entry MCFile and return it.
 
 	file, err := fs.fileStor.GetFileByPath(project.ID, filePath)
 	if err != nil {
@@ -148,7 +166,7 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 		return fs.createFile(filePath, project)
 	}
 
-	// found file, check if its a directory reference
+	// found file, check if it's a directory reference
 
 	if file.IsDir() {
 		mcfile := &MCFile{
@@ -167,14 +185,19 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 		return os.Open(file.ToUnderlyingFilePath(fs.mcfsRoot))
 	}
 
+	// For all other cases we create the file (or return the file from knownFiles).
 	return fs.createFile(filePath, project)
 }
 
+// createFile checks if a file entry was already accessed in knownFiles. If so it uses that. Otherwise,
+// it creates a new version, sticks it in knownFiles and uses it.
 func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.File, error) {
 	knownFile, ok := fs.knownFiles.Load(filePath)
 	if ok {
 		// This file has already been created.
 		file := knownFile.(*mcmodel.File)
+
+		// Always open with O_TRUNC, because WebDAV will resend the entire file contents.
 		f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return nil, err
@@ -191,30 +214,36 @@ func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.
 
 		return mcfile, nil
 	}
-	// if we are here then the lookup failed or this is a write() to an existing file. In either case
-	// create a new file or version.
+
+	// if we are here then there wasn't an entry in knownFiles, so we need to create a new file in the project, and
+	// stick the newly created file in knownFiles.
+
 	dirPath := filepath.Dir(filePath)
 
+	// Find the directory entry where the file will reside.
 	dir, err := fs.fileStor.GetDirByPath(project.ID, dirPath)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create the file in the given directory.
 	name := filepath.Base(filePath)
 	file, err := fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeType(name))
 	if err != nil {
 		return nil, err
 	}
 
+	// Make newly created file as current, setting previous versions as not-current.
 	file, err = fs.fileStor.SetFileAsCurrent(file)
 
+	// Create the underlying directory path from the UUID.
 	err = file.MkdirUnderlyingPath(fs.mcfsRoot)
 	if err != nil {
 		// What to do with the already created database file entry?
 		return nil, err
 	}
 
-	// Create empty file
+	// Create an empty file
 	f, err := os.Create(file.ToUnderlyingFilePath(fs.mcfsRoot))
 	if err != nil {
 		// What to do with the already created database file entry?
@@ -230,6 +259,7 @@ func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.
 		hasher:      md5.New(),
 	}
 
+	// place in knownFiles so subsequent attempts to write will reuse this entry.
 	fs.knownFiles.Store(filePath, file)
 
 	return mcfile, nil
@@ -245,6 +275,8 @@ func (fs *UserFS) Rename(ctx context.Context, oldName, newName string) error {
 	return fmt.Errorf("method Rename not implemented")
 }
 
+// Stat get the stat (os.FileInfo) for a file. It handles "/" and /<project-slug>
+// paths by creating fake entries for them.
 func (fs *UserFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if path == "/" {
 		// Listing root. Create a fake entry.
@@ -264,6 +296,7 @@ func (fs *UserFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	}
 
 	if pathIsOnlyForProjectSlug(path) {
+		// Path is /<project-slug> create a fake entry representing the project.
 		f := mcmodel.File{
 			MimeType:  "directory",
 			Name:      projectSlug,

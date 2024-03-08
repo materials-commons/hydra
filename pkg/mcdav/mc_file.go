@@ -14,15 +14,29 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
+// MCFile represents the underlying "/" (root), project, or file/directory in a project.
+// Only a real project file (as opposed to a directory) will have a non-nil os.File.
 type MCFile struct {
+	// If there is a real file, then this will be non-nil
 	*os.File
 	fileStor    stor.FileStor
 	projectStor stor.ProjectStor
-	mcfile      *mcmodel.File
-	user        *mcmodel.User
-	hasher      hash.Hash
+
+	// The materials commons file entry, or a fake on for a project or "/"
+	mcfile *mcmodel.File
+
+	// The Materials Commons user for this entry. This determines, for project
+	// and "/" what to show.
+	user *mcmodel.User
+
+	// When a real file is opened, each write updates the checksum we are accumulating.
+	hasher hash.Hash
 }
 
+// Close will close the underlying os.File if its non-nil. Note that readonly files
+// from UserFS.OpenFile only return a *os.File and not a MCFile. That means that
+// close doesn't need to handle the case where the actually opened file is a file
+// that was only read and not written.
 func (f *MCFile) Close() error {
 	if f.File == nil {
 		return nil
@@ -40,7 +54,7 @@ func (f *MCFile) Close() error {
 
 	checksum := fmt.Sprintf("%x", f.hasher.Sum(nil))
 
-	// TODO: Instead call f.fileStor.DoneWritingToFile here. I'll need the conversion stor inorder to do this.
+	// TODO:  Also submit the file for conversion if it should be converted.
 	if err := f.fileStor.UpdateMetadataForFileAndProject(f.mcfile, checksum, size); err != nil {
 		// log that we couldn't update the database
 	}
@@ -48,6 +62,7 @@ func (f *MCFile) Close() error {
 	return closeErr
 }
 
+// Write to the file and update the checksum (hasher) state.
 func (f *MCFile) Write(p []byte) (n int, err error) {
 	if f.File == nil {
 		return 0, os.ErrInvalid
@@ -66,13 +81,14 @@ func (f *MCFile) ContentType(ctx context.Context) (string, error) {
 	return f.mcfile.MimeType, nil
 }
 
+// Readdir returns the list of files or projects for an MCFile.
 func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 	if !f.mcfile.IsDir() {
 		return nil, os.ErrInvalid
 	}
 
 	if f.mcfile.Path == "/" {
-		// When mcfile is nil that means we are reading "/", so present a list of projects
+		// The path is "/" so list the users projects as directories.
 		projects, err := f.projectStor.GetProjectsForUser(f.user.ID)
 		if err != nil {
 			return nil, err
@@ -95,14 +111,16 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 		return projectList, nil
 	}
 
-	// If we are here then list the project files/directory for the given directory
+	// If we are here then list the project files/directory for the given directory.
+	// f.mcfile.Path contains a project specific path (so no project-slug)
 	pathToUse := f.mcfile.Path
-	// if mcfile.ID == 0 then this isn't a real directory, but is either / or /<project-slug>.
+
 	if f.mcfile.ID == 0 {
-		// Path is something like /project-slug, so turn this into "/" for the given
-		// project. All other real project directory paths will have the correct path.
-		// It's only these mcdav made up /project-slug entries that have a path we
-		// need to account for and correct.
+		// if mcfile.ID == 0 then this isn't a real directory, since "/" was handled above
+		// it must be a directory listing for a /<project-slug>.
+		//
+		// When we do the lookup we are asking for the files/directories in that
+		// projects root. So change pathToUse to "/".
 		pathToUse = "/"
 	}
 
@@ -111,6 +129,7 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 		return nil, err
 	}
 
+	// Convert entries to fs.FileInfo
 	var fileList []os.FileInfo
 	for _, entry := range entries {
 		fileList = append(fileList, entry.ToFileInfo())
@@ -119,6 +138,7 @@ func (f *MCFile) Readdir(_ int) ([]fs.FileInfo, error) {
 	return fileList, nil
 }
 
+// Stat returns the mcfile info as a fs.FileInfo.
 func (f *MCFile) Stat() (fs.FileInfo, error) {
 	if f.mcfile == nil {
 		return nil, fs.ErrInvalid
