@@ -39,6 +39,8 @@ type UserFS struct {
 	// Directory path to mcfs files
 	mcfsRoot string
 
+	useKnownFiles bool
+
 	// knownFiles is a list of files (*mcmodel.File) that the system has created. When the user writes to a file
 	// they will write to the underlying file represented by this file.
 	knownFiles sync.Map
@@ -61,6 +63,7 @@ func NewUserFS(opts *UserFSOpts) *UserFS {
 		projectStor:    opts.ProjectStor,
 		fileStor:       opts.FileStor,
 		conversionStor: opts.ConversionStor,
+		useKnownFiles:  false,
 	}
 }
 
@@ -198,28 +201,30 @@ func (fs *UserFS) OpenFile(ctx context.Context, path string, flags int, perm os.
 // createFile checks if a file entry was already accessed in knownFiles. If so it uses that. Otherwise,
 // it creates a new version, sticks it in knownFiles and uses it.
 func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.File, error) {
-	knownFile, ok := fs.knownFiles.Load(filePath)
-	if ok {
-		// This file has already been created.
-		file := knownFile.(*mcmodel.File)
+	if fs.useKnownFiles {
+		knownFile, ok := fs.knownFiles.Load(filePath)
+		if ok {
+			// This file has already been created.
+			file := knownFile.(*mcmodel.File)
 
-		// Always open with O_TRUNC, because WebDAV will resend the entire file contents.
-		f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			return nil, err
+			// Always open with O_TRUNC, because WebDAV will resend the entire file contents.
+			f, err := os.OpenFile(file.ToUnderlyingFilePath(fs.mcfsRoot), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+			if err != nil {
+				return nil, err
+			}
+
+			mcfile := &MCFile{
+				File:           f,
+				fileStor:       fs.fileStor,
+				projectStor:    fs.projectStor,
+				conversionStor: fs.conversionStor,
+				mcfile:         file,
+				user:           fs.user,
+				hasher:         md5.New(),
+			}
+
+			return mcfile, nil
 		}
-
-		mcfile := &MCFile{
-			File:           f,
-			fileStor:       fs.fileStor,
-			projectStor:    fs.projectStor,
-			conversionStor: fs.conversionStor,
-			mcfile:         file,
-			user:           fs.user,
-			hasher:         md5.New(),
-		}
-
-		return mcfile, nil
 	}
 
 	// if we are here then there wasn't an entry in knownFiles, so we need to create a new file in the project, and

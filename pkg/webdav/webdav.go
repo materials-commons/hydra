@@ -459,12 +459,12 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 
 		// Create the resource if it didn't previously exist.
 		if _, err := h.FileSystem.Stat(ctx, reqPath); err != nil {
-			f, err := h.FileSystem.OpenFile(ctx, reqPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-			if err != nil {
-				// TODO: detect missing intermediate dirs and return http.StatusConflict?
-				return http.StatusInternalServerError, err
-			}
-			f.Close()
+			//f, err := h.FileSystem.OpenFile(ctx, reqPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+			//if err != nil {
+			//	// TODO: detect missing intermediate dirs and return http.StatusConflict?
+			//	return http.StatusInternalServerError, err
+			//}
+			//f.Close()
 			created = true
 		}
 
