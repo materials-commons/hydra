@@ -1,4 +1,4 @@
-package mcdav
+package fs
 
 import (
 	"bytes"
