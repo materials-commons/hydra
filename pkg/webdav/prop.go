@@ -166,25 +166,26 @@ var liveProps = map[xml.Name]struct {
 //
 // Each Propstat has a unique status and each property name will only be part
 // of one Propstat element.
-func props(ctx context.Context, fs FileSystem, ls LockSystem, name string, pnames []xml.Name) ([]Propstat, error) {
-	f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
+func props(ctx context.Context, fs FileSystem, ls LockSystem, fi os.FileInfo, name string, pnames []xml.Name) ([]Propstat, error) {
+	//fmt.Printf("props calling OpenFile %s\n", name)
+	//f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//defer f.Close()
+	//fi, err := f.Stat()
+	//if err != nil {
+	//	return nil, err
+	//}
 	isDir := fi.IsDir()
 
 	var deadProps map[xml.Name]Property
-	if dph, ok := f.(DeadPropsHolder); ok {
-		deadProps, err = dph.DeadProps()
-		if err != nil {
-			return nil, err
-		}
-	}
+	//if dph, ok := f.(DeadPropsHolder); ok {
+	//	deadProps, err = dph.DeadProps()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
 
 	pstatOK := Propstat{Status: http.StatusOK}
 	pstatNotFound := Propstat{Status: http.StatusNotFound}
@@ -254,7 +255,7 @@ func propnames(ctx context.Context, fs FileSystem, ls LockSystem, name string) (
 // returned if they are named in 'include'.
 //
 // See http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
-func allprop(ctx context.Context, fs FileSystem, ls LockSystem, name string, include []xml.Name) ([]Propstat, error) {
+func allprop(ctx context.Context, fs FileSystem, ls LockSystem, fi os.FileInfo, name string, include []xml.Name) ([]Propstat, error) {
 	pnames, err := propnames(ctx, fs, ls, name)
 	if err != nil {
 		return nil, err
@@ -269,7 +270,7 @@ func allprop(ctx context.Context, fs FileSystem, ls LockSystem, name string, inc
 			pnames = append(pnames, pn)
 		}
 	}
-	return props(ctx, fs, ls, name, pnames)
+	return props(ctx, fs, ls, fi, name, pnames)
 }
 
 // patch patches the properties of resource name. The return values are
