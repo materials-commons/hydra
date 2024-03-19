@@ -1,9 +1,11 @@
 package mcmodel
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -34,4 +36,21 @@ func TestRetrieveAttributeValues(t *testing.T) {
 		}
 		fmt.Printf("%+v\n", attr.AttributeValues)
 	}
+}
+
+func TestSampleJSON(t *testing.T) {
+	dsn := "mc:mcpw@tcp(127.0.0.1:3306)/mc?charset=utf8mb4&parseTime=True&loc=Local"
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+
+	var entity Entity
+	err = db.Preload("Files").
+		Preload("EntityStates.Attributes").
+		Find(&entity, 44903).Error
+	require.NoError(t, err)
+
+	b, err := json.Marshal(&entity)
+	require.NoError(t, err)
+
+	fmt.Println(string(b))
 }

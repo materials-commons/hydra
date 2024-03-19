@@ -9,6 +9,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
+	"gorm.io/gorm"
 )
 
 type CloseActivityHandlerFN func(activityKey string)
@@ -19,6 +20,7 @@ type TransferMonitor struct {
 	globusClient              *globus.Client
 	globusEndpointID          string
 	transferRequestStor       stor.TransferRequestStor
+	db                        *gorm.DB
 	globusTransferStor        stor.GlobusTransferStor
 	fsState                   *fsstate.FSState
 	allowedInactivityDuration time.Duration
@@ -139,7 +141,7 @@ func (m *TransferMonitor) Run(c context.Context) {
 //	we check to make sure no writes got through while we were performing the lock. Assuming that is the
 //	case then we process all their files and release the lock.
 //
-//	If a write did get through, that means there is now an active transfer. We release the lock and
+//	If a write() did get through, that means there is now an active transfer. We release the lock and
 //	skip processing the user's files.
 //
 //	Lastly we need to clean up globus state, release ACLs, etc... There is a timing issue here because
@@ -227,7 +229,51 @@ func (m *TransferMonitor) lockAndCheckInactiveAfterLockTransferRequest(tr *mcmod
 }
 
 func (m *TransferMonitor) processTransferRequestFiles(tr *mcmodel.TransferRequest) {
+	limit := 1000
+	offset := 0
+	var transferRequestFiles []mcmodel.TransferRequestFile
+	for {
+		err := m.db.Limit(limit).
+			Offset(offset).
+			Preload("File").
+			Where("transfer_request_id = ?", tr.ID).
+			Find(&transferRequestFiles).Error
+		if err != nil {
+			return
+		}
+		offset = len(transferRequestFiles)
+		for _, trFile := range transferRequestFiles {
+			m.processTransferRequestFile(&trFile)
+		}
+	}
+}
 
+func (m *TransferMonitor) processTransferRequestFile(trFile *mcmodel.TransferRequestFile) {
+	var usedFile mcmodel.File
+	err := m.db.Where("checksum = ?", trFile.File.Checksum).
+		Where("uses_uuid = ?", trFile.File.UUID).
+		Where("dataset_id IS NULL").
+		Where("deleted_at IS NULL").
+		First(&usedFile)
+	if err == nil {
+		// Found existing, check to see if this file needs to be converted.
+		return
+	}
+
+	// If we are here then file isn't being used. We need to determine if its checksum matches
+	// any other files. If it does, then we point at that file, and delete the download of this file.
+	var existing mcmodel.File
+	err = m.db.Where("checksum = ?", trFile.File.Checksum).
+		Where("id <> ?", trFile.File.ID).
+		Where("dataset_id IS NULL").
+		Where("deleted_at IS NULL").
+		First(&existing)
+	switch {
+	case err != nil:
+		// Didn't find existing, so just convert.
+	case err == nil:
+		// found existing, so switch and delete
+	}
 }
 
 func (m *TransferMonitor) unlockTransferRequest(tr *mcmodel.TransferRequest) {

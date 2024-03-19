@@ -368,6 +368,7 @@ func (s *GormFileStor) PointAtExistingIfExists(file *mcmodel.File) (bool, error)
 		var matched mcmodel.File
 		err := tx.Where("checksum = ?", file.Checksum).
 			Where("deleted_at IS NULL").
+			Where("dataset_id IS NULL").
 			Where("id <> ?", file.ID).
 			First(&matched).Error
 		if err == nil {

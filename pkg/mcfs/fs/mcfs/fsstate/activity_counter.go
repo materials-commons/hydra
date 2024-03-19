@@ -15,6 +15,7 @@ type ActivityCounter struct {
 	lastChangedAt         time.Time
 	writesNotAllowed      atomic.Bool
 	wantedWrite           sync.Map
+	wantedWriteCount      atomic.Uint64
 
 	// Protects LastChanged
 	mu sync.RWMutex
@@ -49,6 +50,7 @@ func (c *ActivityCounter) PreventWrites() {
 }
 
 func (c *ActivityCounter) AllowWrites() {
+	c.ClearWantedWrite()
 	c.writesNotAllowed.Store(false)
 }
 
@@ -57,7 +59,11 @@ func (c *ActivityCounter) WritesNotAllowed() bool {
 }
 
 func (c *ActivityCounter) AddToWantedWrite(path string) {
-	c.wantedWrite.Store(path, true)
+	_, loaded := c.wantedWrite.LoadOrStore(path, true)
+	if loaded {
+		// increment count
+		c.wantedWriteCount.Add(1)
+	}
 }
 
 func (c *ActivityCounter) ForEachWantedWrite(fn func(path string) bool) {
@@ -72,6 +78,7 @@ func (c *ActivityCounter) ClearWantedWrite() {
 		c.wantedWrite.Delete(path)
 		return true
 	})
+	c.wantedWriteCount.Store(0)
 }
 
 func (c *ActivityCounter) GetLastChangedAt() time.Time {

@@ -78,6 +78,15 @@ func (h *MCFileHandle) WithTransferStateTracker(tracker *fsstate.TransferStateTr
 }
 
 func (h *MCFileHandle) Write(_ context.Context, data []byte, off int64) (bytesWritten uint32, errno syscall.Errno) {
+	// Check if we are allowed to write
+	if h.activityCounter.WritesNotAllowed() {
+		// We want to write but aren't allowed to. The system is processing the current files.
+		h.activityCounter.AddToWantedWrite(h.Path)
+
+		// Return an error that can be retried.
+		return 0, syscall.EINTR
+	}
+
 	h.Mu.Lock()
 	clog.UsingCtx(h.key).Debugf("MCFileHandle.Write %s:%d\n", string(data), off)
 	defer func() {
