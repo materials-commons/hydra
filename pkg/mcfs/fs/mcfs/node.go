@@ -135,7 +135,12 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 	st := syscall.Stat_t{}
 	if err := syscall.Lstat(realPath, &st); err != nil {
 		clog.Global().Errorf("Node.Getattr: Lstat failed path %s: %s", realPath, err)
-		return fs.ToErrno(err)
+		//f, err := n.RootData.mcfsapi.Lookup(path)
+		//if err != nil {
+		//	return syscall.ENOENT
+		//}
+		out.Size = uint64(0)
+		return fs.OK
 	}
 
 	out.FromStat(&st)
