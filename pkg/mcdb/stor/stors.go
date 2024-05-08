@@ -59,6 +59,7 @@ type TransferRequestStor interface {
 	GetTransferRequestForProjectAndUser(projectID, userID int) (*mcmodel.TransferRequest, error)
 	GetTransferRequestsForProject(projectID int) ([]mcmodel.TransferRequest, error)
 	GetTransferRequestByUUID(transferUUID string) (*mcmodel.TransferRequest, error)
+	CloseTransferRequestByUUID(transferUUID string) error
 }
 
 type GlobusTransferStor interface {

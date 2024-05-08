@@ -343,3 +343,11 @@ func (s *GormTransferRequestStor) GetTransferRequestByUUID(transferUUID string) 
 
 	return &transferRequest, nil
 }
+
+func (s *GormTransferRequestStor) CloseTransferRequestByUUID(transferUUID string) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Model(&mcmodel.TransferRequest{}).
+			Where("uuid = ?", transferUUID).
+			Update("state", "closed").Error
+	})
+}
