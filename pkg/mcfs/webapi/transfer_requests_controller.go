@@ -53,24 +53,24 @@ func (c *TransferRequestsController) CloseAllInactiveTransferRequests(_ echo.Con
 }
 
 func (c *TransferRequestsController) CloseTransferRequest(ctx echo.Context) error {
-	var req struct {
-		TransferRequestUUID string `json:"transfer_request_uuid"`
-	}
+	transferRequestUUID := ctx.Param("uuid")
 
-	if err := ctx.Bind(&req); err != nil {
-		return err
-	}
+	fmt.Println("CloseTransferRequest for UUID:", transferRequestUUID)
 
-	tr, err := c.transferRequestStor.GetTransferRequestByUUID(req.TransferRequestUUID)
+	tr, err := c.transferRequestStor.GetTransferRequestByUUID(transferRequestUUID)
 	if err != nil {
 		return err
 	}
 
-	if tr.State != "closing" {
-		return fmt.Errorf("transfer request state is '%s', should be 'closing'", tr.State)
-	}
+	//if tr.State == "closed" {
+	//	return nil
+	//}
 
-	c.fsState.TransferStateTracker.DeleteBase(tr.UUID)
+	c.fsState.RemoveTransferRequestState(tr.UUID)
+
+	//if err := c.transferRequestStor.CloseTransferRequestByUUID(tr.UUID); err != nil {
+	//	return err
+	//}
 
 	return nil
 }
