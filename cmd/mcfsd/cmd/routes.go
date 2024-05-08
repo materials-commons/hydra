@@ -31,4 +31,5 @@ func setupRoutes(deps RouteDependencies) {
 	transferRequestsActivityController := webapi.NewTransferRequestsController(deps.globusClient, deps.fsState, deps.stors.TransferRequestStor)
 	g.GET("/transfers", transferRequestsActivityController.IndexTransferRequestStatus)
 	g.GET("/transfers/:uuid/status", transferRequestsActivityController.GetStatusForTransferRequest)
+	g.GET("/transfers/:uuid/close", transferRequestsActivityController.CloseTransferRequest)
 }
