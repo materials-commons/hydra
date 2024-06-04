@@ -32,11 +32,17 @@ var rootCmd = &cobra.Command{
 }
 
 func Run(c context.Context, args []string, config config.Configer) error {
-	if len(args) != 1 {
-		return fmt.Errorf("no path specified for mount")
+	readConfig()
+
+	mountPath := os.Getenv("MCFSD_MOUNT_DIR")
+
+	if len(args) == 1 {
+		mountPath = args[0]
 	}
 
-	readConfig()
+	if mountPath == "" {
+		return fmt.Errorf("no path specified for mount")
+	}
 
 	db := mcdb.MustConnectToDB()
 	stors := stor.NewGormStors(db, mcfsDir)
@@ -67,7 +73,7 @@ func Run(c context.Context, args []string, config config.Configer) error {
 		stors:     stors,
 		fsState:   fsState,
 		mcfsDir:   config.GetKey("MCFS_DIR"),
-		mountPath: args[0],
+		mountPath: mountPath,
 	})
 
 	if err != nil {
