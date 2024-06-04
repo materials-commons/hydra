@@ -23,6 +23,8 @@ servers:
 	(cd ./cmd/mcftservd; go build)
 	(cd ./cmd/mcsshd; go build)
 	(cd ./cmd/mqlservd; go build)
+	(cd ./cmd/mcdavd; go build)
+	(cd ./cmd/mcfsd; go build)
 
 deploy: deploy-cli deploy-server
 
@@ -97,3 +99,17 @@ deploy-mqlservd: mqlservd
 	sudo chmod a+rx /usr/local/bin/mqlservd
 	sudo cp operations/supervisord.d/mqlservd.conf /etc/supervisor/conf.d
 	- sudo supervisorctl start mqlservd:mqlservd_00
+
+deploy-mcdavd: mcdavd
+	- sudo cp operations/supervisord.d/mcdavd.conf /etc/supervisor/conf.d
+	- sudo cp cmd/mcdavd/mcdavd /usr/local/bin
+	- sudo chmod a+rx /usr/local/bin/mcdavd
+	- sudo supervisorctl reread
+	- sudo supervisorctl update
+
+deploy-mcfsd: mcfsd
+	- sudo cp operations/supervisord.d/mcfsd.conf /etc/supervisor/conf.d
+	- sudo cp cmd/mcfsd/mcfsd /usr/local/bin
+	- sudo chmod a+rx /usr/local/bin/mcfsd
+	- sudo supervisorctl reread
+	- sudo supervisorctl update
