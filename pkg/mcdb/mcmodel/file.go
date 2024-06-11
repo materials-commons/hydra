@@ -34,6 +34,30 @@ func (f File) MkdirUnderlyingPath(mcfsDir string) error {
 	return os.MkdirAll(f.ToUnderlyingDirPath(mcfsDir), 0755)
 }
 
+func (f File) CreateUnderlyingFile(mcfsDir string) error {
+	handle, err := f.CreateReturningHandleToUnderlyingFile(mcfsDir)
+	if err != nil {
+		return err
+	}
+
+	_ = handle.Close()
+
+	return nil
+}
+
+func (f File) CreateReturningHandleToUnderlyingFile(mcfsDir string) (*os.File, error) {
+	if err := f.MkdirUnderlyingPath(mcfsDir); err != nil {
+		return nil, err
+	}
+
+	handle, err := os.Create(f.ToUnderlyingFilePath(mcfsDir))
+	if err != nil {
+		return nil, err
+	}
+
+	return handle, nil
+}
+
 func (File) TableName() string {
 	return "files"
 }
