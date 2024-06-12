@@ -62,15 +62,15 @@ func (s *MCFileStore) UseIn(composer *handler.StoreComposer) {
 }
 
 func (s *MCFileStore) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
-	return nil
+	return upload.(*MCFileUpload)
 }
 
 func (s *MCFileStore) AsLengthDeclarableUpload(upload handler.Upload) handler.LengthDeclarableUpload {
-	return nil
+	return upload.(*MCFileUpload)
 }
 
 func (s *MCFileStore) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
-	return nil
+	return upload.(*MCFileUpload)
 }
 
 // createFile creates the file with the content. If the corresponding directory does not exist,
@@ -172,8 +172,12 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 		teeReader := io.TeeReader(src, hasher)
 
 		if _, err := io.Copy(file, teeReader); err != nil {
+			_ = src.Close()
 			return err
 		}
+
+		_ = os.Remove(fileUpload.getChunkPath())
+		_ = src.Close()
 	}
 
 	u.checksum = fmt.Sprintf("%x", hasher.Sum(nil))
