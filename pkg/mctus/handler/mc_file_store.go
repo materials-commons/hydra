@@ -56,7 +56,7 @@ func (s *MCFileStore) NewUpload(ctx context.Context, info handler.FileInfo) (upl
 		return nil, err
 	}
 
-	if err := fileUpload.savestate(); err != nil {
+	if err := fileUpload.saveState(); err != nil {
 		return nil, err
 	}
 
@@ -215,7 +215,9 @@ func (u *MCFileUpload) getInfoPath() string {
 }
 
 func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
-	return nil
+	u.FileInfo.Size = length
+	u.FileInfo.SizeIsDeferred = false
+	return u.saveState()
 }
 
 func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
@@ -250,7 +252,7 @@ func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
 }
 
 // writeInfo updates the entire information. Everything will be overwritten.
-func (u *MCFileUpload) savestate() error {
+func (u *MCFileUpload) saveState() error {
 	data, err := json.Marshal(u)
 	if err != nil {
 		return err
