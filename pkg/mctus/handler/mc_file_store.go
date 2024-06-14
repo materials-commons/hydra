@@ -3,22 +3,23 @@ package handler
 import (
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcssh/mc"
 	"github.com/materials-commons/hydra/pkg/uid"
 	"github.com/tus/tusd/v2/pkg/handler"
+	"gorm.io/gorm"
 )
 
 type MCFileStore struct {
-	fileStor stor.FileStor
-	mcfsDir  string
+	db      *gorm.DB
+	mcfsDir string
 }
 
 func NewMCFileStore() *MCFileStore {
@@ -39,18 +40,33 @@ func (s *MCFileStore) NewUpload(ctx context.Context, info handler.FileInfo) (upl
 		info.ID = uid.Uid()
 	}
 
-	mcfile, err := s.fileStor.CreateFile(filename, projectID, directoryID, ownerID, mc.GetMimeType(filename))
-	if err != nil {
+	fileUpload := &MCFileUpload{
+		fileStor:       stor.NewGormFileStor(s.db, s.mcfsDir),
+		conversionStor: stor.NewGormConversionStor(s.db),
+		MCFSDir:        s.mcfsDir,
+		FileInfo:       info,
+		checksum:       "",
+		Filename:       filename,
+		ProjectID:      projectID,
+		DirectoryID:    directoryID,
+		OwnerID:        ownerID,
+	}
+
+	if err := createFile(fileUpload.getChunkPath(), nil); err != nil {
 		return nil, err
 	}
 
-	_ = mcfile
-	return nil, nil
+	if err := fileUpload.savestate(); err != nil {
+		return nil, err
+	}
+
+	return fileUpload, nil
 }
 
 // GetUpload fetches the upload with a given ID. If no such upload can be found,
 // ErrNotFound must be returned.
 func (s *MCFileStore) GetUpload(ctx context.Context, id string) (upload handler.Upload, err error) {
+	// Need to instantiate the fileStor and conversionStor from the db
 	return nil, nil
 }
 
@@ -107,16 +123,19 @@ func createFile(path string, content []byte) error {
 }
 
 type MCFileUpload struct {
-	MCFile         *mcmodel.File
 	fileStor       stor.FileStor
 	conversionStor stor.ConversionStor
-	mcfsDir        string
-	fileInfo       handler.FileInfo
+	MCFSDir        string
+	FileInfo       handler.FileInfo
 	checksum       string
+	ProjectID      int
+	DirectoryID    int
+	OwnerID        int
+	Filename       string
 }
 
 func (u *MCFileUpload) GetInfo(ctx context.Context) (info handler.FileInfo, err error) {
-	return u.fileInfo, nil
+	return u.FileInfo, nil
 }
 
 func (u *MCFileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
@@ -128,7 +147,7 @@ func (u *MCFileUpload) WriteChunk(ctx context.Context, offset int64, src io.Read
 	// See https://github.com/tus/tusd/issues/698.
 
 	n, err := io.Copy(file, src)
-	u.fileInfo.Offset += n
+	u.FileInfo.Offset += n
 	if err != nil {
 		_ = file.Close()
 		return n, err
@@ -147,7 +166,7 @@ func (u *MCFileUpload) Terminate(ctx context.Context) error {
 }
 
 func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Upload) (err error) {
-	file, err := os.OpenFile(u.MCFile.ToUnderlyingFilePath(u.mcfsDir), os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(u.getChunkPath(), os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
@@ -159,6 +178,8 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 			err = cerr
 		}
 	}()
+
+	// TODO: Start the hasher off of the first chunk...
 
 	hasher := md5.New()
 
@@ -186,7 +207,11 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 }
 
 func (u *MCFileUpload) getChunkPath() string {
-	return filepath.Join(u.mcfsDir, "__tus", u.fileInfo.ID)
+	return filepath.Join(u.MCFSDir, "__tus", u.FileInfo.ID)
+}
+
+func (u *MCFileUpload) getInfoPath() string {
+	return filepath.Join(u.MCFSDir, "__tus", fmt.Sprintf("%s.info", u.FileInfo.ID))
 }
 
 func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
@@ -194,12 +219,42 @@ func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
 }
 
 func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
-	finfo, err := os.Stat(u.MCFile.ToUnderlyingFilePath(u.mcfsDir))
+	if u.FileInfo.IsFinal {
+		// If checksum is "" then there was a single chunk, and we need to compute the checksum here.
+		if u.checksum == "" {
+			// Compute checksum here
+		}
+
+		mcfile, err := u.fileStor.CreateFile(u.Filename, u.ProjectID, u.DirectoryID, u.OwnerID, mc.GetMimeType(u.Filename))
+		if err != nil {
+			// Need to do cleanup
+			return err
+		}
+
+		if err := os.Rename(u.getChunkPath(), mcfile.ToUnderlyingFilePath(u.MCFSDir)); err != nil {
+			// Need to do cleanup
+			return err
+		}
+
+		finfo, err := os.Stat(mcfile.ToUnderlyingFilePath(u.MCFSDir))
+		if err != nil {
+			return err
+		}
+
+		_, err = u.fileStor.DoneWritingToFile(mcfile, u.checksum, finfo.Size(), u.conversionStor)
+
+		return err
+	}
+
+	return nil
+}
+
+// writeInfo updates the entire information. Everything will be overwritten.
+func (u *MCFileUpload) savestate() error {
+	data, err := json.Marshal(u)
 	if err != nil {
 		return err
 	}
 
-	_, err = u.fileStor.DoneWritingToFile(u.MCFile, u.checksum, finfo.Size(), u.conversionStor)
-
-	return err
+	return createFile(u.getInfoPath(), data)
 }
