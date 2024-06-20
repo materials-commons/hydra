@@ -72,6 +72,7 @@ type UserStor interface {
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
 	GetUserByEmail(email string) (*mcmodel.User, error)
+	GetUserByAPIToken(email string) (*mcmodel.User, error)
 }
 
 type Stors struct {

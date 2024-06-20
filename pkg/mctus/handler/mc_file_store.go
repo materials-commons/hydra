@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/json"
@@ -66,8 +67,34 @@ func (s *MCFileStore) NewUpload(ctx context.Context, info handler.FileInfo) (upl
 // GetUpload fetches the upload with a given ID. If no such upload can be found,
 // ErrNotFound must be returned.
 func (s *MCFileStore) GetUpload(ctx context.Context, id string) (upload handler.Upload, err error) {
-	// Need to instantiate the fileStor and conversionStor from the db
-	return nil, nil
+	var mcFileUpload MCFileUpload
+
+	data, err := os.ReadFile(getStatePathByID(s.mcfsDir, id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = handler.ErrNotFound
+		}
+		return nil, err
+	}
+
+	if err := json.Unmarshal(data, &mcFileUpload); err != nil {
+		return nil, err
+	}
+
+	finfo, err := os.Stat(getChunkPathByID(s.mcfsDir, id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = handler.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	mcFileUpload.FileInfo.Size = finfo.Size()
+	mcFileUpload.fileStor = stor.NewGormFileStor(s.db, s.mcfsDir)
+	mcFileUpload.conversionStor = stor.NewGormConversionStor(s.db)
+
+	return &mcFileUpload, nil
 }
 
 func (s *MCFileStore) UseIn(composer *handler.StoreComposer) {
@@ -87,39 +114,6 @@ func (s *MCFileStore) AsLengthDeclarableUpload(upload handler.Upload) handler.Le
 
 func (s *MCFileStore) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
 	return upload.(*MCFileUpload)
-}
-
-// createFile creates the file with the content. If the corresponding directory does not exist,
-// it is created. If the file already exists, its content is removed.
-func createFile(path string, content []byte) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// An upload ID containing slashes is mapped onto different directories on disk,
-			// for example, `myproject/uploadA` should be put into a folder called `myproject`.
-			// If we get an error indicating that a directory is missing, we try to create it.
-			if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
-				return fmt.Errorf("failed to create directory for %s: %s", path, err)
-			}
-
-			// Try creating the file again.
-			file, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-			if err != nil {
-				// If that still doesn't work, error out.
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	if content != nil {
-		if _, err := file.Write(content); err != nil {
-			return err
-		}
-	}
-
-	return file.Close()
 }
 
 type MCFileUpload struct {
@@ -162,10 +156,26 @@ func (u *MCFileUpload) GetReader(ctx context.Context) (io.ReadCloser, error) {
 }
 
 func (u *MCFileUpload) Terminate(ctx context.Context) error {
+	_ = os.Remove(u.getChunkPath())
+	_ = os.Remove(u.getStatePath())
 	return nil
 }
 
 func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Upload) (err error) {
+	// Create the hasher and start it by reading the first chunk that we will be appending to
+	hasher := md5.New()
+	d, err := os.ReadFile(u.getChunkPath())
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(hasher, bytes.NewReader(d))
+	if err != nil {
+		return err
+	}
+
+	// Now that the hash is started, we can reopen the first chunk and start appending
+	// the other chunks to it.
+
 	file, err := os.OpenFile(u.getChunkPath(), os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return err
@@ -178,10 +188,6 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 			err = cerr
 		}
 	}()
-
-	// TODO: Start the hasher off of the first chunk...
-
-	hasher := md5.New()
 
 	for _, partialUpload := range uploads {
 		fileUpload := partialUpload.(*MCFileUpload)
@@ -208,11 +214,11 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 }
 
 func (u *MCFileUpload) getChunkPath() string {
-	return filepath.Join(u.MCFSDir, "__tus", u.FileInfo.ID)
+	return getChunkPathByID(u.MCFSDir, u.FileInfo.ID)
 }
 
 func (u *MCFileUpload) getStatePath() string {
-	return filepath.Join(u.MCFSDir, "__tus", fmt.Sprintf("%s.state", u.FileInfo.ID))
+	return getStatePathByID(u.MCFSDir, u.FileInfo.ID)
 }
 
 func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
@@ -225,7 +231,16 @@ func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
 	if u.FileInfo.IsFinal {
 		// If checksum is "" then there was a single chunk, and we need to compute the checksum here.
 		if u.checksum == "" {
-			// Compute checksum here
+			hasher := md5.New()
+			d, err := os.ReadFile(u.getChunkPath())
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(hasher, bytes.NewReader(d))
+			if err != nil {
+				return err
+			}
+			u.checksum = fmt.Sprintf("%x", hasher.Sum(nil))
 		}
 
 		mcfile, err := u.fileStor.CreateFile(u.Filename, u.ProjectID, u.DirectoryID, u.OwnerID, mc.GetMimeType(u.Filename))
@@ -253,6 +268,47 @@ func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// createFile creates the file with the content. If the corresponding directory does not exist,
+// it is created. If the file already exists, its content is removed.
+func createFile(path string, content []byte) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// An upload ID containing slashes is mapped onto different directories on disk,
+			// for example, `myproject/uploadA` should be put into a folder called `myproject`.
+			// If we get an error indicating that a directory is missing, we try to create it.
+			if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
+				return fmt.Errorf("failed to create directory for %s: %s", path, err)
+			}
+
+			// Try creating the file again.
+			file, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+			if err != nil {
+				// If that still doesn't work, error out.
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if content != nil {
+		if _, err := file.Write(content); err != nil {
+			return err
+		}
+	}
+
+	return file.Close()
+}
+
+func getStatePathByID(mcfsDir, ID string) string {
+	return filepath.Join(mcfsDir, "__tus", fmt.Sprintf("%s.state", ID))
+}
+
+func getChunkPathByID(mcfsDir, ID string) string {
+	return filepath.Join(mcfsDir, "__tus", ID)
 }
 
 // writeInfo updates the entire information. Everything will be overwritten.
