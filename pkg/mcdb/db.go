@@ -25,13 +25,14 @@ const SqliteInMemoryDSN = "file::memory:?cache=shared"
 
 const maxDBRetries = 5
 
+var dbInstance *gorm.DB
+
 // MustConnectToDB will attempt to connect to the database maxDBRetries times. If it isn't successful
 // after that number of retries then it will call log.Fatalf(), which will cause the server to exit.
 // Between retry attempts it will sleep for 3 seconds.
 func MustConnectToDB() *gorm.DB {
 	var (
 		err error
-		db  *gorm.DB
 	)
 
 	gormConfig := &gorm.Config{
@@ -40,11 +41,11 @@ func MustConnectToDB() *gorm.DB {
 
 	retryCount := 1
 	for {
-		db, err = gorm.Open(mysql.Open(MakeDSNFromEnv()), gormConfig)
+		dbInstance, err = gorm.Open(mysql.Open(MakeDSNFromEnv()), gormConfig)
 		switch {
 		case err == nil:
 			// Connected to db, yay!
-			return db
+			return dbInstance
 		case retryCount >= maxDBRetries:
 			// Retry limit exceeded :-(
 			log.Fatalf("Failed to open db (%s): %s", MakeDSNFromEnv(), err)
@@ -59,4 +60,8 @@ func MustConnectToDB() *gorm.DB {
 func RunMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(&mcmodel.File{}, &mcmodel.Project{}, &mcmodel.User{}, &mcmodel.Conversion{},
 		&mcmodel.TransferRequest{}, &mcmodel.TransferRequestFile{}, &mcmodel.GlobusTransfer{}, &mcmodel.Team{})
+}
+
+func GetDBInstance() *gorm.DB {
+	return dbInstance
 }
