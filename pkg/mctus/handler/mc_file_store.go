@@ -198,6 +198,7 @@ func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Uplo
 		}
 
 		_ = os.Remove(fileUpload.getChunkPath())
+		_ = os.Remove(fileUpload.getStatePath())
 		_ = src.Close()
 	}
 
@@ -210,8 +211,8 @@ func (u *MCFileUpload) getChunkPath() string {
 	return filepath.Join(u.MCFSDir, "__tus", u.FileInfo.ID)
 }
 
-func (u *MCFileUpload) getInfoPath() string {
-	return filepath.Join(u.MCFSDir, "__tus", fmt.Sprintf("%s.info", u.FileInfo.ID))
+func (u *MCFileUpload) getStatePath() string {
+	return filepath.Join(u.MCFSDir, "__tus", fmt.Sprintf("%s.state", u.FileInfo.ID))
 }
 
 func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
@@ -238,6 +239,9 @@ func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
 			return err
 		}
 
+		// Remove state file for chunk
+		_ = os.Remove(u.getStatePath())
+
 		finfo, err := os.Stat(mcfile.ToUnderlyingFilePath(u.MCFSDir))
 		if err != nil {
 			return err
@@ -258,5 +262,5 @@ func (u *MCFileUpload) saveState() error {
 		return err
 	}
 
-	return createFile(u.getInfoPath(), data)
+	return createFile(u.getStatePath(), data)
 }
