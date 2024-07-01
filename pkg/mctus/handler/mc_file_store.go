@@ -23,8 +23,11 @@ type MCFileStore struct {
 	mcfsDir string
 }
 
-func NewMCFileStore() *MCFileStore {
-	return &MCFileStore{}
+func NewMCFileStore(db *gorm.DB, mcfsDir string) *MCFileStore {
+	return &MCFileStore{
+		db:      db,
+		mcfsDir: mcfsDir,
+	}
 }
 
 // NewUpload creates a new upload using the size as the file's length. The method must

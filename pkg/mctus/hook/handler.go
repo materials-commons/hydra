@@ -3,16 +3,23 @@ package hook
 import (
 	"strconv"
 
-	hplugin "github.com/hashicorp/go-plugin"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/tus/tusd/v2/pkg/hooks"
-	"github.com/tus/tusd/v2/pkg/hooks/plugin"
+	"gorm.io/gorm"
 )
 
 type MCHookHandler struct {
 	projectStor stor.ProjectStor
 	fileStor    stor.FileStor
 	userStor    stor.UserStor
+}
+
+func NewMCHookHandler(db *gorm.DB) *MCHookHandler {
+	return &MCHookHandler{
+		projectStor: stor.NewGormProjectStor(db),
+		fileStor:    stor.NewGormFileStor(db, ""),
+		userStor:    stor.NewGormUserStor(db),
+	}
 }
 
 func (h *MCHookHandler) Setup() error {
@@ -88,23 +95,4 @@ func rejectRequest(reason string) (res hooks.HookResponse) {
 	res.HTTPResponse.StatusCode = 400
 	res.HTTPResponse.Body = reason
 	return res
-}
-
-var handshakeConfig = hplugin.HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "tusd",
-	MagicCookieValue: "yes",
-}
-
-func main() {
-	handler := &MCHookHandler{}
-
-	var pluginMap = map[string]hplugin.Plugin{
-		"hookHandler": &plugin.HookHandlerPlugin{Impl: handler},
-	}
-
-	hplugin.Serve(&hplugin.ServeConfig{
-		HandshakeConfig: handshakeConfig,
-		Plugins:         pluginMap,
-	})
 }
