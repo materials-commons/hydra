@@ -11,6 +11,8 @@ import (
 	"github.com/subosito/gotenv"
 	"github.com/tus/tusd/v2/pkg/filelocker"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
+	"github.com/tus/tusd/v2/pkg/hooks"
+	"github.com/tus/tusd/v2/pkg/hooks/plugin"
 )
 
 var rootCmd = &cobra.Command{
@@ -34,11 +36,17 @@ var rootCmd = &cobra.Command{
 		filestor.UseIn(composer)
 		locker.UseIn(composer)
 
-		handler, err := tusd.NewHandler(tusd.Config{
-			BasePath:              "/files/",
-			StoreComposer:         composer,
-			NotifyCompleteUploads: true,
-		})
+		handler, err := hooks.NewHandlerWithHooks(
+			&tusd.Config{
+				BasePath:              "/files/",
+				StoreComposer:         composer,
+				NotifyCompleteUploads: false,
+			},
+			&plugin.PluginHook{
+				Path: "/usr/local/bin/tus",
+			},
+			[]hooks.HookType{hooks.HookPreCreate})
+
 		if err != nil {
 			log.Fatalf("unable to create handler: %s", err)
 		}
