@@ -43,7 +43,7 @@ var rootCmd = &cobra.Command{
 				NotifyCompleteUploads: false,
 			},
 			&plugin.PluginHook{
-				Path: "/usr/local/bin/tus",
+				Path: "/usr/local/bin/tus/mctus_hook",
 			},
 			[]hooks.HookType{hooks.HookPreCreate})
 
