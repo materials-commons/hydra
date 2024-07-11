@@ -339,6 +339,8 @@ github.com/tj/go-buffer v1.1.0/go.mod h1:iyiJpfFcR2B9sXu7KvjbT9fpM4mOelRSDTbntVj
 github.com/tj/go-elastic v0.0.0-20171221160941-36157cbbebc2/go.mod h1:WjeM0Oo1eNAjXGDx2yma7uG2XoyRZTq1uv3M/o7imD0=
 github.com/tj/go-kinesis v0.0.0-20171128231115-08b17f58cb1b/go.mod h1:/yhzCV0xPfx6jb1bBgRFjl5lytqVqZXEaeqWP8lTEao=
 github.com/tj/go-spin v1.1.0/go.mod h1:Mg1mzmePZm4dva8Qz60H2lHwmJ2loum4VIrLgVnKwh4=
+github.com/tus/lockfile v1.2.0 h1:92dMoNyeb5zaNi8eQ79WLqt/npUWUFkaM5ZM9kOMIDM=
+github.com/tus/lockfile v1.2.0/go.mod h1:JyfWCHNyfd7eGxudGohrkt38kuKRki6L0JH82p2e+mc=
 github.com/tus/tusd/v2 v2.4.0 h1:SpXmzQPCtiedkhNPl5Gn4ApQXLChPLdYrWbZQI42uJE=
 github.com/tus/tusd/v2 v2.4.0/go.mod h1:X+fc/MU+T+NDD5gNJHHE58jo6cQj1vlMstlT16+xlrg=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
