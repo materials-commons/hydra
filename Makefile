@@ -65,9 +65,6 @@ mcdavd:
 mctusd:
 	(cd ./cmd/mctusd; go build)
 
-mctus_hook:
-	(cd ./cmd/mctus_hook; go build)
-
 deploy-mcftservd: mcftservd
 	- sudo supervisorctl stop mcftservd:mcftservd_00
 	sudo cp cmd/mcftservd/mcftservd /usr/local/bin
@@ -113,13 +110,10 @@ deploy-mcdavd: mcdavd
 	- sudo supervisorctl reread
 	- sudo supervisorctl update
 
- deploy-mctus: mctusd mctus_hook
+ deploy-mctus: mctusd
 	- sudo cp operations/supervisord.d/mctusd.conf /etc/supervisor/conf.d
 	- sudo cp cmd/mctusd/mctusd /usr/local/bin
 	- sudo chmod a+rx /usr/local/bin/mctusd
-	- sudo mkdir /usr/local/bin/tus
-	- sudo cp cmd/mctus_hook/mctus_hook /usr/local/bin/tus
-	- sudo chmod a+rx /usr/local/bin/tus/mctus_hook
 	- sudo supervisorctl reread
 	- sudo supervisorctl update
 
