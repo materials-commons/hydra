@@ -314,7 +314,7 @@ func getChunkPathByID(mcfsDir, ID string) string {
 	return filepath.Join(mcfsDir, "__tus", ID)
 }
 
-// writeInfo updates the entire information. Everything will be overwritten.
+// saveState saves the upload state in JSON format.
 func (u *MCFileUpload) saveState() error {
 	data, err := json.Marshal(u)
 	if err != nil {
