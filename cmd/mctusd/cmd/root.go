@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb"
@@ -30,8 +32,21 @@ var rootCmd = &cobra.Command{
 		}
 
 		db := mcdb.MustConnectToDB()
-		filestor := handler.NewMCFileStore(db, os.Getenv("MCFS_DIR"))
-		locker := filelocker.New("/tmp") // TODO - This should be passed in
+
+		tusChunksDir := filepath.Join(os.Getenv("MCFS_DIR"), "__tus", "chunks")
+		fmt.Printf("tusChunksDir: %s\n", tusChunksDir)
+		if err := os.MkdirAll(tusChunksDir, 0755); err != nil {
+			log.Fatalf("Unable to create directory %s: %s", tusChunksDir, err)
+		}
+		filestor := handler.NewMCFileStore(db, tusChunksDir)
+
+		tusLockDir := filepath.Join(os.Getenv("MCFS_DIR"), "__tus", "locks")
+		fmt.Printf("tusLockDir: %s\n", tusLockDir)
+		if err := os.MkdirAll(tusLockDir, 0755); err != nil {
+			log.Fatalf("Unable to create directory %s: %s", tusLockDir, err)
+		}
+		locker := filelocker.New(tusLockDir)
+
 		composer := tusd.NewStoreComposer()
 		filestor.UseIn(composer)
 		locker.UseIn(composer)

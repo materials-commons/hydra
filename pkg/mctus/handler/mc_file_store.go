@@ -19,14 +19,14 @@ import (
 )
 
 type MCFileStore struct {
-	db      *gorm.DB
-	mcfsDir string
+	db        *gorm.DB
+	chunksDir string
 }
 
-func NewMCFileStore(db *gorm.DB, mcfsDir string) *MCFileStore {
+func NewMCFileStore(db *gorm.DB, chunksDir string) *MCFileStore {
 	return &MCFileStore{
-		db:      db,
-		mcfsDir: mcfsDir,
+		db:        db,
+		chunksDir: chunksDir,
 	}
 }
 
@@ -45,9 +45,9 @@ func (s *MCFileStore) NewUpload(ctx context.Context, info handler.FileInfo) (upl
 	}
 
 	fileUpload := &MCFileUpload{
-		fileStor:       stor.NewGormFileStor(s.db, s.mcfsDir),
+		fileStor:       stor.NewGormFileStor(s.db, s.chunksDir),
 		conversionStor: stor.NewGormConversionStor(s.db),
-		MCFSDir:        s.mcfsDir,
+		MCFSDir:        s.chunksDir,
 		FileInfo:       info,
 		checksum:       "",
 		Filename:       filename,
@@ -72,7 +72,7 @@ func (s *MCFileStore) NewUpload(ctx context.Context, info handler.FileInfo) (upl
 func (s *MCFileStore) GetUpload(ctx context.Context, id string) (upload handler.Upload, err error) {
 	var mcFileUpload MCFileUpload
 
-	data, err := os.ReadFile(getStatePathByID(s.mcfsDir, id))
+	data, err := os.ReadFile(getStatePathByID(s.chunksDir, id))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = handler.ErrNotFound
@@ -84,7 +84,7 @@ func (s *MCFileStore) GetUpload(ctx context.Context, id string) (upload handler.
 		return nil, err
 	}
 
-	finfo, err := os.Stat(getChunkPathByID(s.mcfsDir, id))
+	finfo, err := os.Stat(getChunkPathByID(s.chunksDir, id))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = handler.ErrNotFound
@@ -94,7 +94,7 @@ func (s *MCFileStore) GetUpload(ctx context.Context, id string) (upload handler.
 	}
 
 	mcFileUpload.FileInfo.Size = finfo.Size()
-	mcFileUpload.fileStor = stor.NewGormFileStor(s.db, s.mcfsDir)
+	mcFileUpload.fileStor = stor.NewGormFileStor(s.db, s.chunksDir)
 	mcFileUpload.conversionStor = stor.NewGormConversionStor(s.db)
 
 	return &mcFileUpload, nil
@@ -165,6 +165,7 @@ func (u *MCFileUpload) Terminate(ctx context.Context) error {
 }
 
 func (u *MCFileUpload) ConcatUploads(ctx context.Context, uploads []handler.Upload) (err error) {
+	fmt.Printf("ConcatUploads: %s, isFinal: %t\n", u.FileInfo.ID, u.FileInfo.IsFinal)
 	// Create the hasher and start it by reading the first chunk that we will be appending to
 	hasher := md5.New()
 	d, err := os.ReadFile(u.getChunkPath())
@@ -231,6 +232,7 @@ func (u *MCFileUpload) DeclareLength(ctx context.Context, length int64) error {
 }
 
 func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
+	fmt.Printf("FinishUpload: %s, isFinal: %t\n", u.FileInfo.ID, u.FileInfo.IsFinal)
 	if u.FileInfo.IsFinal {
 		// If checksum is "" then there was a single chunk, and we need to compute the checksum here.
 		if u.checksum == "" {
