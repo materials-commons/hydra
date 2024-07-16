@@ -2,6 +2,7 @@ package mqldb
 
 import (
 	"fmt"
+
 	"github.com/materials-commons/hydra/pkg/mql/parser"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -269,7 +270,7 @@ func evalMatchStatement(db *DB, process *mcmodel.Activity, sampleState *SampleSt
 	return false
 }
 
-// evalSampleFuncMatch is called when the user as specified one of the built in sample matching functions. It determines
+// evalSampleFuncMatch is called when the user as specified one of the built-in sample matching functions. It determines
 // the function being called and performs the evaluation.
 func evalSampleFuncMatch(state *SampleState, db *DB, match parser.MatchStatement) bool {
 	if state == nil {
@@ -278,8 +279,11 @@ func evalSampleFuncMatch(state *SampleState, db *DB, match parser.MatchStatement
 
 	switch {
 	case match.Operation == "has-process":
-		// matching samples that are used in the given process
+		// match samples that are used in the given process
 		return evalSampleFuncMatchHasProcess(state, db, match.Value.(string))
+	case match.Operation == "not-has-process":
+		// match samples that are NOT used in the given process
+		return !evalSampleFuncMatchHasProcess(state, db, match.Value.(string))
 	case match.Operation == "has-attribute":
 		return evalSampleFuncMatchHasAttribute(state, db, match.Value.(string))
 	}
