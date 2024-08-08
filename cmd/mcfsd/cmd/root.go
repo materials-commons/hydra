@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"github.com/apex/log"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/labstack/echo/v4"
 	"github.com/materials-commons/hydra/pkg/config"
 	"github.com/materials-commons/hydra/pkg/globus"
@@ -85,9 +89,27 @@ func Run(c context.Context, args []string, config config.Configer) error {
 		log.Fatalf("Mount failed: %s", err)
 	}
 
+	go unmountOnSignal(fuseServer, mountPath)
+
 	fuseServer.Wait()
 
 	return nil
+}
+
+func unmountOnSignal(server *fuse.Server, path string) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-c
+	log.Infof("Got %s signal, unmounting %q...", sig, path)
+	if err := server.Unmount(); err != nil {
+		log.Errorf("Unmount failed: %s, trying umount...", err)
+		cmd := exec.Command("/usr/bin/umount", path)
+		if err := cmd.Run(); err != nil {
+			log.Errorf("/usr/bin/umount failed: %s", err)
+		}
+	}
+
+	os.Exit(0)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
