@@ -41,6 +41,8 @@ deploy-server: ssh-hostkey server
 	sudo chmod a+rx /usr/local/bin/mchydrad
 	sudo cp operations/supervisord.d/mchydrad.conf /etc/supervisor/conf.d
 
+deploy-servers: deploy-mcbridgefsd deploy-mcftservd deploy-mcsshd deploy-mqlservd deploy-mcdavd deploy-mcfsd
+
 mcbridgefsd:
 	(cd ./cmd/mcbridgefsd; go build)
 
@@ -100,7 +102,7 @@ deploy-mcdavd: mcdavd
 	- sudo chmod a+rx /usr/local/bin/mcdavd
 
 
- deploy-mctus: mctusd
+deploy-mctusd: mctusd
 	- sudo cp operations/supervisord.d/mctusd.conf /etc/supervisor/conf.d
 	- sudo cp cmd/mctusd/mctusd /usr/local/bin
 	- sudo chmod a+rx /usr/local/bin/mctusd
