@@ -43,6 +43,12 @@ deploy-server: ssh-hostkey server
 
 deploy-servers: deploy-mcbridgefsd deploy-mcftservd deploy-mcsshd deploy-mqlservd deploy-mcdavd deploy-mcfsd
 
+stop-servers:
+	-sudo supervisorctl stop 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*'
+
+start-servers:
+	-sudo supervisorctl start 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*'
+
 mcbridgefsd:
 	(cd ./cmd/mcbridgefsd; go build)
 
