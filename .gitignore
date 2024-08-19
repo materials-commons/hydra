@@ -28,3 +28,4 @@ cmd/mcfsd/mcfsd
 cmd/mcfsc/mcfsc
 cmd/mcdavd/mcdavd
 cmd/mctusd/mctusd
+cmd/mcapid/mcapid
