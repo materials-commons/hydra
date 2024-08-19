@@ -16,6 +16,19 @@ func NewDotenvConfig(path string) *DotenvConfig {
 	return &DotenvConfig{DotenvPath: path}
 }
 
+func MustLoadFromMCDotenv() *DotenvConfig {
+	dotenvFilePath := os.Getenv("MC_DOTENV_PATH")
+	if dotenvFilePath == "" {
+		log.Fatalf("MC_DOTENV_PATH not set or blank")
+	}
+
+	if err := gotenv.Load(dotenvFilePath); err != nil {
+		log.Fatalf("Failed loading configuration file %s: %s", dotenvFilePath, err)
+	}
+
+	return NewDotenvConfig(dotenvFilePath)
+}
+
 func (c *DotenvConfig) LoadFromPath(path string) error {
 	c.DotenvPath = path
 	return gotenv.Load(c.DotenvPath)
@@ -32,7 +45,7 @@ func (c *DotenvConfig) GetKey(key string) string {
 func (c *DotenvConfig) MustGetKey(key string) string {
 	val := c.GetKey(key)
 	if val == "" {
-		log.Fatalf("No such required config key: '%s'", key)
+		log.Fatalf("Required config key '%s', doesn't exist or is blank", key)
 	}
 
 	return val

@@ -17,7 +17,6 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mcfs/fs/mcfs/fsstate"
 	"github.com/spf13/cobra"
-	"github.com/subosito/gotenv"
 )
 
 var mcfsDir string
@@ -29,16 +28,15 @@ var rootCmd = &cobra.Command{
 	Long:  `Daemon for the mcfs file system`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
-		if err := Run(ctx, args, config.GetConfig()); err != nil {
+		c := config.MustLoadFromMCDotenv()
+		if err := Run(ctx, args, c); err != nil {
 			log.Fatalf("mcfsd: %s", err)
 		}
 	},
 }
 
 func Run(c context.Context, args []string, config config.Configer) error {
-	readConfig()
-
-	mountPath := os.Getenv("MCFSD_MOUNT_DIR")
+	mountPath := config.GetKey("MCFSD_MOUNT_DIR")
 
 	if len(args) == 1 {
 		mountPath = args[0]
@@ -47,6 +45,9 @@ func Run(c context.Context, args []string, config config.Configer) error {
 	if mountPath == "" {
 		return fmt.Errorf("no path specified for mount")
 	}
+
+	mcfsDir := config.MustGetKey("MCFS_DIR")
+	log.Infof("MCFS Dir: %s", mcfsDir)
 
 	db := mcdb.MustConnectToDB()
 	stors := stor.NewGormStors(db, mcfsDir)
@@ -119,29 +120,4 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func readConfig() {
-	incompleteConfiguration := false
-
-	dotenvFilePath := os.Getenv("MC_DOTENV_PATH")
-	if dotenvFilePath == "" {
-		log.Fatalf("MC_DOTENV_PATH not set or blank")
-	}
-
-	if err := gotenv.Load(dotenvFilePath); err != nil {
-		log.Fatalf("Failed loading configuration file %s: %s", dotenvFilePath, err)
-	}
-
-	mcfsDir = os.Getenv("MCFS_DIR")
-	if mcfsDir == "" {
-		log.Errorf("MCFS_DIR is not set or blank")
-		incompleteConfiguration = true
-	}
-
-	if incompleteConfiguration {
-		log.Fatalf("One or more required variables not configured, exiting.")
-	}
-
-	log.Infof("MCFS Dir: %s", mcfsDir)
 }
