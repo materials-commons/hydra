@@ -235,7 +235,7 @@ func evalOrStatement(db *DB, process *mcmodel.Activity, sampleState *SampleState
 	return eval(db, process, sampleState, statement.Right)
 }
 
-// evalMatchStatement evaluates a MatchStatment which is a leaf node matching against a specific type of item such
+// evalMatchStatement evaluates a MatchStatement which is a leaf node matching against a specific type of item such
 // as a process or sample attribute, or similar.
 func evalMatchStatement(db *DB, process *mcmodel.Activity, sampleState *SampleState, match parser.MatchStatement) bool {
 	switch match.FieldType {
