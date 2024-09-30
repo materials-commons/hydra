@@ -6,6 +6,12 @@ package cmd
 import (
 	"os"
 
+	"github.com/apex/log"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/materials-commons/hydra/pkg/config"
+	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +22,25 @@ var rootCmd = &cobra.Command{
 	Long:  ``,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	Run: func(cmd *cobra.Command, args []string) {},
+	Run: func(cmd *cobra.Command, args []string) {
+		e := echo.New()
+		e.HideBanner = true
+		e.HidePort = true
+		e.Use(middleware.Recover())
+		db := mcdb.MustConnectToDB()
+		c := config.MustLoadFromMCDotenv()
+		mcfsDir := c.MustGetKey("MCFS_DIR")
+		log.Infof("MCFS Dir: %s", mcfsDir)
+		fileStor := stor.NewGormFileStor(db, mcfsDir)
+
+		setupRoutes(e, RouteOpts{
+			fileStor: fileStor,
+		})
+
+		if err := e.Start(":" + c.GetKeyWithDefault("MCAPID_PORT", "1352")); err != nil {
+			log.Fatalf("Unable to start server: %v", err)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

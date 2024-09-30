@@ -14,5 +14,7 @@ func setupRoutes(e *echo.Echo, opts RouteOpts) {
 	g := e.Group("/api")
 
 	folderController := webapi.NewFolderController(opts.fileStor)
+
 	g.POST("/folders", folderController.GetOrCreateFolder)
+	g.POST("/folders/by-path", folderController.GetOrCreateFolderPath)
 }
