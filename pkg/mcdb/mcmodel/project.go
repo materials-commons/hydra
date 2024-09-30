@@ -13,6 +13,7 @@ type Project struct {
 	TeamID         int       `json:"team_id"`
 	OwnerID        int       `json:"owner_id"`
 	Owner          *User     `json:"owner" gorm:"foreignKey:OwnerID;references:ID"`
+	RootDir        *File     `json:"rootDir"`
 	Size           int64     `json:"size"`
 	FileCount      int       `json:"file_count"`
 	DirectoryCount int       `json:"directory_count"`
