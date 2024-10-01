@@ -10,6 +10,8 @@ type Project struct {
 	UUID           string    `json:"uuid"`
 	Slug           string    `json:"slug"`
 	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Summary        string    `json:"summary"`
 	TeamID         int       `json:"team_id"`
 	OwnerID        int       `json:"owner_id"`
 	Owner          *User     `json:"owner" gorm:"foreignKey:OwnerID;references:ID"`
