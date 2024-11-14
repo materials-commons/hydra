@@ -21,7 +21,6 @@ type Dataset struct {
 	Summary       string `json:"summary"`
 	DOI           string `json:"doi"`
 	Authors       string `json:"authors"`
-	Files         []File `json:"files" gorm:"many2many:dataset2file"`
 	FileSelection string
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
