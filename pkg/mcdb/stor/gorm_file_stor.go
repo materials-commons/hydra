@@ -304,15 +304,18 @@ func (s *GormFileStor) GetOrCreateDirPath(projectID, ownerID int, path string) (
 	}
 
 	// If we are here then the path didn't exist and the parent didn't exist so now we are going to traverse
-	// upwards constructing as we go. The way we do this is to split the path, retrieve the root, and then just
-	// start appending each entry of the path on, checking if it exists and if it doesn't then create it.
+	// downwards constructing as we go. The way we do this is to split the path, retrieve the root, and then
+	// start appending each entry of the path on, checking if it exists and if it doesn't we create it.
 
 	// Start with root and then go from there
 	parentDir, err = s.GetDirByPath(projectID, "/")
 	if err != nil {
+		// The root needs to exist. If it doesn't then there is a bigger issue. Return an error
+		// and let higher levels in the system fail.
 		return nil, err
 	}
 
+	// Split up the path and walking it one by one creating missing directory entries.
 	pathParts := strings.Split(path, "/")
 	currentPath := "/"
 	for _, pathPart := range pathParts[1:] {
