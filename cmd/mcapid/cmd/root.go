@@ -33,7 +33,7 @@ var rootCmd = &cobra.Command{
 		log.Infof("MCFS Dir: %s", mcfsDir)
 		fileStor := stor.NewGormFileStor(db, mcfsDir)
 
-		setupRoutes(e, RouteOpts{
+		setupInternalRoutes(e, RouteOpts{
 			fileStor: fileStor,
 		})
 
