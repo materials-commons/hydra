@@ -7,6 +7,8 @@ type TransferRequestFile struct {
 	UUID              string           `json:"string"`
 	Name              string           `json:"name"`
 	State             string           `json:"state"`
+	ExpectedSize      uint64           `json:"expected_size"`
+	ExpectedChecksum  string           `json:"expected_checksum"`
 	TransferRequestID int              `json:"transfer_request_id"`
 	TransferRequest   *TransferRequest `gorm:"foreignKey:TransferRequestID;references:ID"`
 	ProjectID         int              `json:"project_id"`

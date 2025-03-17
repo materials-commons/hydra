@@ -20,10 +20,10 @@ func setupInternalRoutes(e *echo.Echo, opts RouteOpts) {
 
 }
 
-func setupExternalRoutes(e *echo.Echo) {
+func setupExternalRoutes(e *echo.Echo, clientTransferStor stor.ClientTransferStor) {
 	g := e.Group("/transfers")
 
-	transferUploadController := webapi.NewTransferUploadController()
+	transferUploadController := webapi.NewTransferUploadController(clientTransferStor)
 	g.POST("/uploads/start", transferUploadController.StartUpload)
 	g.POST("/uploads/send", transferUploadController.SendUploadBytes)
 	g.POST("/uploads/finish", transferUploadController.FinishUpload)
@@ -31,7 +31,7 @@ func setupExternalRoutes(e *echo.Echo) {
 	g.GET("/uploads/status", transferUploadController.GetUploadStatus)
 	g.GET("/uploads/verify", transferUploadController.GetVerifyStatus)
 
-	transferDownloadController := webapi.NewTransferDownloadController()
+	transferDownloadController := webapi.NewTransferDownloadController(clientTransferStor)
 	g.POST("/downloads/start", transferDownloadController.StartDownload)
 	g.POST("/downloads/receive", transferDownloadController.ReceiveDownloadBytes)
 	g.POST("/downloads/finish", transferDownloadController.FinishDownload)

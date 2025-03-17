@@ -75,6 +75,14 @@ type UserStor interface {
 	GetUserByAPIToken(email string) (*mcmodel.User, error)
 }
 
+type ClientTransferStor interface {
+	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, error)
+	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+	CloseClientTransfer(clientTransferID int) error
+	AbortClientTransfer(clientTransferID int) error
+}
+
 type Stors struct {
 	ConversionStor          ConversionStor
 	FileStor                FileStor
@@ -83,6 +91,7 @@ type Stors struct {
 	TransferRequestStor     TransferRequestStor
 	GlobusTransferStor      GlobusTransferStor
 	UserStor                UserStor
+	ClientTransferStor      ClientTransferStor
 }
 
 func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
