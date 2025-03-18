@@ -1,23 +1,15 @@
 package mcapid
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
-	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
-type ClientTransferCache interface {
-	GetOrCreateClientTransferRequestFileByPath(clientUUID string, projectID int, path string, ownerID int, fn CreateClientTransferFN) (*mcmodel.TransferRequestFile, error)
-}
-
-type clientTransfer struct {
-	clientTransfer            *mcmodel.ClientTransfer
-	transfersByTransferFileId sync.Map // map[id]*TransferRequestFile
-	transfersByPath           sync.Map // map[path]*TransferRequestFile
-}
-
+//
 // Cache design
+//
 // Requirements: Need to be able to look up a client request quickly. A request will consist of
 // The client_uuid, project_id, owner_id, and one of [path] or [transfer_request_file_id], and optionally
 // [transfer_request_id]
@@ -51,54 +43,148 @@ type clientTransfer struct {
 // Calls that don't hold a lock will have WithoutLock appended to them.
 //
 // Errors:
-//     ErrNoSuchClientUUID
 //     ErrNoClientTransfer
 //     ErrNoMatchingClientTransferRequestFile
 // API:
 //    GetTransferRequestFileByPath(client_uuid, project_id, owner_id, path) (*mcmodel.TransferRequestFile, error)
 //    GetTransferRequestFileByID(client_uuid, project_id, owner_id, transfer_request_file_id) (*mcmodel.TransferRequestFile, error)
-//    WithWriteLockHeld(func(clientTransferInserterFn, clientTransferRequestFileInserterFn, checkByPathFn, checkByIDFn) error) (*mcmodel.TransferRequestFile, error)
+//    WithWriteLockHeld(fn func(cache NoLockHeldClientTransferCache) (*mcmodel.TransferRequestFile, error)) (*mcmodel.TransferRequestFile, error)
+//
+
+var ErrNoClientTransfer = errors.New("no client transfer")
+var ErrNoMatchingClientTransferRequestFile = errors.New("no matching client transfer file found")
+
+type ClientTransferCache interface {
+	GetTransferRequestFileByPath(clientUUID string, projectID int, ownerID int, path string) (*mcmodel.TransferRequestFile, error)
+	GetTransferRequestFileByID(clientUUID string, projectID int, ownerID int, transferRequestFileID int) (*mcmodel.TransferRequestFile, error)
+	WithWriteLockHeld(fn func(cache NoLockHeldClientTransferCache) (*mcmodel.TransferRequestFile, error)) (*mcmodel.TransferRequestFile, error)
+}
+
+type NoLockHeldClientTransferCache interface {
+	InsertClientTransferNoLockHeld(clientUUID string, cf *mcmodel.ClientTransfer)
+	InsertTransferRequestFileNoLockHeld(clientUUID string, trf *mcmodel.TransferRequestFile) error
+	GetTransferRequestFileByPathNoLockHeld(clientUUID string, projectID int, ownerID int, path string) (*mcmodel.TransferRequestFile, error)
+	GetTransferRequestFileByIDNoLockHeld(clientUUID string, projectID int, ownerID int, transferRequestFileId int) (*mcmodel.TransferRequestFile, error)
+}
+
+// A clientTransferEntry holds all the state for a client tranfer, including the underlying mcmodel.ClientTransfer as
+// well as all the mcmodel.TransferRequestFiles associated with that transfer.
+type clientTransferEntry struct {
+	clientTransfer       *mcmodel.ClientTransfer
+	transferRequestFiles []*mcmodel.TransferRequestFile
+}
 
 type ClientTransferCacheI struct {
-	// clientTransfersMap is a map[client_uuid]*clientTransfer
-	// where client_uuid is the (string) client_uuid field stored in a ClientTransfer
-	clientTransfersMap      map[string]*clientTransfer
-	mu                      sync.Mutex
-	clientTransferStor      stor.ClientTransferStor
-	transferRequestFileStor stor.TransferRequestFileStor
+	clientTransferEntriesMap map[string][]*clientTransferEntry
+	mu                       sync.RWMutex
 }
 
-type CreateClientTransferFN func() (*mcmodel.ClientTransfer, error)
-
-func NewClientTransferCache(clientTransferStor stor.ClientTransferStor, transferRequestFileStor stor.TransferRequestFileStor) *ClientTransferCacheI {
-	return &ClientTransferCacheI{clientTransferStor: clientTransferStor, transferRequestFileStor: transferRequestFileStor}
+func NewClientTransferCache() *ClientTransferCacheI {
+	return &ClientTransferCacheI{
+		clientTransferEntriesMap: make(map[string][]*clientTransferEntry),
+	}
 }
 
-func (c *ClientTransferCacheI) GetOrCreateClientTransfer(clientUUID string, fn CreateClientTransferFN) (*mcmodel.ClientTransfer, error) {
+func (c *ClientTransferCacheI) GetTransferRequestFileByPath(clientUUID string, projectID int, ownerID int, path string) (*mcmodel.TransferRequestFile, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.GetTransferRequestFileByPathNoLockHeld(clientUUID, projectID, ownerID, path)
+}
+
+func (c *ClientTransferCacheI) GetTransferRequestFileByID(clientUUID string, projectID int, ownerID int, transferRequestFileID int) (*mcmodel.TransferRequestFile, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.GetTransferRequestFileByIDNoLockHeld(clientUUID, projectID, ownerID, transferRequestFileID)
+}
+
+func (c *ClientTransferCacheI) WithWriteLockHeld(fn func(cache NoLockHeldClientTransferCache) (*mcmodel.TransferRequestFile, error)) (*mcmodel.TransferRequestFile, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return fn(c)
+}
 
-	if ct, ok := c.clientTransfersMap[clientUUID]; ok {
-		return ct.clientTransfer, nil
+func (c *ClientTransferCacheI) InsertClientTransferNoLockHeld(clientUUID string, cf *mcmodel.ClientTransfer) {
+	clientTransferEntry := makeClientTransferEntry(cf)
+	c.clientTransferEntriesMap[clientUUID] = append(c.clientTransferEntriesMap[clientUUID], clientTransferEntry)
+}
+
+func makeClientTransferEntry(cf *mcmodel.ClientTransfer) *clientTransferEntry {
+	return &clientTransferEntry{
+		clientTransfer: cf,
+	}
+}
+
+func (c *ClientTransferCacheI) InsertTransferRequestFileNoLockHeld(clientUUID string, trf *mcmodel.TransferRequestFile) error {
+	matchingClientTransfer, err := c.getClientTransferEntryNoLockHeld(clientUUID, trf.ProjectID, trf.OwnerID)
+	if err != nil {
+		return err
 	}
 
-	ct, err := fn()
+	matchingClientTransfer.transferRequestFiles = append(matchingClientTransfer.transferRequestFiles, trf)
+
+	return nil
+}
+
+func (c *ClientTransferCacheI) GetTransferRequestFileByPathNoLockHeld(clientUUID string, projectID int, ownerID int, path string) (*mcmodel.TransferRequestFile, error) {
+	matchingClientTransfer, err := c.getClientTransferEntryNoLockHeld(clientUUID, projectID, ownerID)
 	if err != nil {
 		return nil, err
 	}
 
-	c.clientTransfersMap[clientUUID] = &clientTransfer{clientTransfer: ct}
-
-	return ct, nil
-}
-
-func (c *ClientTransferCacheI) GetOrCreateTransferRequestFileByPath(clientUUID string, projectID int, path string) (*mcmodel.TransferRequestFile, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if ct, ok := c.clientTransfersMap[clientUUID]; !ok {
-		_ = ct
+	// Found a matching client transfer, so now look for a matching TransferRequestFile by path
+	for _, transferRequestFile := range matchingClientTransfer.transferRequestFiles {
+		if transferRequestFile.Path == path {
+			return transferRequestFile, nil
+		}
 	}
 
-	return nil, nil
+	// No match found
+	return nil, ErrNoMatchingClientTransferRequestFile
+}
+
+func (c *ClientTransferCacheI) GetTransferRequestFileByIDNoLockHeld(clientUUID string, projectID int, ownerID int, transferRequestFileID int) (*mcmodel.TransferRequestFile, error) {
+	matchingClientTransferEntry, err := c.getClientTransferEntryNoLockHeld(clientUUID, projectID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Found a matching client transfer, so now look for a matching TransferRequestFile by path
+	for _, transferRequestFile := range matchingClientTransferEntry.transferRequestFiles {
+		if transferRequestFile.ID == transferRequestFileID {
+			return transferRequestFile, nil
+		}
+	}
+
+	// No match found
+	return nil, ErrNoMatchingClientTransferRequestFile
+}
+
+func (c *ClientTransferCacheI) getClientTransferEntryNoLockHeld(clientUUID string, projectID int, ownerID int) (*clientTransferEntry, error) {
+	// Check if there are any client transfers associated with the ClientUUID
+	clientTransferEntries, ok := c.clientTransferEntriesMap[clientUUID]
+	if !ok {
+		return nil, ErrNoClientTransfer
+	}
+
+	// Check if any of the client transfers associated with ClientUUID match the projectID and OwnerID
+	for _, clientTransfer := range clientTransferEntries {
+		if clientTransferEntryMatches(projectID, ownerID, clientTransfer) {
+			return clientTransfer, nil
+		}
+	}
+
+	// No client transfers matched
+	return nil, ErrNoClientTransfer
+}
+
+func clientTransferEntryMatches(projectID int, ownerID int, clientTransferEntry *clientTransferEntry) bool {
+	if clientTransferEntry.clientTransfer.ProjectID != projectID {
+		return false
+	}
+
+	if clientTransferEntry.clientTransfer.OwnerID != ownerID {
+		return false
+	}
+
+	return true
 }
