@@ -1,13 +1,17 @@
 package webapi
 
 import (
-	"github.com/labstack/echo/v4"
-	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/materials-commons/hydra/pkg/mcapid"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
 type TransferUploadController struct {
-	clientTransferStor stor.ClientTransferStor
+	clientTransferStor  stor.ClientTransferStor
+	clientTransferCache mcapid.ClientTransferCache
 }
 
 func NewTransferUploadController(clientTransferStor stor.ClientTransferStor) *TransferUploadController {
@@ -28,10 +32,18 @@ func (c *TransferUploadController) StartUpload(ctx echo.Context) error {
 		return ctx.NoContent(http.StatusBadRequest)
 	}
 
-	clientTransfer, err := c.clientTransferStor.GetOrCreateClientTransferByPath(req.ClientUUID, req.ProjectID, 0, req.DestinationPath)
-
-	_ = clientTransfer
+	user := ctx.Get("user").(*mcmodel.User)
+	_ = user
+	transferRequestFile, err := c.clientTransferCache.GetOrCreateClientTransferRequestFileByPath(req.ClientUUID, req.ProjectID, req.DestinationPath, user.ID, nil)
+	_ = transferRequestFile
 	_ = err
+
+	//
+	//clientTransfer, transferRequestFile, err := c.clientTransferStor.GetOrCreateClientTransferByPath(req.ClientUUID, req.ProjectID, 0, req.DestinationPath)
+	//
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }

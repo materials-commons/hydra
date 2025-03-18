@@ -56,9 +56,9 @@ func (s *GormUserStor) GetUserByEmail(email string) (*mcmodel.User, error) {
 	return &user, nil
 }
 
-func (s *GormUserStor) GetUserByAPIToken(email string) (*mcmodel.User, error) {
+func (s *GormUserStor) GetUserByAPIToken(apitoken string) (*mcmodel.User, error) {
 	var user mcmodel.User
-	if err := s.db.Where("api_token = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Where("api_token = ?", apitoken).First(&user).Error; err != nil {
 		return nil, err
 	}
 

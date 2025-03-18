@@ -72,12 +72,12 @@ type UserStor interface {
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)
 	GetUserBySlug(slug string) (*mcmodel.User, error)
 	GetUserByEmail(email string) (*mcmodel.User, error)
-	GetUserByAPIToken(email string) (*mcmodel.User, error)
+	GetUserByAPIToken(apitoken string) (*mcmodel.User, error)
 }
 
 type ClientTransferStor interface {
 	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
-	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, error)
+	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, *mcmodel.TransferRequestFile, error)
 	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
 	CloseClientTransfer(clientTransferID int) error
 	AbortClientTransfer(clientTransferID int) error

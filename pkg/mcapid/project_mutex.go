@@ -6,23 +6,23 @@ import (
 	"github.com/apex/log"
 )
 
-var mapMutex sync.Mutex
-var mutexes = make(map[int]*sync.Mutex)
+var projectMapMutex sync.Mutex
+var projectMutexes = make(map[int]*sync.Mutex)
 
 func AcquireProjectMutex(projectID int) {
-	mapMutex.Lock()
-	defer mapMutex.Unlock()
+	projectMapMutex.Lock()
+	defer projectMapMutex.Unlock()
 	var p sync.Mutex
-	projectMutex, ok := mutexes[projectID]
+	projectMutex, ok := projectMutexes[projectID]
 	if !ok {
 		projectMutex = &p
-		mutexes[projectID] = projectMutex
+		projectMutexes[projectID] = projectMutex
 	}
 	projectMutex.Lock()
 }
 
 func ReleaseProjectMutex(projectID int) {
-	m, ok := mutexes[projectID]
+	m, ok := projectMutexes[projectID]
 	if !ok {
 		log.Errorf("releaseProjectMutex called on project (%d) with no mutex", projectID)
 		return

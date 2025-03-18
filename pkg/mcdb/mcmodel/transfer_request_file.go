@@ -9,6 +9,8 @@ type TransferRequestFile struct {
 	State             string           `json:"state"`
 	ExpectedSize      uint64           `json:"expected_size"`
 	ExpectedChecksum  string           `json:"expected_checksum"`
+	Path              string           `json:"path"`
+	ClientUUID        string           `json:"client_uuid"` // From ClientTransfer. Stored here to eliminate a query.
 	TransferRequestID int              `json:"transfer_request_id"`
 	TransferRequest   *TransferRequest `gorm:"foreignKey:TransferRequestID;references:ID"`
 	ProjectID         int              `json:"project_id"`
