@@ -26,6 +26,7 @@ type FileStor interface {
 	UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error
 	PointAtExistingIfExists(file *mcmodel.File) (bool, error)
 	DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error)
+	Root() string
 }
 
 type ProjectStor interface {

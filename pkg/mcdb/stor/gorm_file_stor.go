@@ -21,6 +21,10 @@ func NewGormFileStor(db *gorm.DB, mcfsRoot string) *GormFileStor {
 	return &GormFileStor{db: db, mcfsRoot: mcfsRoot}
 }
 
+func (s *GormFileStor) Root() string {
+	return s.mcfsRoot
+}
+
 func (s *GormFileStor) GetFileByID(fileID int) (*mcmodel.File, error) {
 	var file mcmodel.File
 	if err := s.db.Find(&file, fileID).Error; err != nil {
