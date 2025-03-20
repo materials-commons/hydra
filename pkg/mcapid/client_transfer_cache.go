@@ -65,6 +65,7 @@ type NoLockHeldClientTransferCache interface {
 	InsertTransferRequestFileNoLockHeld(clientUUID string, trf *mcmodel.TransferRequestFile) error
 	GetTransferRequestFileByPathNoLockHeld(clientUUID string, projectID int, ownerID int, path string) (*mcmodel.TransferRequestFile, error)
 	GetTransferRequestFileByIDNoLockHeld(clientUUID string, projectID int, ownerID int, transferRequestFileId int) (*mcmodel.TransferRequestFile, error)
+	GetTransferRequestNoLockHeld(clientUUID string, projectID int, ownerID int) (*mcmodel.TransferRequest, error)
 }
 
 // A clientTransferEntry holds all the state for a client tranfer, including the underlying mcmodel.ClientTransfer as
@@ -103,8 +104,8 @@ func (c *ClientTransferCacheI) WithWriteLockHeld(fn func(cache NoLockHeldClientT
 	return fn(c)
 }
 
-func (c *ClientTransferCacheI) InsertClientTransferNoLockHeld(clientUUID string, cf *mcmodel.ClientTransfer) {
-	clientTransferEntry := makeClientTransferEntry(cf)
+func (c *ClientTransferCacheI) InsertClientTransferNoLockHeld(clientUUID string, ct *mcmodel.ClientTransfer) {
+	clientTransferEntry := makeClientTransferEntry(ct)
 	c.clientTransferEntriesMap[clientUUID] = append(c.clientTransferEntriesMap[clientUUID], clientTransferEntry)
 }
 
@@ -157,6 +158,15 @@ func (c *ClientTransferCacheI) GetTransferRequestFileByIDNoLockHeld(clientUUID s
 
 	// No match found
 	return nil, ErrNoMatchingClientTransferRequestFile
+}
+
+func (c *ClientTransferCacheI) GetTransferRequestNoLockHeld(clientUUID string, projectID int, ownerID int) (*mcmodel.TransferRequest, error) {
+	matchingClientTransfer, err := c.getClientTransferEntryNoLockHeld(clientUUID, projectID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return matchingClientTransfer.clientTransfer.TransferRequest, nil
 }
 
 func (c *ClientTransferCacheI) getClientTransferEntryNoLockHeld(clientUUID string, projectID int, ownerID int) (*clientTransferEntry, error) {

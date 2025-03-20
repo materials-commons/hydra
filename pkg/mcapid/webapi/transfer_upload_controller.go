@@ -1,6 +1,8 @@
 package webapi
 
 import (
+	"errors"
+	"github.com/apex/log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -57,7 +59,7 @@ func (c *TransferUploadController) StartUpload(ctx echo.Context) error {
 	user := ctx.Get("user").(*mcmodel.User)
 	transferRequestFile, err := c.clientTransferCache.GetTransferRequestFileByPath(req.ClientUUID, req.ProjectID, user.ID, req.DestinationPath)
 	switch {
-	case err == mcapid.ErrNoClientTransfer:
+	case errors.Is(err, mcapid.ErrNoClientTransfer):
 		// Need to create a ClientTransfer, a TransferRequest, and a TransferRequestFile
 		transferRequestFile, err = c.clientTransferCache.WithWriteLockHeld(func(cache mcapid.NoLockHeldClientTransferCache) (*mcmodel.TransferRequestFile, error) {
 			trf, err := cache.GetTransferRequestFileByPathNoLockHeld(req.ClientUUID, req.ProjectID, user.ID, req.DestinationPath)
@@ -74,7 +76,30 @@ func (c *TransferUploadController) StartUpload(ctx echo.Context) error {
 		}
 
 		// return json blob with success
-	case err == mcapid.ErrNoMatchingClientTransferRequestFile:
+	case errors.Is(err, mcapid.ErrNoMatchingClientTransferRequestFile):
+		transferRequestFile, err = c.clientTransferCache.WithWriteLockHeld(func(cache mcapid.NoLockHeldClientTransferCache) (*mcmodel.TransferRequestFile, error) {
+			trf, err := cache.GetTransferRequestFileByPathNoLockHeld(req.ClientUUID, req.ProjectID, user.ID, req.DestinationPath)
+			if err == nil {
+				return trf, nil
+			}
+
+			transferRequest, err := cache.GetTransferRequestNoLockHeld(req.ClientUUID, req.ProjectID, user.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			trf, err = c.createTransferRequestFile(transferRequest, req, user.ID)
+
+			if err = cache.InsertTransferRequestFileNoLockHeld(req.ClientUUID, trf); err != nil {
+				// If this happens something really went wrong as we already know that the ClientUUID exists
+				// and yet now we've failed while holding the lock that would prevent anyone else from changing
+				// the cache!!
+				log.Debugf("Failed to insert transferRequestFile with ID (%d) into cache for ClientUUID %s. This should never happen.", trf.ID, req.ClientUUID)
+				return nil, err
+			}
+
+			return trf, nil
+		})
 		// Need to create a TransferRequestFile
 	case err != nil:
 	// some other error
@@ -97,13 +122,6 @@ func (c *TransferUploadController) StartUpload(ctx echo.Context) error {
 		}
 	}
 
-	//
-	//clientTransfer, transferRequestFile, err := c.clientTransferStor.GetOrCreateClientTransferByPath(req.ClientUUID, req.ProjectID, 0, req.DestinationPath)
-	//
-	//if err != nil {
-	//	return err
-	//}
-
 	return nil
 }
 
@@ -120,24 +138,10 @@ func (c *TransferUploadController) createClientTransferAndTransferRequestFile(ca
 		return nil, err
 	}
 
-	dir, err := c.fileStor.GetOrCreateDirPath(req.ProjectID, ownerID, filepath.Dir(req.DestinationPath))
+	trf, err := c.createTransferRequestFile(tr, req, ownerID)
 	if err != nil {
 		return nil, err
 	}
-
-	filename := filepath.Base(req.DestinationPath)
-	f, err := c.fileStor.CreateFile(filename, req.ProjectID, ownerID, dir.ID, mc.GetMimeType(filename))
-	if err != nil {
-		return nil, err
-	}
-
-	var trf *mcmodel.TransferRequestFile
-	f, trf, err = c.transferRequestStor.CreateNewFile(f, dir, tr)
-	if err != nil {
-		return nil, err
-	}
-
-	_ = trf
 
 	ct := &mcmodel.ClientTransfer{
 		ClientUUID:        req.ClientUUID,
@@ -151,7 +155,29 @@ func (c *TransferUploadController) createClientTransferAndTransferRequestFile(ca
 		return nil, err
 	}
 
-	return nil, nil
+	cache.InsertClientTransferNoLockHeld(req.ClientUUID, ct)
+	if err := cache.InsertTransferRequestFileNoLockHeld(req.ClientUUID, trf); err != nil {
+		return nil, err
+	}
+
+	return trf, nil
+}
+
+func (c *TransferUploadController) createTransferRequestFile(tr *mcmodel.TransferRequest, req StartUploadRequest, userID int) (*mcmodel.TransferRequestFile, error) {
+	dir, err := c.fileStor.GetOrCreateDirPath(req.ProjectID, userID, filepath.Dir(req.DestinationPath))
+	if err != nil {
+		return nil, err
+	}
+
+	filename := filepath.Base(req.DestinationPath)
+	f, err := c.fileStor.CreateFile(filename, req.ProjectID, userID, dir.ID, mc.GetMimeType(filename))
+	if err != nil {
+		return nil, err
+	}
+
+	_, trf, err := c.transferRequestStor.CreateNewFile(f, dir, tr)
+
+	return trf, err
 }
 
 func (c *TransferUploadController) SendUploadBytes(ctx echo.Context) error {
