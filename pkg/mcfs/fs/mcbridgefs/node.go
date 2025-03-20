@@ -417,7 +417,7 @@ func (n *Node) createNewMCFileVersion() (*mcmodel.File, error) {
 		Current:     false,
 	}
 
-	newFile, err = transferRequestStore.CreateNewFile(newFile, n.file.Directory, &transferRequest)
+	newFile, _, err = transferRequestStore.CreateNewFile(newFile, n.file.Directory, &transferRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +453,8 @@ func (n *Node) createNewMCFile(name string) (*mcmodel.File, error) {
 		Current:     false,
 	}
 
-	return transferRequestStore.CreateNewFile(file, dir, &transferRequest)
+	f, _, err := transferRequestStore.CreateNewFile(file, dir, &transferRequest)
+	return f, err
 }
 
 // getMimeType will determine the type of file from its extension. It strips out the extra information

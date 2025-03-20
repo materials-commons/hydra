@@ -131,10 +131,13 @@ func (c *TransferUploadController) createClientTransferAndTransferRequestFile(ca
 		return nil, err
 	}
 
-	f, err = c.transferRequestStor.CreateNewFile(f, dir, tr)
+	var trf *mcmodel.TransferRequestFile
+	f, trf, err = c.transferRequestStor.CreateNewFile(f, dir, tr)
 	if err != nil {
 		return nil, err
 	}
+
+	_ = trf
 
 	ct := &mcmodel.ClientTransfer{
 		ClientUUID:        req.ClientUUID,

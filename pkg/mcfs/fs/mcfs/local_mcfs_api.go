@@ -80,7 +80,8 @@ func (fsapi *LocalMCFSApi) createNewFile(p mcpath.Path) (*mcmodel.File, error) {
 		Current:     false,
 	}
 
-	return fsapi.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
+	f, _, err := fsapi.stors.TransferRequestStor.CreateNewFile(file, dir, tr)
+	return f, err
 }
 
 // Open will open a file. It will create a new version if opening a new file for write. An open in Append
@@ -233,7 +234,7 @@ func (fsapi *LocalMCFSApi) createNewFileVersion(p mcpath.Path) (*mcmodel.File, e
 		Current:     false,
 	}
 
-	f, err = fsapi.stors.TransferRequestStor.CreateNewFile(f, dir, tr)
+	f, _, err = fsapi.stors.TransferRequestStor.CreateNewFile(f, dir, tr)
 	if err != nil {
 		return nil, err
 	}

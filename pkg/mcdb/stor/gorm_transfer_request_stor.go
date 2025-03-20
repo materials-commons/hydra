@@ -118,25 +118,30 @@ func (s *GormTransferRequestStor) MarkFileAsOpen(file *mcmodel.File) error {
 	})
 }
 
-func (s *GormTransferRequestStor) CreateNewFile(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error) {
-	var err error
-	if file, err = s.addFileToDatabase(file, dir.ID, transferRequest, true); err != nil {
-		return file, err
+func (s *GormTransferRequestStor) CreateNewFile(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, *mcmodel.TransferRequestFile, error) {
+	var (
+		err error
+		trf *mcmodel.TransferRequestFile
+	)
+	if file, trf, err = s.addFileToDatabase(file, dir.ID, transferRequest, true); err != nil {
+		return file, trf, err
 	}
 
 	if err := os.MkdirAll(file.ToUnderlyingDirPath(s.mcfsRoot), 0755); err != nil {
 		// TODO: If this fails then we should remove the created file from the database
 		log.Errorf("os.MkdirAll failed (%s): %s\n", file.ToUnderlyingDirPath(s.mcfsRoot), err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	file.Directory = dir
-	return file, nil
+	return file, trf, nil
 }
 
 func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) (*mcmodel.File, error) {
-	var err error
-	if file, err = s.addFileToDatabase(file, dir.ID, transferRequest, false); err != nil {
+	var (
+		err error
+	)
+	if file, _, err = s.addFileToDatabase(file, dir.ID, transferRequest, false); err != nil {
 		return file, err
 	}
 
@@ -153,18 +158,19 @@ func (s *GormTransferRequestStor) CreateNewFileVersion(file, dir *mcmodel.File, 
 // addFileToDatabase will add an mcmodel.File entry and an associated mcmodel.TransferRequestFile entry
 // to the database. The file parameter must be filled out, except for the UUID which will be generated
 // for the file. The TransferRequestFile will be created based on the file entry.
-func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID int, transferRequest *mcmodel.TransferRequest, updateProject bool) (*mcmodel.File, error) {
+func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID int, transferRequest *mcmodel.TransferRequest, updateProject bool) (*mcmodel.File, *mcmodel.TransferRequestFile, error) {
 	var (
 		err                     error
 		transferFileRequestUUID string
+		trf                     *mcmodel.TransferRequestFile
 	)
 
 	if file.UUID, err = uuid.GenerateUUID(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if transferFileRequestUUID, err = uuid.GenerateUUID(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Wrap creation in a transaction so that both the file and the TransferRequestFile are either
@@ -190,6 +196,8 @@ func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID in
 			return err
 		}
 
+		trf = &transferRequestFile
+
 		if updateProject {
 			return incrementProjectFileTypeCountAndFilesCount(tx, transferRequest.ProjectID, mime.Mime2Description(file.MimeType))
 		}
@@ -197,7 +205,7 @@ func (s *GormTransferRequestStor) addFileToDatabase(file *mcmodel.File, dirID in
 		return nil
 	})
 
-	return file, err
+	return file, trf, err
 }
 
 func (s *GormTransferRequestStor) ListDirectory(dir *mcmodel.File, transferRequest *mcmodel.TransferRequest) ([]mcmodel.File, error) {
