@@ -3,7 +3,6 @@ package webapi
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -259,9 +258,9 @@ func TestFinalizeUpload(t *testing.T) {
 	chunk1Path := filepath.Join(chunksDir, "chunk_1")
 	chunk2Path := filepath.Join(chunksDir, "chunk_2")
 
-	ioutil.WriteFile(chunk0Path, []byte("Chunk 0 data"), 0644)
-	ioutil.WriteFile(chunk1Path, []byte("Chunk 1 data"), 0644)
-	ioutil.WriteFile(chunk2Path, []byte("Chunk 2 data"), 0644)
+	_ = os.WriteFile(chunk0Path, []byte("Chunk 0 data"), 0644)
+	_ = os.WriteFile(chunk1Path, []byte("Chunk 1 data"), 0644)
+	_ = os.WriteFile(chunk2Path, []byte("Chunk 2 data"), 0644)
 
 	// Add chunks to the controller
 	controller.mu.Lock()
@@ -346,8 +345,8 @@ func TestFinalizeUpload(t *testing.T) {
 		newChunk0Path := filepath.Join(newChunksDir, "chunk_0")
 		newChunk1Path := filepath.Join(newChunksDir, "chunk_1")
 
-		ioutil.WriteFile(newChunk0Path, []byte("Chunk 0 data"), 0644)
-		ioutil.WriteFile(newChunk1Path, []byte("Chunk 1 data"), 0644)
+		_ = os.WriteFile(newChunk0Path, []byte("Chunk 0 data"), 0644)
+		_ = os.WriteFile(newChunk1Path, []byte("Chunk 1 data"), 0644)
 
 		// Add chunks to the controller
 		controller.mu.Lock()

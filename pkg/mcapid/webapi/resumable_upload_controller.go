@@ -3,7 +3,6 @@ package webapi
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -226,7 +225,7 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 		c.mu.Unlock()
 
 		// Read the chunk file
-		chunkData, err := ioutil.ReadFile(chunkPath)
+		chunkData, err := os.ReadFile(chunkPath)
 		if err != nil {
 			return ctx.JSON(http.StatusInternalServerError, map[string]string{
 				"error": fmt.Sprintf("Failed to read chunk %d: %v", idx, err),
@@ -255,11 +254,11 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 
 	// Return the final file info
 	return ctx.JSON(http.StatusOK, map[string]interface{}{
-		"file_id":    file.ID,
-		"file_uuid":  file.UUID,
-		"file_size":  totalSize,
-		"chunks":     totalChunks,
-		"finalized":  true,
+		"file_id":   file.ID,
+		"file_uuid": file.UUID,
+		"file_size": totalSize,
+		"chunks":    totalChunks,
+		"finalized": true,
 	})
 }
 
