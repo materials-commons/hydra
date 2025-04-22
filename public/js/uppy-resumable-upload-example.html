@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Materials Commons Resumable Upload Plugin for Uppy - Example</title>
+  <link href="https://releases.transloadit.com/uppy/v2.9.4/uppy.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .config-section {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #uppy-dashboard {
+      margin-top: 20px;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      border-left: 4px solid #4CAF50;
+    }
+  </style>
+</head>
+<body>
+  <h1>Materials Commons Resumable Upload Example</h1>
+  
+  <div class="config-section">
+    <h2>Configuration</h2>
+    <label for="server-url">Server URL:</label>
+    <input type="text" id="server-url" value="http://localhost:1352">
+    
+    <label for="api-key">API Key:</label>
+    <input type="text" id="api-key" placeholder="Enter your Materials Commons API key">
+    
+    <label for="project-id">Project ID:</label>
+    <input type="number" id="project-id" placeholder="Enter your project ID">
+    
+    <label for="destination-path">Destination Path:</label>
+    <input type="text" id="destination-path" placeholder="/path/to/destination/">
+    
+    <label for="chunk-size">Chunk Size (bytes):</label>
+    <input type="number" id="chunk-size" value="1048576">
+    
+    <button id="initialize-uppy">Initialize Uppy</button>
+  </div>
+  
+  <div id="uppy-dashboard"></div>
+  
+  <div id="status" class="status" style="display: none;">
+    <h3>Upload Status</h3>
+    <pre id="status-output"></pre>
+  </div>
+
+  <script src="https://releases.transloadit.com/uppy/v2.9.4/uppy.min.js"></script>
+  <script src="uppy-resumable-upload.js"></script>
+  <script>
+    document.getElementById('initialize-uppy').addEventListener('click', function() {
+      // Get configuration values
+      const serverUrl = document.getElementById('server-url').value;
+      const apiKey = document.getElementById('api-key').value;
+      const projectId = parseInt(document.getElementById('project-id').value, 10);
+      const destinationPathPrefix = document.getElementById('destination-path').value;
+      const chunkSize = parseInt(document.getElementById('chunk-size').value, 10);
+      
+      // Validate inputs
+      if (!apiKey) {
+        alert('Please enter your API key');
+        return;
+      }
+      
+      if (!projectId || isNaN(projectId)) {
+        alert('Please enter a valid project ID');
+        return;
+      }
+      
+      // Clear previous instance if exists
+      const dashboard = document.getElementById('uppy-dashboard');
+      dashboard.innerHTML = '';
+      
+      // Initialize Uppy
+      const uppy = new Uppy.Uppy({
+        debug: true,
+        autoProceed: false,
+        restrictions: {
+          maxFileSize: null,
+          maxNumberOfFiles: 10
+        }
+      })
+        .use(Uppy.Dashboard, {
+          inline: true,
+          target: '#uppy-dashboard',
+          showProgressDetails: true,
+          proudlyDisplayPoweredByUppy: true
+        })
+        .use(MaterialsCommonsResumableUpload, {
+          serverUrl: serverUrl,
+          apiKey: apiKey,
+          chunkSize: chunkSize
+        });
+      
+      // Add metadata to files
+      uppy.on('file-added', (file) => {
+        const destinationPath = destinationPathPrefix + (destinationPathPrefix.endsWith('/') ? '' : '/') + file.name;
+        uppy.setFileMeta(file.id, {
+          projectId: projectId,
+          destinationPath: destinationPath
+        });
+        
+        console.log(`Added file: ${file.name} with destination: ${destinationPath}`);
+      });
+      
+      // Update status on upload progress
+      uppy.on('upload-progress', (file, progress) => {
+        const statusOutput = document.getElementById('status-output');
+        statusOutput.textContent = `Uploading ${file.name}: ${Math.round(progress.bytesUploaded / progress.bytesTotal * 100)}%`;
+        document.getElementById('status').style.display = 'block';
+      });
+      
+      // Update status on upload success
+      uppy.on('upload-success', (file, response) => {
+        const statusOutput = document.getElementById('status-output');
+        statusOutput.textContent = `Successfully uploaded ${file.name}\n\nResponse:\n${JSON.stringify(response, null, 2)}`;
+        document.getElementById('status').style.display = 'block';
+      });
+      
+      // Update status on upload error
+      uppy.on('upload-error', (file, error) => {
+        const statusOutput = document.getElementById('status-output');
+        statusOutput.textContent = `Error uploading ${file.name}: ${error.message}`;
+        document.getElementById('status').style.display = 'block';
+      });
+      
+      console.log('Uppy initialized with the following configuration:', {
+        serverUrl,
+        apiKey: apiKey ? '***' : 'not provided',
+        projectId,
+        destinationPathPrefix,
+        chunkSize
+      });
+    });
+  </script>
+</body>
+</html>

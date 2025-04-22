@@ -31,11 +31,16 @@ var rootCmd = &cobra.Command{
 		c := config.MustLoadFromMCDotenv()
 		mcfsDir := c.MustGetKey("MCFS_DIR")
 		log.Infof("MCFS Dir: %s", mcfsDir)
-		fileStor := stor.NewGormFileStor(db, mcfsDir)
 
+		// Initialize all the storage interfaces
+		stors := stor.NewGormStors(db, mcfsDir)
+
+		// Setup internal and external routes
 		setupInternalRoutes(e, RouteOpts{
-			fileStor: fileStor,
+			fileStor: stors.FileStor,
 		})
+
+		setupExternalRoutes(e, *stors)
 
 		if err := e.Start(":" + c.GetKeyWithDefault("MCAPID_PORT", "1352")); err != nil {
 			log.Fatalf("Unable to start server: %v", err)
