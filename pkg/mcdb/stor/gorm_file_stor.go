@@ -221,7 +221,12 @@ func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path
 		}
 
 		if err := tx.Create(&dir).Error; err != nil {
-			return err
+			// Create failed, so lets checks if the directory already exists, and if so, return it.
+			return tx.Where("path = ?", path).
+				Where("deleted_at IS NULL").
+				Where("dataset_id IS NULL").
+				Where("project_id = ?", projectID).
+				Find(&dir).Error
 		}
 
 		return tx.Model(&project).Updates(&mcmodel.Project{DirectoryCount: project.DirectoryCount + 1}).Error
@@ -259,6 +264,8 @@ func (s *GormFileStor) CreateDirIfNotExists(parentDirID int, path, name string, 
 		}
 
 		if err := tx.Create(dir).Error; err != nil {
+			// Create failed, so lets checks if the directory already exists, and if so, return it.
+			dir, err = findDirByPath(tx, projectID, path)
 			return err
 		}
 
