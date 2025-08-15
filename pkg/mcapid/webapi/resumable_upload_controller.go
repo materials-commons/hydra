@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/labstack/echo/v4"
@@ -15,18 +16,29 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
+// These type aliases are here to make the chunks map more readable. They help to define each of the levels of the map.
+type userID = int            // The user ID of the user doing an upload
+type fileID = int            // The file ID of the file chunks are being uploaded for
+type currentChunkIndex = int // The last chunk index successfully uploaded.
+
+type ResumableUploadInstance struct {
+	LastChunkIndexUploaded int
+	ExpectedSize           int64
+	ExpectedChecksum       string
+}
+
 // ResumableUploadController handles file uploads with support for unlimited size and restartable uploads.
 type ResumableUploadController struct {
 	fileStor stor.FileStor
 	mu       sync.Mutex
-	chunks   map[int]map[int]string // map[fileID]map[chunkIndex]chunkPath
+	chunks   map[userID]map[fileID]currentChunkIndex
 }
 
 // NewResumableUploadController creates a new ResumableUploadController.
 func NewResumableUploadController(fileStor stor.FileStor) *ResumableUploadController {
 	return &ResumableUploadController{
 		fileStor: fileStor,
-		chunks:   make(map[int]map[int]string),
+		chunks:   make(map[userID]map[fileID]currentChunkIndex),
 	}
 }
 
@@ -104,12 +116,11 @@ func (c *ResumableUploadController) Upload(ctx echo.Context) error {
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to write to chunk file"})
 	}
 
-	// Store the chunk path in the chunks map
+	// Store the last chunk written in the chunks state map
 	c.mu.Lock()
 	if _, ok := c.chunks[file.ID]; !ok {
-		c.chunks[file.ID] = make(map[int]string)
+		c.chunks[user.ID][file.ID] = chunkIndex
 	}
-	c.chunks[file.ID][chunkIndex] = chunkPath
 	c.mu.Unlock()
 
 	// Return the chunk info
@@ -169,6 +180,12 @@ func (c *ResumableUploadController) GetUploadStatus(ctx echo.Context) error {
 
 // FinalizeUpload combines all chunks for a file into a single file in the correct order.
 func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
+	// Get the user from the context
+	user := ctx.Get("user").(*mcmodel.User)
+	if user == nil {
+		return ctx.JSON(http.StatusUnauthorized, map[string]string{"error": "User not authenticated"})
+	}
+
 	// Parse the request parameters
 	fileID, err := strconv.Atoi(ctx.QueryParam("file_id"))
 	if err != nil {
@@ -188,26 +205,29 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 
 	// Check if we have all the chunks
 	c.mu.Lock()
-	chunkMap, hasChunks := c.chunks[fileID]
+
+	// Check if user has an upload
+	userUploadsMap, hasUserUploads := c.chunks[user.ID]
+	if !hasUserUploads {
+		c.mu.Unlock()
+		return ctx.JSON(http.StatusBadRequest, map[string]string{"error": "No chunks found for this user"})
+	}
+
+	_, hasChunks := userUploadsMap[fileID]
 	if !hasChunks {
 		c.mu.Unlock()
 		return ctx.JSON(http.StatusBadRequest, map[string]string{"error": "No chunks found for this file"})
 	}
 
-	if len(chunkMap) != totalChunks {
-		c.mu.Unlock()
+	c.mu.Unlock()
+
+	chunkIndices := c.createSortedListOfChunkIds(file.OwnerID, fileID)
+
+	if len(chunkIndices) != totalChunks {
 		return ctx.JSON(http.StatusBadRequest, map[string]string{
-			"error": fmt.Sprintf("Expected %d chunks, but found %d", totalChunks, len(chunkMap)),
+			"error": fmt.Sprintf("Expected %d chunks, but found %d", totalChunks, len(chunkIndices)),
 		})
 	}
-
-	// Get all chunk indices and sort them
-	chunkIndices := make([]int, 0, len(chunkMap))
-	for idx := range chunkMap {
-		chunkIndices = append(chunkIndices, idx)
-	}
-	sort.Ints(chunkIndices)
-	c.mu.Unlock()
 
 	// Create the final file
 	filePath := file.ToUnderlyingFilePath(c.fileStor.Root())
@@ -220,10 +240,8 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 	// Combine all chunks in order
 	var totalSize int64 = 0
 	for _, idx := range chunkIndices {
-		c.mu.Lock()
-		chunkPath := chunkMap[idx]
-		c.mu.Unlock()
 
+		chunkPath := c.getChunkPath(file.OwnerID, fileID, idx)
 		// Read the chunk file
 		chunkData, err := os.ReadFile(chunkPath)
 		if err != nil {
@@ -245,11 +263,15 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 
 	// Clean up the chunks
 	c.mu.Lock()
-	chunksDir := filepath.Join(c.fileStor.Root(), "chunks", fmt.Sprintf("file_%d", fileID))
-	delete(c.chunks, fileID)
+	delete(c.chunks[user.ID], fileID)
+	// Check if the user has any more upload requests
+	if len(c.chunks[user.ID]) == 0 {
+		delete(c.chunks, user.ID)
+	}
 	c.mu.Unlock()
 
 	// Remove the chunks directory
+	chunksDir := filepath.Join(c.fileStor.Root(), "chunks", fmt.Sprintf("file_%d", fileID))
 	os.RemoveAll(chunksDir)
 
 	// Return the final file info
@@ -260,6 +282,40 @@ func (c *ResumableUploadController) FinalizeUpload(ctx echo.Context) error {
 		"chunks":    totalChunks,
 		"finalized": true,
 	})
+}
+
+func (c *ResumableUploadController) createSortedListOfChunkIds(userID, fileID int) []int {
+	chunkDirEntries, err := os.ReadDir(c.getChunkDirPath(userID, fileID))
+	if err != nil {
+		return nil
+	}
+	chunkIds := make([]int, 0, len(chunkDirEntries))
+	for _, entry := range chunkDirEntries {
+		if entry.Name() == "upload-state.json" {
+			continue
+		}
+		chunkIndex, _ := strconv.Atoi(strings.TrimSuffix(entry.Name(), ".chunk"))
+		chunkIds = append(chunkIds, chunkIndex)
+	}
+
+	sort.Ints(chunkIds)
+	return chunkIds
+}
+
+func (c *ResumableUploadController) getChunkDirPath(userID, fileID int) string {
+	return filepath.Join(c.fileStor.Root(), "__chunks", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", fileID))
+}
+
+func (c *ResumableUploadController) getChunkPath(userID, fileID, chunkIndex int) string {
+	return filepath.Join(c.getChunkDirPath(userID, fileID), fmt.Sprintf("%d.chunk", chunkIndex))
+}
+
+func (c *ResumableUploadController) getAndCreateChunkDirPath(userID, fileID int) (string, error) {
+	chunkDirPath := c.getChunkDirPath(userID, fileID)
+	if err := os.MkdirAll(chunkDirPath, 0755); err != nil {
+		return "", err
+	}
+	return chunkDirPath, nil
 }
 
 // getOrCreateFile gets an existing file or creates a new one if it doesn't exist.
