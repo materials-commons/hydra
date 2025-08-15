@@ -2,6 +2,7 @@ package mcfs
 
 import (
 	"context"
+	"fmt"
 	"hash/fnv"
 	"os"
 	"os/user"
@@ -122,6 +123,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 	}
 
 	if fops, ok := f.(fs.FileGetattrer); ok {
+		fmt.Printf("   Doing fops.Getattr\n")
 		return fops.Getattr(ctx, out)
 	}
 
@@ -145,6 +147,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 	out.FromStat(&st)
 
+	fmt.Printf("   out %+v\n", out)
 	return fs.OK
 }
 
@@ -187,7 +190,9 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (ino
 	out.SetTimes(&now, &f.UpdatedAt, &now)
 
 	node := n.newNode()
-	return n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(f)}), fs.OK
+	ino := n.NewInode(ctx, node, fs.StableAttr{Mode: n.getMode(f)})
+	fmt.Printf("after n.NewInode ino is %+v\n", ino)
+	return ino, fs.OK
 }
 
 // Mkdir will create a new directory. If an attempt is made to create an existing directory then it will return

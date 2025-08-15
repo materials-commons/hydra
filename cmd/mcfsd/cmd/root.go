@@ -11,6 +11,7 @@ import (
 	"github.com/apex/log"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/labstack/echo/v4"
+	"github.com/materials-commons/hydra/pkg/clog"
 	"github.com/materials-commons/hydra/pkg/config"
 	"github.com/materials-commons/hydra/pkg/globus"
 	"github.com/materials-commons/hydra/pkg/mcdb"
@@ -67,6 +68,8 @@ func Run(c context.Context, args []string, config config.Configer) error {
 		fsState:      fsState,
 		globusClient: globusClient,
 	})
+
+	_, _ = clog.SetGlobalLoggerLevel(log.DebugLevel)
 
 	go func() {
 		if err := e.Start("localhost:1350"); err != nil {
