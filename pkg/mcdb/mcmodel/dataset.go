@@ -11,20 +11,22 @@ import (
 )
 
 type Dataset struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	UUID          string `json:"uuid"`
-	ProjectID     int    `json:"project_id"`
-	License       string `json:"license"`
-	LicenseLink   string `json:"license_link"`
-	Description   string `json:"description"`
-	Summary       string `json:"summary"`
-	DOI           string `json:"doi"`
-	Authors       string `json:"authors"`
-	FileSelection string
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	PublishedAt   time.Time `json:"published_at"`
+	ID              int    `json:"id"`
+	Name            string `json:"name"`
+	UUID            string `json:"uuid"`
+	ProjectID       int    `json:"project_id"`
+	License         string `json:"license"`
+	LicenseLink     string `json:"license_link"`
+	Description     string `json:"description"`
+	Summary         string `json:"summary"`
+	DOI             string `json:"doi"`
+	TestDOI         string `json:"test_doi"`
+	Authors         string `json:"authors"`
+	FileSelection   string
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	PublishedAt     time.Time `json:"published_at"`
+	TestPublishedAt time.Time `json:"test_published_at"`
 }
 
 func (d Dataset) ZipfileDir(mcfsDir string) string {
