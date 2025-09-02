@@ -374,7 +374,7 @@ func TestFinalizeUpload(t *testing.T) {
 	})
 }
 
-// TestGetOrCreateFile tests the getOrCreateFile helper method
+// TestGetOrCreateFile tests the getOrCreateMCFile helper method
 func TestGetOrCreateFile(t *testing.T) {
 	// Setup
 	mockFileStor := stor.NewMockFileStor()
@@ -388,7 +388,7 @@ func TestGetOrCreateFile(t *testing.T) {
 
 	t.Run("CreateNewFile", func(t *testing.T) {
 		// Execute
-		file, err := controller.getOrCreateFile(1, 1, dir.ID, "newfile.txt")
+		file, err := controller.getOrCreateMCFile(1, 1, dir.ID, "newfile.txt")
 
 		// Assert
 		require.NoError(t, err)
@@ -405,7 +405,7 @@ func TestGetOrCreateFile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Execute - should get the existing file
-		file, err := controller.getOrCreateFile(1, 1, dir.ID, "existing.txt")
+		file, err := controller.getOrCreateMCFile(1, 1, dir.ID, "existing.txt")
 
 		// Assert
 		require.NoError(t, err)

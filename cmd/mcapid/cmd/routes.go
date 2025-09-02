@@ -29,8 +29,16 @@ func setupExternalRoutes(e *echo.Echo, stors stor.Stors) {
 		Keyname:         "apikey",
 		GetUserByAPIKey: userCache.GetUserByAPIKey,
 	}
+
+	projectAccessCache := apimiddleware.NewProjectAccessCache(stors.ProjectStor)
+	projectAccessConfig := apimiddleware.ProjectAccessConfig{
+		Skipper:            middleware.DefaultSkipper,
+		HasAccessToProject: projectAccessCache.HasAccessToProject,
+	}
+
 	g := e.Group("/transfers")
 	g.Use(apimiddleware.APIKeyAuth(apikeyConfig))
+	g.Use(apimiddleware.ProjectAccessAuth(projectAccessConfig))
 
 	transferUploadController := webapi.NewTransferUploadController(webapi.TransferUploadControllerConfig{
 		ClientTransferStor:      stors.ClientTransferStor,
@@ -56,6 +64,8 @@ func setupExternalRoutes(e *echo.Echo, stors stor.Stors) {
 	resumableUploadController := webapi.NewResumableUploadController(stors.FileStor)
 	resumableUploadGroup := e.Group("/resumable-upload")
 	resumableUploadGroup.Use(apimiddleware.APIKeyAuth(apikeyConfig))
+	resumableUploadGroup.Use(apimiddleware.ProjectAccessAuth(projectAccessConfig))
+	
 	resumableUploadGroup.POST("/upload", resumableUploadController.Upload)
 	resumableUploadGroup.POST("/finalize", resumableUploadController.FinalizeUpload)
 	resumableUploadGroup.GET("/status", resumableUploadController.GetUploadStatus)
