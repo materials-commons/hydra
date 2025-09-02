@@ -22,9 +22,9 @@ func NewAPIKeyCache(userStor stor.UserStor) *APIKeyCache {
 
 func (c *APIKeyCache) GetUserByAPIKey(apikey string) (*mcmodel.User, error) {
 	c.apikeyCacheMu.RLock()
-	defer c.apikeyCacheMu.RUnlock()
 
 	if user, ok := c.cache[apikey]; ok {
+		c.apikeyCacheMu.RUnlock()
 		return user, nil
 	}
 
