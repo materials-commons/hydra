@@ -24,46 +24,48 @@ func (c *ProjectAccessCache) HasAccessToProject(userID, projectID int) (bool, er
 
 	users, ok := c.cache[projectID]
 	if ok {
-		// Project is already known, lets check if user is already in the cache and attempt
-		// to load if they aren't. The checkAndLoadUser will upgrade to a write lock if needed.
+		// Project is already known, let's check if the user is already in the cache and attempt
+		// to load if they aren't. The checkAndLoadUser handles release the lock and will upgrade
+		// to a write lock if needed.
 		return c.checkAndLoadUser(userID, projectID, users)
 	}
 
-	// If we are here then we need to load the project and check this user
+	// If we are here, then we need to load the project and check this user
 
 	// 1. First upgrade to a write lock
 	c.mu.RUnlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Check if user has access
+	// 2. Check if the user has access
 	if c.projectStor.UserCanAccessProject(userID, projectID) {
-		// User has access, let's add them to the cache. Since we haven't seen
-		// this project before we can just add it to the cache.
+		// User has access. Since we haven't seen this project before, we need to add it
+		// to the cache along with the user.
 		c.cache[projectID] = []int{userID}
 		return true, nil
 	}
 
-	// If we are here, then the user does not have access to the project. Let's
-	// create the project entry and an empty array of users for it.
+	// If we are here, then the user does not have access to the project. There is also
+	// no entry for the project in the cache. We'll add an empty list to the cache.
 	c.cache[projectID] = []int{}
 	return false, nil
 }
 
 // checkAndLoadUser checks if the user is in the list of users for the project. If not,
-// it will attempt to load the project and add the user to the list of users.
+// it will attempt to load the project and add the user to the list of users. It's
+// important that this function is called with a read lock held. It will upgrade
+// to a write lock if needed.
 func (c *ProjectAccessCache) checkAndLoadUser(userID, projectID int, users []int) (bool, error) {
-	// Check if user is already in the list
+	// Check if the user is already in the list.
 	for id, _ := range users {
 		if id == userID {
-			// We are holding a read lock, the parent function doesn't know what lock
-			// we are holding, so we release and return.
+			// We are holding a read lock, so we release and return.
 			c.mu.RUnlock()
 			return true, nil
 		}
 	}
 
-	// User is not in the list. Before we upgrade we need to check if the user
+	// User is not in the list. Before we upgrade the lock, we need to check if the user
 	// even has access to the project.
 	if !c.projectStor.UserCanAccessProject(userID, projectID) {
 		// No access, so release the read lock and return false

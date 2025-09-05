@@ -109,10 +109,10 @@ func (c *ResumableUploadController) computeStartingChunk(projectID, userID, file
 	return 1
 }
 
-// Upload handles file uploads with support for multiple chunks being sent simultaneously.
+// UploadChunk handles file uploads with support for multiple chunks being sent simultaneously.
 // It reads the file data from the request body and writes it to a chunk file.
 // Each chunk is stored separately and will be combined when the upload is finalized.
-func (c *ResumableUploadController) Upload(ctx echo.Context) error {
+func (c *ResumableUploadController) UploadChunk(ctx echo.Context) error {
 	var uploadRequest UploadRequest
 	if err := bindUploadRequest(ctx, &uploadRequest); err != nil {
 		return err

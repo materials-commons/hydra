@@ -44,7 +44,7 @@ func setupEchoContext(t *testing.T, method, target string, body []byte, queryPar
 	return c, rec
 }
 
-// TestUpload tests the Upload method
+// TestUpload tests the UploadChunk method
 func TestUpload(t *testing.T) {
 	// Setup
 	mockFileStor := stor.NewMockFileStor()
@@ -69,7 +69,7 @@ func TestUpload(t *testing.T) {
 		ctx, rec := setupEchoContext(t, http.MethodPost, "/resumable-upload/upload", body, queryParams)
 
 		// Execute
-		err := controller.Upload(ctx)
+		err := controller.UploadChunk(ctx)
 
 		// Assert
 		require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestUpload(t *testing.T) {
 		body := []byte("This is chunk 0")
 		ctx, rec := setupEchoContext(t, http.MethodPost, "/resumable-upload/upload", body, queryParams)
 
-		err := controller.Upload(ctx)
+		err := controller.UploadChunk(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), "Invalid project ID")
@@ -124,7 +124,7 @@ func TestUpload(t *testing.T) {
 
 		ctx, rec = setupEchoContext(t, http.MethodPost, "/resumable-upload/upload", body, queryParams)
 
-		err = controller.Upload(ctx)
+		err = controller.UploadChunk(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), "Destination path is required")
