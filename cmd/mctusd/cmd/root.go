@@ -8,13 +8,11 @@ import (
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb"
-	"github.com/materials-commons/hydra/pkg/mctus/handler"
-	"github.com/materials-commons/hydra/pkg/mctus/hook"
+	"github.com/materials-commons/hydra/pkg/mctus2"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 	"github.com/tus/tusd/v2/pkg/filelocker"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
-	"github.com/tus/tusd/v2/pkg/hooks"
 )
 
 var rootCmd = &cobra.Command{
@@ -33,14 +31,17 @@ var rootCmd = &cobra.Command{
 
 		db := mcdb.MustConnectToDB()
 
-		tusChunksDir := filepath.Join(os.Getenv("MCFS_DIR"), "__tus", "chunks")
+		mcfsDir := os.Getenv("MCFS_DIR")
+
+		tusChunksDir := filepath.Join(mcfsDir, "__tus", "chunks")
 		fmt.Printf("tusChunksDir: %s\n", tusChunksDir)
 		if err := os.MkdirAll(tusChunksDir, 0755); err != nil {
 			log.Fatalf("Unable to create directory %s: %s", tusChunksDir, err)
 		}
-		filestor := handler.NewMCFileStore(db, tusChunksDir)
 
-		tusLockDir := filepath.Join(os.Getenv("MCFS_DIR"), "__tus", "locks")
+		app := mctus2.NewApp(mctus2.LocalFileStore{Path: tusChunksDir}, nil, db, mcfsDir)
+
+		tusLockDir := filepath.Join(mcfsDir, "__tus", "locks")
 		fmt.Printf("tusLockDir: %s\n", tusLockDir)
 		if err := os.MkdirAll(tusLockDir, 0755); err != nil {
 			log.Fatalf("Unable to create directory %s: %s", tusLockDir, err)
@@ -48,36 +49,26 @@ var rootCmd = &cobra.Command{
 		locker := filelocker.New(tusLockDir)
 
 		composer := tusd.NewStoreComposer()
-		filestor.UseIn(composer)
+		app.TusFileStore.UseIn(composer)
 		locker.UseIn(composer)
 
-		hook := hook.NewMCHookHandler(db)
+		config := tusd.Config{
+			BasePath:              "/files/",
+			StoreComposer:         composer,
+			NotifyCompleteUploads: true,
+		}
 
-		handler, err := hooks.NewHandlerWithHooks(
-			&tusd.Config{
-				BasePath:              "/files/",
-				StoreComposer:         composer,
-				NotifyCompleteUploads: false,
-			},
-			hook,
-			//&plugin.PluginHook{
-			//	Path: "/usr/local/bin/tus/mctus_hook",
-			//},
-			[]hooks.HookType{hooks.HookPreCreate})
-
+		handler, err := tusd.NewHandler(config)
 		if err != nil {
 			log.Fatalf("unable to create handler: %s", err)
 		}
 
-		//go func() {
-		//	for {
-		//		event := <-handler.CompleteUploads
-		//		log.Printf("Upload %s finished\n", event.Upload.ID)
-		//	}
-		//}()
+		app.TusHandler = handler
 
-		http.Handle("/files/", http.StripPrefix("/files/", handler))
-		http.Handle("/files", http.StripPrefix("/files", handler))
+		go app.OnFileComplete()
+
+		http.Handle("/files/", app.AccessMiddleware(http.StripPrefix("/files/", handler)))
+		http.Handle("/files", app.AccessMiddleware(http.StripPrefix("/files", handler)))
 		err = http.ListenAndServe(":8558", nil)
 		if err != nil {
 			log.Fatalf("unable to listen: %s", err)
