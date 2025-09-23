@@ -9,25 +9,34 @@ import (
 )
 
 type File struct {
-	ID                   int       `json:"id"`
-	UUID                 string    `json:"uuid"`
-	UsesUUID             string    `json:"uses_uuid"`
-	UsesID               int       `json:"uses_id"`
-	ProjectID            int       `json:"project_id"`
-	Name                 string    `json:"name"`
-	OwnerID              int       `json:"owner_id"`
-	Path                 string    `json:"path"`
-	DirectoryID          int       `json:"directory_id" gorm:"default:null"`
-	DatasetID            int       `json:"dataset_id" gorm:"default:null"`
-	Size                 uint64    `json:"size"`
-	Checksum             string    `json:"checksum"`
-	MimeType             string    `json:"mime_type"`
-	MediaTypeDescription string    `json:"media_type_description"`
-	Current              bool      `json:"current"`
-	Directory            *File     `json:"directory" gorm:"foreignKey:DirectoryID;references:ID"`
-	DeletedAt            time.Time `gorm:"default:null"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                      int       `json:"id"`
+	UUID                    string    `json:"uuid"`
+	UsesUUID                string    `json:"uses_uuid"`
+	UsesID                  int       `json:"uses_id"`
+	ProjectID               int       `json:"project_id"`
+	Name                    string    `json:"name"`
+	OwnerID                 int       `json:"owner_id"`
+	Path                    string    `json:"path"`
+	DirectoryID             int       `json:"directory_id" gorm:"default:null"`
+	DatasetID               int       `json:"dataset_id" gorm:"default:null"`
+	Size                    uint64    `json:"size"`
+	Checksum                string    `json:"checksum"`
+	MimeType                string    `json:"mime_type"`
+	MediaTypeDescription    string    `json:"media_type_description"`
+	Current                 bool      `json:"current"`
+	Directory               *File     `json:"directory" gorm:"foreignKey:DirectoryID;references:ID"`
+	DeletedAt               time.Time `gorm:"default:null"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+	UploadSource            string    `json:"upload_source"`
+	FileMissingAt           time.Time `json:"file_missing_at" gorm:"default:null"`
+	FileMissingDeterminedBy string    `json:"file_missing_determined_by"`
+	Health                  string    `json:"health"`
+	HealthFixedBy           string    `json:"health_fixed_by"`
+	ThumbnailCreatedAt      time.Time `json:"thumbnail_created_at" gorm:"default:null"`
+	ThumbnailStatus         string    `json:"thumbnail_status"`
+	ConversionCreatedAt     time.Time `json:"conversion_created_at" gorm:"default:null"`
+	ConversionStatus        string    `json:"conversion_status"`
 }
 
 func (f File) MkdirUnderlyingPath(mcfsDir string) error {
@@ -81,6 +90,15 @@ func (f File) FullPath() string {
 	}
 
 	return f.Directory.Path + "/" + f.Name
+}
+
+func (f File) RealFileExists(mcdir string) bool {
+	_, err := os.Stat(f.ToUnderlyingFilePath(mcdir))
+	if err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (f File) ToUnderlyingFilePath(mcdir string) string {

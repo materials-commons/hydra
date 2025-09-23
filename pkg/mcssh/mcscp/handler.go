@@ -266,7 +266,7 @@ func (h *mcfsHandler) Write(s ssh.Session, entry *scp.FileEntry) (int64, error) 
 
 	// Create a file that isn't set as current. This way the file doesn't show up until it's
 	// data has been written.
-	if file, err = h.stores.FileStore.CreateFile(entry.Name, h.project.ID, dir.ID, h.user.ID, mc.GetMimeType(entry.Name)); err != nil {
+	if file, err = h.stores.FileStore.CreateFile(entry.Name, h.project.ID, dir.ID, h.user.ID, mc.GetMimeTypeByExtension(entry.Name)); err != nil {
 		log.Errorf("Error creating file %s in project %d, in directory %d for user %d: %s", entry.Name, h.project.ID, dir.ID, h.user.ID, err)
 		return 0, fmt.Errorf("unable to create file '%s' in dir %d for project %d: %s", entry.Name, dir.ID, h.project.ID, err)
 	}

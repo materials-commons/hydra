@@ -170,7 +170,7 @@ func (c *TransferUploadController) createTransferRequestFile(tr *mcmodel.Transfe
 	}
 
 	filename := filepath.Base(req.DestinationPath)
-	f, err := c.fileStor.CreateFile(filename, req.ProjectID, userID, dir.ID, mc.GetMimeType(filename))
+	f, err := c.fileStor.CreateFile(filename, req.ProjectID, userID, dir.ID, mc.GetMimeTypeByExtension(filename))
 	if err != nil {
 		return nil, err
 	}

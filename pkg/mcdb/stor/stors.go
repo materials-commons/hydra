@@ -26,6 +26,10 @@ type FileStor interface {
 	UpdateFileUses(file *mcmodel.File, uuid string, fileID int) error
 	PointAtExistingIfExists(file *mcmodel.File) (bool, error)
 	DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error)
+	GetMatchingFileInDirectory(directoryID int, checksum string, name string) (*mcmodel.File, error)
+	SetFileHealthMissing(file *mcmodel.File, determinedBy string, source string) (*mcmodel.File, error)
+	SetFileHealthFixed(file *mcmodel.File, fixedBy string, source string) (*mcmodel.File, error)
+	FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error)
 	Root() string
 }
 

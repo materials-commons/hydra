@@ -3,6 +3,8 @@ package mc
 import (
 	"fmt"
 	"mime"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,10 +45,10 @@ func GetProjectSlugFromPath(path string) string {
 	return projectSlug
 }
 
-// GetMimeType will determine the type of file from its extension. It strips out the extra information
+// GetMimeTypeByExtension will determine the type of file from its extension. It strips out the extra information
 // such as the charset and just returns the underlying type. It returns "unknown" for the mime type if
 // the mime package is unable to determine the type.
-func GetMimeType(name string) string {
+func GetMimeTypeByExtension(name string) string {
 	mimeType := mime.TypeByExtension(filepath.Ext(name))
 	if mimeType == "" {
 		return "unknown"
@@ -58,6 +60,42 @@ func GetMimeType(name string) string {
 	}
 
 	return strings.TrimSpace(mimeType[:semicolon])
+}
+
+func DetectMimeType(filePath string) string {
+	// Attempt to determine the mime type from file contents
+	buf := make([]byte, 512)
+	f, _ := os.Open(filePath)
+	defer f.Close()
+	n, _ := f.Read(buf)
+	mimeType := http.DetectContentType(buf[:n])
+
+	// Handle the case where the mime type has extra information after a semicolon,
+	// for example, text/plain; charset=utf-8
+	semicolon := strings.Index(mimeType, ";")
+	if semicolon == -1 {
+		mimeType = strings.TrimSpace(mimeType)
+	} else {
+		mimeType = strings.TrimSpace(mimeType[:semicolon])
+	}
+
+	switch {
+	case mimeType == "":
+		return GetMimeTypeByExtension(filePath)
+	case mimeType == "application/octet-stream" || mimeType == "text/plain":
+		// If the mime type is application/octet-stream or text/plain,
+		// then try to determine the mime type from the extension.
+		saveMimeType := mimeType
+		mimeType = GetMimeTypeByExtension(filePath)
+
+		// If we can't determine the mime type from the extension, then return the saved mime type.
+		if mimeType == "unknown" {
+			return saveMimeType
+		}
+		return mimeType
+	default:
+		return mimeType
+	}
 }
 
 // GetAndValidateProjectFromPath retrieves the project by extracting the project slug from the path, and asking

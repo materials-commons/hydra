@@ -248,7 +248,7 @@ func (u *MCFileUpload) FinishUpload(ctx context.Context) error {
 			u.checksum = fmt.Sprintf("%x", hasher.Sum(nil))
 		}
 
-		mcfile, err := u.fileStor.CreateFile(u.Filename, u.ProjectID, u.DirectoryID, u.OwnerID, mc.GetMimeType(u.Filename))
+		mcfile, err := u.fileStor.CreateFile(u.Filename, u.ProjectID, u.DirectoryID, u.OwnerID, mc.GetMimeTypeByExtension(u.Filename))
 		if err != nil {
 			// Need to do cleanup
 			return err

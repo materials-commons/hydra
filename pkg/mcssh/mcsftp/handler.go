@@ -113,7 +113,7 @@ func (h *mcfsHandler) Filewrite(r *sftp.Request) (io.WriterAt, error) {
 
 	// Create the Materials Commons file. This handles version creation.
 	fileName := filepath.Base(r.Filepath)
-	mcFile.file, err = h.stores.FileStore.CreateFile(fileName, mcFile.project.ID, mcFile.dir.ID, h.user.ID, mc.GetMimeType(fileName))
+	mcFile.file, err = h.stores.FileStore.CreateFile(fileName, mcFile.project.ID, mcFile.dir.ID, h.user.ID, mc.GetMimeTypeByExtension(fileName))
 	if err != nil {
 		log.Errorf("Error creating file %s for user %d in directory %d of project %d: %s", fileName, h.user.ID, mcFile.dir.ID, mcFile.project.ID, err)
 		return nil, os.ErrNotExist

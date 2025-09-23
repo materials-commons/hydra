@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/hashicorp/go-uuid"
@@ -432,4 +433,95 @@ func (s *GormFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, si
 	}
 
 	return fileSwitched, nil
+}
+
+func (s *GormFileStor) GetMatchingFileInDirectory(directoryID int, checksum string, name string) (*mcmodel.File, error) {
+	var file mcmodel.File
+	err := s.db.Where("directory_id = ?", directoryID).
+		Where("name = ?", name).
+		Where("checksum = ?", checksum).
+		Where("deleted_at IS NULL").
+		Where("dataset_id IS NULL").
+		First(&file).Error
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
+func (s *GormFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy string, source string) (*mcmodel.File, error) {
+	if source == "" {
+		source = file.UploadSource
+	}
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		err := tx.Model(file).
+			Updates(map[string]interface{}{
+				"health":                     "missing",
+				"file_missing_at":            time.Now(),
+				"file_missing_determined_by": determinedBy,
+				"health_fixed_at":            gorm.Expr("NULL"),
+				"health_fixed_by":            gorm.Expr("NULL"),
+				"upload_source":              source,
+			}).Error
+
+		if err != nil {
+			return err
+		}
+
+		return tx.Where("uses_uuid = ?", file.UUIDForUses()).
+			Updates(map[string]interface{}{
+				"health":                     "missing",
+				"file_missing_at":            time.Now(),
+				"file_missing_determined_by": determinedBy,
+				"health_fixed_at":            gorm.Expr("NULL"),
+				"health_fixed_by":            gorm.Expr("NULL"),
+			}).Error
+	})
+
+	return file, err
+}
+
+func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, source string) (*mcmodel.File, error) {
+	if source == "" {
+		source = file.UploadSource
+	}
+	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
+		err := tx.Model(file).
+			Updates(map[string]interface{}{
+				"health":                     "fixed",
+				"health_fixed_by":            fixedBy,
+				"health_fixed_at":            time.Now(),
+				"file_missing_at":            gorm.Expr("NULL"),
+				"file_missing_determined_by": gorm.Expr("NULL"),
+				"upload_source":              source,
+			}).Error
+
+		if err != nil {
+			return err
+		}
+
+		return tx.Where("uses_uuid = ?", file.UUIDForUses()).
+			Updates(map[string]interface{}{
+				"health":                     "fixed",
+				"health_fixed_by":            fixedBy,
+				"health_fixed_at":            time.Now(),
+				"file_missing_at":            gorm.Expr("NULL"),
+				"file_missing_determined_by": gorm.Expr("NULL"),
+			}).Error
+	})
+	return file, err
+}
+
+func (s *GormFileStor) FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error) {
+	var file mcmodel.File
+	err := s.db.Where("checksum = ?", checksum).
+		Where("deleted_at IS NULL").
+		Where("dataset_id IS NULL").
+		First(&file).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &file, nil
 }

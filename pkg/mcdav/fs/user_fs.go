@@ -242,7 +242,7 @@ func (fs *UserFS) createFile(filePath string, project *mcmodel.Project) (webdav.
 
 	// Create the file in the given directory.
 	name := filepath.Base(filePath)
-	file, err := fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeType(name))
+	file, err := fs.fileStor.CreateFile(name, project.ID, dir.ID, fs.user.ID, mc.GetMimeTypeByExtension(name))
 	if err != nil {
 		return nil, err
 	}
