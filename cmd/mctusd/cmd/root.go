@@ -69,6 +69,7 @@ var rootCmd = &cobra.Command{
 
 		http.Handle("/files/", app.AccessMiddleware(http.StripPrefix("/files/", handler)))
 		http.Handle("/files", app.AccessMiddleware(http.StripPrefix("/files", handler)))
+		fmt.Printf("Listening on port 8558\n")
 		err = http.ListenAndServe(":8558", nil)
 		if err != nil {
 			log.Fatalf("unable to listen: %s", err)

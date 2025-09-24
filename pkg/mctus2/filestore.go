@@ -4,7 +4,7 @@
 // It stores the uploads in a directory specified in two different files: The
 // `[id].info` files are used to store the fileinfo in JSON format. The
 // `[id]` files without an extension contain the raw binary data uploaded.
-// No cleanup is performed so you may want to run a cronjob to ensure your disk
+// No cleanup is performed, so you may want to run a cronjob to ensure your disk
 // is not filled up with old and finished uploads.
 //
 // Related to the filestore is the package filelocker, which provides a file-based
@@ -41,14 +41,14 @@ type LocalFileStore struct {
 	Path string
 }
 
-// New creates a new file based storage backend. The directory specified will
+// New creates a new file-based storage backend. The directory specified will
 // be used as the only storage entry. This method does not check
 // whether the path exists, use os.MkdirAll to ensure.
 func New(path string) LocalFileStore {
 	return LocalFileStore{path}
 }
 
-// UseIn sets this store as the core data store in the passed composer and adds
+// UseIn sets this store as the core data store in the composer and adds
 // all possible extension to it.
 func (store LocalFileStore) UseIn(composer *handler.StoreComposer) {
 	composer.UseCore(store)
@@ -78,7 +78,7 @@ func (store LocalFileStore) NewUpload(ctx context.Context, info handler.FileInfo
 		"Path": binPath,
 	}
 
-	// Create binary file with no content
+	// Create a binary file with no content
 	if err := createFile(binPath, nil); err != nil {
 		return nil, err
 	}
@@ -133,6 +133,10 @@ func (store LocalFileStore) GetUpload(ctx context.Context, id string) (handler.U
 
 func (store LocalFileStore) GetFilePath(id string) string {
 	return store.binPath(id)
+}
+
+func (store LocalFileStore) GetInfoPath(id string) string {
+	return store.infoPath(id)
 }
 
 func (store LocalFileStore) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
@@ -194,8 +198,8 @@ func (upload *fileUpload) GetReader(ctx context.Context) (io.ReadCloser, error) 
 
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	// We ignore errors indicating that the files cannot be found because we want
-	// to delete them anyways. The files might be removed by a cron job for cleaning up
-	// or some file might have been removed when tusd crashed during the termination.
+	// to delete them anyway. The files might be removed by a cron job for cleaning up,
+	// or some files might have been removed when tusd crashed during the termination.
 	err := os.Remove(upload.binPath)
 	if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -215,7 +219,7 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []handler.U
 		return err
 	}
 	defer func() {
-		// Ensure that close error is propagated, if it occurs.
+		// Ensure that close error is propagated if it occurs.
 		// See https://github.com/tus/tusd/issues/698.
 		cerr := file.Close()
 		if err == nil {

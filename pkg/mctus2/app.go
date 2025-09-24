@@ -1,7 +1,6 @@
 package mctus2
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
@@ -198,6 +197,7 @@ func (a *App) handleFileComplete(event tusd.HookEvent) error {
 		return err
 	}
 
+	//fmt.Printf("uploadedFileInfo.ID: %s\n", uploadedFileInfo.ID)
 	existingFile, err := a.fileStor.GetMatchingFileInDirectory(dir.ID, checksum, metadata.Filename)
 	switch {
 	case err != nil:
@@ -229,6 +229,7 @@ func computeChecksum(filePath string) (string, error) {
 }
 
 func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir *mcmodel.File, info tusd.FileInfo) error {
+	//fmt.Printf("handleUploadOfNewFile: %s\n", info.ID)
 	usesUuid := ""
 
 	tusFilePath := a.TusFileStore.GetFilePath(info.ID)
@@ -310,7 +311,7 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 		log.Errorf("file was not moved to expected location")
 	}
 
-	a.cleanupTUSFile(info)
+	a.cleanupTUSFiles(info)
 
 	return nil
 }
@@ -319,6 +320,7 @@ func (a *App) handleUploadOfExistingFile(metadata *FileMetadata, checksum string
 	// There are two cases here we need to account for:
 	// 1. The existingFile file is not on disk. In this case we need to mark it as fixed and save it.
 	// 2. The existingFile is on disk, in that case we don't need to save anything to disk.
+	//fmt.Printf("handleUploadOfExistingFile: %s\n", info.ID)
 
 	if !existingFile.RealFileExists(a.mcfsDir) {
 		_, _ = a.fileStor.SetFileHealthFixed(existingFile, "tus-upload:existence-check", "TUS")
@@ -343,30 +345,36 @@ func (a *App) handleUploadOfExistingFile(metadata *FileMetadata, checksum string
 		log.Errorf("failed setting file %d as current: %s", existingFile.ID, err)
 	}
 
-	a.cleanupTUSFile(info)
+	a.cleanupTUSFiles(info)
 
 	return nil
 }
 
 func (a *App) moveFileTo(info tusd.FileInfo, to string) error {
 	tusFilePath := a.TusFileStore.GetFilePath(info.ID)
+	//fmt.Printf("moveFileTo: %s to %s\n", tusFilePath, to)
+	if err := os.MkdirAll(path.Dir(to), 0755); err != nil {
+		log.Errorf("failed creating directory for path %s: %s", path.Dir(to), err)
+	}
 	if err := os.Rename(tusFilePath, to); err != nil {
-		// log error
+		log.Errorf("failed moving file %s to expected location %s: %s", tusFilePath, to, err)
 		return err
 	}
 
 	return nil
 }
 
-func (a *App) cleanupTUSFile(info tusd.FileInfo) {
-	ctx := context.Background()
-	up, err := a.TusFileStore.GetUpload(ctx, info.ID)
-	if err != nil {
-		log.Errorf("failed getting TUS upload (%s): %s", info.ID, err)
+// cleanupTUSFile delete the TUS upload info file, and the upload file itself. The
+// upload file may not exist if the upload was moved. The upload file is moved
+// if there isn't a file with the same checksum already stored in the system.
+func (a *App) cleanupTUSFiles(info tusd.FileInfo) {
+	infoPath := a.TusFileStore.GetInfoPath(info.ID)
+	if err := os.Remove(infoPath); err != nil {
+		log.Errorf("failed deleting TUS upload info (%s): %s", infoPath, err)
 	}
-	if t, ok := up.(tusd.TerminatableUpload); ok {
-		_ = t.Terminate(ctx)
-	}
+
+	// Ignore error, as the file may not exist.
+	_ = os.Remove(a.TusFileStore.GetFilePath(info.ID))
 }
 
 func parseTusMetadata(metadata string) map[string]string {
