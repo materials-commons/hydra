@@ -257,7 +257,7 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 	// 3. We found a matching file with the same checksum, and that file exists on disk. In that case
 	//    we don't need to save anything to disk, because we already have a file with the same checksum.
 
-	if matchingFileByChecksum != nil {
+	if matchingFileByChecksum == nil {
 		// If there is not a file with a matching checksum, then this is a completely
 		// new file. We save the file to the generated UUID.
 		//
