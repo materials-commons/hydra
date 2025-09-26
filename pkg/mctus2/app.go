@@ -1,6 +1,7 @@
 package mctus2
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
@@ -30,6 +32,8 @@ type App struct {
 	accessCache    *AccessCache
 	accessCount    int
 	mcfsDir        string
+	ctx            context.Context
+	maxParallel    int
 }
 
 func NewApp(tusFileStore LocalFileStore, tusHandler *tusd.Handler, db *gorm.DB, mcfsDir string) *App {
@@ -42,6 +46,8 @@ func NewApp(tusFileStore LocalFileStore, tusHandler *tusd.Handler, db *gorm.DB, 
 		conversionStor: stor.NewGormConversionStor(db),
 		accessCache:    NewAccessCache(),
 		mcfsDir:        mcfsDir,
+		maxParallel:    5,
+		ctx:            context.Background(),
 	}
 }
 
@@ -170,12 +176,37 @@ func (a *App) getUploadedFileMetadata(metadata tusd.MetaData) (*FileMetadata, er
 }
 
 func (a *App) OnFileComplete() {
-	for event := range a.TusHandler.CompleteUploads {
-		if err := a.handleFileComplete(event); err != nil {
-			// log error and skip this upload
-			continue
+	uploadCompleteEvents := a.TusHandler.CompleteUploads
+	var wg sync.WaitGroup
+
+	// Create the background worker for the file completes
+	fileCompleteWorker := func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-a.ctx.Done():
+				return
+			case ev, ok := <-uploadCompleteEvents:
+				if !ok {
+					return
+				}
+				if err := a.handleFileComplete(ev); err != nil {
+					log.Errorf("Error handling file complete: %v", err)
+				}
+			}
 		}
 	}
+
+	// Set the parallelism
+	wg.Add(a.maxParallel)
+
+	// Launch the background workers that will process completion events
+	for i := 0; i < a.maxParallel; i++ {
+		go fileCompleteWorker()
+	}
+
+	// Wait forever, or until the background workers receive a close event and exit.
+	wg.Wait()
 }
 
 func (a *App) handleFileComplete(event tusd.HookEvent) error {
