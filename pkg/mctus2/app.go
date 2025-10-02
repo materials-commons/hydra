@@ -116,22 +116,16 @@ func (a *App) AccessMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		userID, err := strconv.Atoi(metadata["user_id"])
-		if err != nil {
-			http.Error(w, "user_id not found", http.StatusBadRequest)
-			return
-		}
-
-		apiToken, err := apiTokenFromRequest(r)
-
-		user, err := a.getUserByAPIToken(apiToken)
+		apiToken, err := apiTokenFromRequestHeader(r.Header)
 		if err != nil {
 			http.Error(w, "invalid api token", http.StatusUnauthorized)
 			return
 		}
 
-		if user.ID != userID {
-			http.Error(w, "invalid user id", http.StatusUnauthorized)
+		user, err := a.getUserByAPIToken(apiToken)
+		if err != nil {
+			http.Error(w, "invalid api token", http.StatusUnauthorized)
+			return
 		}
 
 		if !a.userCanAccessProject(user.ID, projectID) {
@@ -145,11 +139,12 @@ func (a *App) AccessMiddleware(next http.Handler) http.Handler {
 
 type FileMetadata struct {
 	ProjectID     int
-	UserID        int
 	DirectoryPath string
 	Filename      string
 }
 
+// getUploadedFileMetadata returns the metadata for the uploaded file. It does some basic validation
+// for the existence and type of the metadata.
 func (a *App) getUploadedFileMetadata(metadata tusd.MetaData) (*FileMetadata, error) {
 	var (
 		fileMetadata FileMetadata
@@ -161,20 +156,22 @@ func (a *App) getUploadedFileMetadata(metadata tusd.MetaData) (*FileMetadata, er
 		return nil, err
 	}
 
-	fileMetadata.UserID, err = strconv.Atoi(metadata["user_id"])
-	if err != nil {
-		return nil, err
+	fileMetadata.Filename = metadata["filename"]
+	if fileMetadata.Filename == "" {
+		return nil, errors.New("filename not found")
 	}
 
 	fileMetadata.DirectoryPath = metadata["directory_path"]
-	fileMetadata.Filename = metadata["filename"]
-	if fileMetadata.DirectoryPath == "" || fileMetadata.Filename == "" {
-		return nil, err
+	if fileMetadata.DirectoryPath == "" {
+		return nil, errors.New("directory_path not found")
 	}
 
 	return &fileMetadata, nil
 }
 
+// OnFileComplete runs a handler to process Tus completed upload events. It has a pool of workers that
+// will process the events concurrently. Processing a single event will create a new file entry in the
+// database and move the file to the appropriate location. It will then clean up the Tus file state.
 func (a *App) OnFileComplete() {
 	uploadCompleteEvents := a.TusHandler.CompleteUploads
 	var wg sync.WaitGroup
@@ -193,6 +190,7 @@ func (a *App) OnFileComplete() {
 				if err := a.handleFileComplete(ev); err != nil {
 					log.Errorf("Error handling file complete: %v", err)
 				}
+				a.cleanupTUSFilesForEvent(ev.Upload)
 			}
 		}
 	}
@@ -211,35 +209,52 @@ func (a *App) OnFileComplete() {
 
 func (a *App) handleFileComplete(event tusd.HookEvent) error {
 	uploadedFileInfo := event.Upload
-	metadata, err := a.getUploadedFileMetadata(uploadedFileInfo.MetaData)
+	header := event.HTTPRequest.Header
+
+	// We need to map the user from the API token. To do that, we extract the API token from the header.
+	// Then from the API token we can get the user in the cache of users we maintain.
+	apiToken, err := apiTokenFromRequestHeader(header)
 	if err != nil {
-		// log error and skip this upload
+		log.Errorf("failed getting api token from request header: %s", err)
+		return err
+	}
+
+	user, err := a.getUserByAPIToken(apiToken)
+	if err != nil {
+		log.Errorf("failed getting user from api token: %s", err)
+		return err
+	}
+
+	uploadedFileMetadata, err := a.getUploadedFileMetadata(uploadedFileInfo.MetaData)
+	if err != nil {
+		log.Errorf("failed getting uploaded file metadata: %s", err)
 		return err
 	}
 
 	tusFilePath := a.TusFileStore.GetFilePath(uploadedFileInfo.ID)
 	checksum, err := computeChecksum(tusFilePath)
 	if err != nil {
+		log.Errorf("failed computing checksum: %s", err)
 		return err
 	}
 
-	dir, err := a.fileStor.GetOrCreateDirPath(metadata.ProjectID, metadata.UserID, metadata.DirectoryPath)
+	dir, err := a.fileStor.GetOrCreateDirPath(uploadedFileMetadata.ProjectID, user.ID, uploadedFileMetadata.DirectoryPath)
 	if err != nil {
+		log.Errorf("failed getting or creating directory path: %s", err)
 		return err
 	}
 
-	//fmt.Printf("uploadedFileInfo.ID: %s\n", uploadedFileInfo.ID)
-	existingFile, err := a.fileStor.GetMatchingFileInDirectory(dir.ID, checksum, metadata.Filename)
+	existingFile, err := a.fileStor.GetMatchingFileInDirectory(dir.ID, checksum, uploadedFileMetadata.Filename)
 	switch {
 	case err != nil:
 		// Assume we need to create a new file
-		return a.handleUploadOfNewFile(metadata, checksum, dir, uploadedFileInfo)
+		return a.handleUploadOfNewFile(uploadedFileMetadata, user.ID, checksum, dir, uploadedFileInfo)
 	case existingFile == nil:
 		// No matching file found, so we need to create a new file
-		return a.handleUploadOfNewFile(metadata, checksum, dir, uploadedFileInfo)
+		return a.handleUploadOfNewFile(uploadedFileMetadata, user.ID, checksum, dir, uploadedFileInfo)
 	default:
 		// The existingFile is not null, so handle upload of an existing entry
-		return a.handleUploadOfExistingFile(metadata, checksum, dir, existingFile, uploadedFileInfo)
+		return a.handleUploadOfExistingFile(uploadedFileMetadata, checksum, dir, existingFile, uploadedFileInfo)
 	}
 }
 
@@ -259,8 +274,7 @@ func computeChecksum(filePath string) (string, error) {
 	return fmt.Sprintf("%x", sum), nil
 }
 
-func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir *mcmodel.File, info tusd.FileInfo) error {
-	//fmt.Printf("handleUploadOfNewFile: %s\n", info.ID)
+func (a *App) handleUploadOfNewFile(metadata *FileMetadata, userID int, checksum string, dir *mcmodel.File, info tusd.FileInfo) error {
 	usesUuid := ""
 
 	tusFilePath := a.TusFileStore.GetFilePath(info.ID)
@@ -273,8 +287,9 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 	// is we have a second copy of a file.
 
 	// Create the new file entry in the database.
-	f, err := a.fileStor.CreateFile(metadata.Filename, metadata.ProjectID, dir.ID, metadata.UserID, mimeType)
+	f, err := a.fileStor.CreateFile(metadata.Filename, metadata.ProjectID, dir.ID, userID, mimeType)
 	if err != nil {
+		log.Errorf("failed creating file: %s", err)
 		return err
 	}
 
@@ -295,6 +310,7 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 		// This is case (1) above.
 		if err := a.moveFileTo(info, f.ToUnderlyingFilePath(a.mcfsDir)); err != nil {
 			// Review if this is the right thing to do.
+			log.Errorf("failed moving file %d to expected location: %s", f.ID, err)
 			return err
 		}
 	} else {
@@ -316,7 +332,7 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 				_, _ = a.fileStor.SetFileHealthFixed(matchingFileByChecksum, "tus-upload:existence-check", "TUS")
 			}
 		}
-		// else if matchingFileByChecksum->realFileExists() is true, then we don't need to do anything.
+		// else matchingFileByChecksum->realFileExists() is true, so we don't need to do anything.
 		// This is case (3) above.
 	}
 
@@ -342,8 +358,6 @@ func (a *App) handleUploadOfNewFile(metadata *FileMetadata, checksum string, dir
 		log.Errorf("file was not moved to expected location")
 	}
 
-	a.cleanupTUSFiles(info)
-
 	return nil
 }
 
@@ -351,23 +365,36 @@ func (a *App) handleUploadOfExistingFile(metadata *FileMetadata, checksum string
 	// There are two cases here we need to account for:
 	// 1. The existingFile file is not on disk. In this case we need to mark it as fixed and save it.
 	// 2. The existingFile is on disk, in that case we don't need to save anything to disk.
-	//fmt.Printf("handleUploadOfExistingFile: %s\n", info.ID)
-
 	if !existingFile.RealFileExists(a.mcfsDir) {
-		_, _ = a.fileStor.SetFileHealthFixed(existingFile, "tus-upload:existence-check", "TUS")
+		// This is case (1): The existingFile does not exist on disk. We need to save it to disk and mark it as fixed.
+
+		// Move file
 		pathToMoveFileTo := existingFile.ToUnderlyingFilePath(a.mcfsDir)
 		if err := a.moveFileTo(info, pathToMoveFileTo); err != nil {
+			log.Errorf("failed moving file %d to expected location: %s", existingFile.ID, err)
 			return err
 		}
 
+		// Check if the file exists and if it does not then mark it as missing.
 		if !existingFile.RealFileExists(a.mcfsDir) {
 			_, _ = a.fileStor.SetFileHealthMissing(existingFile, "tus-upload:existence-check", "TUS")
 			return errors.New("file was not moved to expected location")
 		}
+
+		// If we are here, then the file was successfully moved to the expected location and now exists.
+		_, _ = a.fileStor.SetFileHealthFixed(existingFile, "tus-upload:existence-check", "TUS")
+
+	} else {
+		// The existingFile exists on disk. This is case 2. Add the existingFile to the conversion queue
+		// and set the current flag on the existingFile, and any files matching its name in the directory.
+		// Other than checking the database state, there is nothing we need to do with the uploaded file.
+
+		if existingFile.Health == "missing" {
+			// If the file exists but is marked as missing, then we need to mark it as fixed.
+			_, _ = a.fileStor.SetFileHealthFixed(existingFile, "tus-upload:existence-check", "TUS")
+		}
 	}
 
-	// The existingFile exists on disk. This is case 2. Add the existingFile to the conversion queue
-	// and set the current flag on the existingFile, and any files matching its name in the directory.
 	if _, err := a.conversionStor.AddFileToConvert(existingFile); err != nil {
 		log.Errorf("failed adding file %d to be converted: %s", existingFile.ID, err)
 	}
@@ -376,14 +403,11 @@ func (a *App) handleUploadOfExistingFile(metadata *FileMetadata, checksum string
 		log.Errorf("failed setting file %d as current: %s", existingFile.ID, err)
 	}
 
-	a.cleanupTUSFiles(info)
-
 	return nil
 }
 
 func (a *App) moveFileTo(info tusd.FileInfo, to string) error {
 	tusFilePath := a.TusFileStore.GetFilePath(info.ID)
-	//fmt.Printf("moveFileTo: %s to %s\n", tusFilePath, to)
 	if err := os.MkdirAll(path.Dir(to), 0755); err != nil {
 		log.Errorf("failed creating directory for path %s: %s", path.Dir(to), err)
 	}
@@ -395,16 +419,16 @@ func (a *App) moveFileTo(info tusd.FileInfo, to string) error {
 	return nil
 }
 
-// cleanupTUSFile delete the TUS upload info file, and the upload file itself. The
+// cleanupTUSFileForEvent deletes the TUS upload info file and the upload file itself. The
 // upload file may not exist if the upload was moved. The upload file is moved
 // if there isn't a file with the same checksum already stored in the system.
-func (a *App) cleanupTUSFiles(info tusd.FileInfo) {
+func (a *App) cleanupTUSFilesForEvent(info tusd.FileInfo) {
 	infoPath := a.TusFileStore.GetInfoPath(info.ID)
 	if err := os.Remove(infoPath); err != nil {
 		log.Errorf("failed deleting TUS upload info (%s): %s", infoPath, err)
 	}
 
-	// Ignore error, as the file may not exist.
+	// Ignore the error, as the file may not exist.
 	_ = os.Remove(a.TusFileStore.GetFilePath(info.ID))
 }
 
@@ -432,8 +456,8 @@ func parseTusMetadata(metadata string) map[string]string {
 	return metadataMap
 }
 
-func apiTokenFromRequest(r *http.Request) (string, error) {
-	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+func apiTokenFromRequestHeader(header http.Header) (string, error) {
+	auth := strings.TrimSpace(header.Get("Authorization"))
 	if auth == "" {
 		return "", errors.New("authorization header not found")
 	}

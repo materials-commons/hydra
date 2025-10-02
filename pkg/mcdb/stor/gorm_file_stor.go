@@ -93,11 +93,7 @@ func (s *GormFileStor) UpdateFile(file, updates *mcmodel.File) (*mcmodel.File, e
 		return tx.Model(file).Updates(updates).Error
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	return file, err
 }
 
 func (s *GormFileStor) SetUsesToNull(file *mcmodel.File) (*mcmodel.File, error) {
@@ -465,10 +461,12 @@ func (s *GormFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy str
 			}).Error
 
 		if err != nil {
+			log.Errorf("failed setting file %d health to missing: %s", file.ID, err)
 			return err
 		}
 
-		return tx.Where("uses_uuid = ?", file.UUIDForUses()).
+		err = tx.Model(&mcmodel.File{}).
+			Where("uses_uuid = ?", file.UUIDForUses()).
 			Updates(map[string]interface{}{
 				"health":                     "missing",
 				"file_missing_at":            time.Now(),
@@ -476,6 +474,12 @@ func (s *GormFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy str
 				"health_fixed_at":            gorm.Expr("NULL"),
 				"health_fixed_by":            gorm.Expr("NULL"),
 			}).Error
+
+		if err != nil {
+			log.Errorf("failed setting file %d uses_uuid %s health to missing: %s", file.ID, file.UsesUUID, err)
+		}
+
+		return err
 	})
 
 	return file, err
@@ -497,10 +501,12 @@ func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, so
 			}).Error
 
 		if err != nil {
+			log.Errorf("failed setting file %d health to fixed: %s", file.ID, err)
 			return err
 		}
 
-		return tx.Where("uses_uuid = ?", file.UUIDForUses()).
+		err = tx.Model(&mcmodel.File{}).
+			Where("uses_uuid = ?", file.UUIDForUses()).
 			Updates(map[string]interface{}{
 				"health":                     "fixed",
 				"health_fixed_by":            fixedBy,
@@ -508,7 +514,14 @@ func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, so
 				"file_missing_at":            gorm.Expr("NULL"),
 				"file_missing_determined_by": gorm.Expr("NULL"),
 			}).Error
+
+		if err != nil {
+			log.Errorf("failed setting file %d uses_uuid %s health to fixed: %s", file.ID, file.UUIDForUses(), err)
+		}
+
+		return err
 	})
+
 	return file, err
 }
 

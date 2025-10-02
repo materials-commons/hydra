@@ -10,7 +10,7 @@ type Conversion struct {
 	FileID              int       `json:"file_id"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
-	ConversionStartedAt time.Time `json:"conversion_started_at"`
+	ConversionStartedAt time.Time `json:"conversion_started_at" gorm:"default:null"`
 }
 
 func (Conversion) TableName() string {
