@@ -31,6 +31,7 @@ type App struct {
 	conversionStor stor.ConversionStor
 	accessCache    *AccessCache
 	accessCount    int
+	directoryCache *DirectoryCache
 	mcfsDir        string
 	ctx            context.Context
 	maxParallel    int
@@ -45,6 +46,7 @@ func NewApp(tusFileStore LocalFileStore, tusHandler *tusd.Handler, db *gorm.DB, 
 		userStor:       stor.NewGormUserStor(db),
 		conversionStor: stor.NewGormConversionStor(db),
 		accessCache:    NewAccessCache(),
+		directoryCache: NewDirectoryCache(),
 		mcfsDir:        mcfsDir,
 		maxParallel:    5,
 		ctx:            context.Background(),
@@ -89,6 +91,30 @@ func (a *App) userCanAccessProject(userID int, projectID int) bool {
 	return false
 }
 
+func (a *App) directoryInProject(projectID int, dirID int) bool {
+	a.directoryCache.Lock()
+	defer a.directoryCache.Unlock()
+
+	if a.directoryCache.DirectoryIDExists(projectID, dirID) {
+		return true
+	}
+
+	dir, err := a.fileStor.GetFileByID(dirID)
+	if err != nil {
+		// directory id does not exist
+		return false
+	}
+
+	if dir.ProjectID != projectID {
+		// directory_id is not in the specified project
+		return false
+	}
+
+	// directory is in the project, so add it to the cache
+	a.directoryCache.projectIDToDirectoryID[projectID] = append(a.directoryCache.projectIDToDirectoryID[projectID], dirID)
+	return true
+}
+
 func (a *App) AccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isCreate := r.Method == http.MethodPost && path.Clean(r.URL.Path) == "/"
@@ -104,9 +130,24 @@ func (a *App) AccessMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		directoryID, err := strconv.Atoi(metadata["directory_id"])
+		if err != nil {
+			directoryID = 0
+		}
+
+		if directoryID != 0 && !a.directoryInProject(projectID, directoryID) {
+			http.Error(w, "directory_id not found", http.StatusBadRequest)
+			return
+		}
+
 		directoryPath := metadata["directory_path"]
-		if directoryPath == "" {
-			http.Error(w, "directory_path not found", http.StatusBadRequest)
+		if directoryPath == "" && directoryID == 0 {
+			http.Error(w, "neither directory_id or directory_path was found", http.StatusBadRequest)
+			return
+		}
+
+		if directoryPath != "" && directoryID != 0 {
+			http.Error(w, "only one of directory_id or directory_path should be specified", http.StatusBadRequest)
 			return
 		}
 
@@ -140,6 +181,7 @@ func (a *App) AccessMiddleware(next http.Handler) http.Handler {
 type FileMetadata struct {
 	ProjectID     int
 	DirectoryPath string
+	DirectoryID   int
 	Filename      string
 }
 
@@ -156,14 +198,21 @@ func (a *App) getUploadedFileMetadata(metadata tusd.MetaData) (*FileMetadata, er
 		return nil, err
 	}
 
+	fileMetadata.DirectoryID, err = strconv.Atoi(metadata["directory_id"])
+	if err != nil {
+		// If the directory_id is not present, then we set it to 0 to signify that we should use
+		// directory_path to determine the directory.
+		fileMetadata.DirectoryID = 0
+	}
+
 	fileMetadata.Filename = metadata["filename"]
 	if fileMetadata.Filename == "" {
 		return nil, errors.New("filename not found")
 	}
 
 	fileMetadata.DirectoryPath = metadata["directory_path"]
-	if fileMetadata.DirectoryPath == "" {
-		return nil, errors.New("directory_path not found")
+	if fileMetadata.DirectoryPath == "" && fileMetadata.DirectoryID == 0 {
+		return nil, errors.New("one of directory_path or directory_id needs to be specified: neither was found")
 	}
 
 	return &fileMetadata, nil
@@ -238,7 +287,7 @@ func (a *App) handleFileComplete(event tusd.HookEvent) error {
 		return err
 	}
 
-	dir, err := a.fileStor.GetOrCreateDirPath(uploadedFileMetadata.ProjectID, user.ID, uploadedFileMetadata.DirectoryPath)
+	dir, err := a.getOrCreateDir(uploadedFileMetadata.ProjectID, user.ID, uploadedFileMetadata)
 	if err != nil {
 		log.Errorf("failed getting or creating directory path: %s", err)
 		return err
@@ -256,6 +305,17 @@ func (a *App) handleFileComplete(event tusd.HookEvent) error {
 		// The existingFile is not null, so handle upload of an existing entry
 		return a.handleUploadOfExistingFile(uploadedFileMetadata, checksum, dir, existingFile, uploadedFileInfo)
 	}
+}
+
+// getOrCreateDir gets or creates a directory. It checks the fileMetadata, and if DirectoryID is set, it will
+// return the directory with that ID. If DirectoryID is not set, then it will check the DirectoryPath and
+// return the directory with that path. If the directory does not exist, it will create it.
+func (a *App) getOrCreateDir(projectID int, userID int, fileMetadata *FileMetadata) (*mcmodel.File, error) {
+	if fileMetadata.DirectoryID != 0 {
+		return a.fileStor.GetFileByID(fileMetadata.DirectoryID)
+	}
+
+	return a.fileStor.GetOrCreateDirPath(projectID, userID, fileMetadata.DirectoryPath)
 }
 
 func computeChecksum(filePath string) (string, error) {
