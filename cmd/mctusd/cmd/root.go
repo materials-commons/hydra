@@ -53,9 +53,11 @@ var rootCmd = &cobra.Command{
 		locker.UseIn(composer)
 
 		config := tusd.Config{
-			BasePath:              "/files/",
-			StoreComposer:         composer,
-			NotifyCompleteUploads: true,
+			BasePath:                "/files/",
+			StoreComposer:           composer,
+			NotifyCompleteUploads:   true,
+			RespectForwardedHeaders: true,
+			DisableDownload:         true,
 		}
 
 		handler, err := tusd.NewHandler(config)
