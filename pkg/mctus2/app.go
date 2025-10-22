@@ -32,6 +32,7 @@ type App struct {
 	accessCache    *AccessCache
 	accessCount    int
 	directoryCache *DirectoryCache
+	progressCache  *UploadProgressCache
 	mcfsDir        string
 	ctx            context.Context
 	maxParallel    int
@@ -47,6 +48,7 @@ func NewApp(tusFileStore LocalFileStore, tusHandler *tusd.Handler, db *gorm.DB, 
 		conversionStor: stor.NewGormConversionStor(db),
 		accessCache:    NewAccessCache(),
 		directoryCache: NewDirectoryCache(),
+		progressCache:  NewUploadProgressCache(),
 		mcfsDir:        mcfsDir,
 		maxParallel:    5,
 		ctx:            context.Background(),
@@ -216,6 +218,21 @@ func (a *App) getUploadedFileMetadata(metadata tusd.MetaData) (*FileMetadata, er
 	}
 
 	return &fileMetadata, nil
+}
+
+func (a *App) OnUploadProgress() {
+	uploadProgressEvents := a.TusHandler.UploadProgress
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case ev, ok := <-uploadProgressEvents:
+			if !ok {
+				return
+			}
+			a.progressCache.SetUploadProgress(ev.Upload.ID, ev.Upload.Offset)
+		}
+	}
 }
 
 // OnFileComplete runs a handler to process Tus completed upload events. It has a pool of workers that

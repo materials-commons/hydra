@@ -58,6 +58,7 @@ var rootCmd = &cobra.Command{
 			NotifyCompleteUploads:   true,
 			RespectForwardedHeaders: true,
 			DisableDownload:         true,
+			NotifyUploadProgress:    true,
 		}
 
 		handler, err := tusd.NewHandler(config)
@@ -68,6 +69,7 @@ var rootCmd = &cobra.Command{
 		app.TusHandler = handler
 
 		go app.OnFileComplete()
+		go app.OnUploadProgress()
 
 		http.Handle("/files/", app.AccessMiddleware(http.StripPrefix("/files/", handler)))
 		http.Handle("/files", app.AccessMiddleware(http.StripPrefix("/files", handler)))
