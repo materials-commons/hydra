@@ -38,17 +38,17 @@ type App struct {
 	maxParallel    int
 }
 
-func NewApp(tusFileStore LocalFileStore, tusHandler *tusd.Handler, db *gorm.DB, mcfsDir string) *App {
+func NewApp(tusFileStore LocalFileStore, db *gorm.DB, mcfsDir string, progressCache *UploadProgressCache) *App {
 	return &App{
 		TusFileStore:   tusFileStore,
-		TusHandler:     tusHandler,
+		TusHandler:     nil,
 		projectStor:    stor.NewGormProjectStor(db),
 		fileStor:       stor.NewGormFileStor(db, mcfsDir),
 		userStor:       stor.NewGormUserStor(db),
 		conversionStor: stor.NewGormConversionStor(db),
 		accessCache:    NewAccessCache(),
 		directoryCache: NewDirectoryCache(),
-		progressCache:  NewUploadProgressCache(),
+		progressCache:  progressCache,
 		mcfsDir:        mcfsDir,
 		maxParallel:    5,
 		ctx:            context.Background(),

@@ -39,7 +39,8 @@ var rootCmd = &cobra.Command{
 			log.Fatalf("Unable to create directory %s: %s", tusChunksDir, err)
 		}
 
-		app := mctus2.NewApp(mctus2.LocalFileStore{Path: tusChunksDir}, nil, db, mcfsDir)
+		progressCache := mctus2.NewUploadProgressCache()
+		app := mctus2.NewApp(mctus2.LocalFileStore{Path: tusChunksDir}, db, mcfsDir, progressCache)
 
 		tusLockDir := filepath.Join(mcfsDir, "__tus", "locks")
 		fmt.Printf("tusLockDir: %s\n", tusLockDir)
@@ -71,8 +72,17 @@ var rootCmd = &cobra.Command{
 		go app.OnFileComplete()
 		go app.OnUploadProgress()
 
+		progressController := mctus2.NewProgressController(progressCache)
+
 		http.Handle("/files/", app.AccessMiddleware(http.StripPrefix("/files/", handler)))
-		http.Handle("/files", app.AccessMiddleware(http.StripPrefix("/files", handler)))
+		http.HandleFunc("/tus-upload-progress", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			progressController.GetUploadProgressHandler(w, r)
+		})
+
 		fmt.Printf("Listening on port 8558\n")
 		err = http.ListenAndServe(":8558", nil)
 		if err != nil {
