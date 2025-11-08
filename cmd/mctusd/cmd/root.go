@@ -9,6 +9,7 @@ import (
 	"github.com/apex/log"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mctus2"
+	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 	"github.com/tus/tusd/v2/pkg/filelocker"
@@ -81,6 +82,13 @@ var rootCmd = &cobra.Command{
 				return
 			}
 			progressController.GetUploadProgressHandler(w, r)
+		})
+
+		hub := wserv.NewHub(db)
+		go hub.Run()
+
+		http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			hub.ServeWS(hub, w, r)
 		})
 
 		fmt.Printf("Listening on port 8558\n")
