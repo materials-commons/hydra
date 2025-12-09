@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 )
 
 // Message types
@@ -36,12 +37,14 @@ type Message struct {
 }
 
 type ClientConnection struct {
-	ID   string
-	Conn *websocket.Conn
-	Send chan Message
-	Hub  *Hub
-	Type string // "ui" or "python"
-	mu   sync.Mutex
+	ID       string
+	Conn     *websocket.Conn
+	Send     chan Message
+	Hub      *Hub
+	Type     string // "ui" or "python"
+	Hostname string
+	User     *mcmodel.User
+	mu       sync.Mutex
 }
 
 func (c *ClientConnection) readPump() {
