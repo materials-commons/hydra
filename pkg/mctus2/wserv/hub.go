@@ -1,6 +1,7 @@
 package wserv
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,6 +23,20 @@ type Hub struct {
 	broadcast       chan Message
 	mu              sync.RWMutex
 	userStor        stor.UserStor
+}
+
+type HubCommandRequest struct {
+	ClientID string                 `json:"client_id"`
+	Command  string                 `json:"command"`
+	UserID   int                    `json:"user_id"`
+	Payload  map[string]interface{} `json:"payload"`
+}
+
+type HubCommandResponse struct {
+	ClientID string `json:"client_id"`
+	Command  string `json:"command"`
+	UserID   int    `json:"user_id"`
+	Status   string `json:"status"`
 }
 
 func NewHub(db *gorm.DB) *Hub {
@@ -135,7 +150,7 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	// Send connection acknowledgment
 	connectMsg := Message{
-		Type:      "CONNECTED",
+		Command:   "CONNECTED",
 		ID:        "system",
 		Timestamp: time.Now(),
 		ClientID:  clientID,
@@ -147,31 +162,89 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	go client.readPump()
 }
 
-func (h *Hub) validateToken(token string) (clientID string, clientType string, valid bool) {
-	// TODO: Implement your token validation logic here
-	// This should validate against your database or token store
-	// Return clientID, clientType ("ui" or "python"), and whether token is valid
+// ****** NOTE ******
+// All REST endpoints are listening on localhost. The PHP app sends requests to them. The user is already
+// authenticated, so these endpoints don't need to do any authentication. However, we do check that the
+// userID is associated with the clientID that comes across in the request.
 
-	fmt.Println("Validating token:", token)
-	// Example placeholder:
-	if token == "" {
-		return "", "", false
+func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	user, err := h.userStor.GetUserByAPIToken(token)
-	if err != nil {
-		return "", "", false
+	var req HubCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	_ = user
+	if req.UserID == 0 {
+		http.Error(w, "Missing user_id", http.StatusBadRequest)
+		return
+	}
 
-	// You would typically:
-	// 1. Query database to verify token exists
-	// 2. Check if token is expired
-	// 3. Get associated client ID and type
-	// 4. Return the information
+	if req.ClientID == "" {
+		http.Error(w, "Missing client_id", http.StatusBadRequest)
+		return
+	}
 
-	return "client-123", "python", true
+	// ensure the client exists, and is associated with the userID
+	h.mu.RLock()
+	c, exists := h.clients[req.ClientID]
+	h.mu.RUnlock()
+
+	if !exists {
+		_ = sendCommandResponse(w, HubCommandResponse{}, http.StatusNotFound)
+	}
+
+	if c.User.ID != req.UserID {
+		_ = sendCommandResponse(w, HubCommandResponse{}, http.StatusForbidden)
+	}
+
+	msg := Message{
+		Command:   req.Command,
+		ID:        "system",
+		Timestamp: time.Now(),
+		ClientID:  req.ClientID,
+		Payload:   req.Payload,
+	}
+
+	h.broadcast <- msg
+	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
+}
+
+type ClientResp struct {
+	ClientID string `json:"client_id"`
+	Type     string `json:"type"`
+	Hostname string `json:"hostname"`
+	UserID   int    `json:"user_id"`
+}
+
+func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.mu.RLock()
+	clients := make([]ClientResp, 0, len(h.clients))
+	for id, client := range h.clients {
+		cr := ClientResp{ClientID: id, Type: client.Type, Hostname: client.Hostname, UserID: client.User.ID}
+		clients = append(clients, cr)
+	}
+	defer h.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(clients)
+}
+
+// private utility methods
+
+func sendCommandResponse(w http.ResponseWriter, resp HubCommandResponse, httpStatus int) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatus)
+	return json.NewEncoder(w).Encode(resp)
 }
 
 func (h *Hub) validateAuthorizationAndUser(authHeader string) (error, *mcmodel.User) {

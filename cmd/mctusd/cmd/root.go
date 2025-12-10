@@ -91,6 +91,18 @@ var rootCmd = &cobra.Command{
 			hub.ServeWS(hub, w, r)
 		})
 
+		hubMux := http.NewServeMux()
+		hubMux.HandleFunc("/send-command", hub.HandleSendCommand)
+		hubMux.HandleFunc("/list-clients", hub.HandleListClients)
+
+		// Start the hub REST API server on port 8559
+		go func() {
+			fmt.Printf("Hub REST API listening on port 8559\n")
+			if err := http.ListenAndServe(":8559", hubMux); err != nil {
+				log.Fatalf("unable to start hub REST API server: %s", err)
+			}
+		}()
+
 		fmt.Printf("Listening on port 8558\n")
 		err = http.ListenAndServe(":8558", nil)
 		if err != nil {
