@@ -44,6 +44,7 @@ type ClientConnection struct {
 	Type     string // "ui" or "python"
 	Hostname string
 	User     *mcmodel.User
+	Projects []*mcmodel.Project
 	mu       sync.Mutex
 }
 
@@ -64,7 +65,7 @@ func (c *ClientConnection) readPump() {
 		err := c.Conn.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+				log.Printf("WebSocket error here: %v", err)
 			}
 			break
 		}

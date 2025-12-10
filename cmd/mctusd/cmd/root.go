@@ -94,6 +94,7 @@ var rootCmd = &cobra.Command{
 		hubMux := http.NewServeMux()
 		hubMux.HandleFunc("/send-command", hub.HandleSendCommand)
 		hubMux.HandleFunc("/list-clients", hub.HandleListClients)
+		hubMux.HandleFunc("/list-clients-for-user/{id}", hub.HandleListClientsForUser)
 
 		// Start the hub REST API server on port 8559
 		go func() {

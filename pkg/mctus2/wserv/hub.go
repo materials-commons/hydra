@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ type Hub struct {
 	broadcast       chan Message
 	mu              sync.RWMutex
 	userStor        stor.UserStor
+	projectStor     stor.ProjectStor
 }
 
 type HubCommandRequest struct {
@@ -47,6 +49,7 @@ func NewHub(db *gorm.DB) *Hub {
 		unregister:      make(chan *ClientConnection),
 		broadcast:       make(chan Message),
 		userStor:        stor.NewGormUserStor(db),
+		projectStor:     stor.NewGormProjectStor(db),
 	}
 }
 
@@ -54,17 +57,38 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			fmt.Println("Registering client trying to get lock!")
 			h.mu.Lock()
 			h.clients[client.ID] = client
 			h.clientsByUserID[client.User.ID] = append(h.clientsByUserID[client.User.ID], client)
 			h.mu.Unlock()
 			log.Printf("ClientConnection registered: %s (type: %s), (host: %s), (userID: %d)", client.ID, client.Type, client.Hostname, client.User.ID)
+			log.Printf("With Projects:")
+			for _, p := range client.Projects {
+				log.Printf("  %s (id: %d)", p.Name, p.ID)
+			}
 
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client.ID]; ok {
 				delete(h.clients, client.ID)
 				close(client.Send)
+
+				// Remove from clientsByUserID
+				if userClients, ok := h.clientsByUserID[client.User.ID]; ok {
+					for i, c := range userClients {
+						if c.ID == client.ID {
+							// Delete the entry at index i
+							h.clientsByUserID[client.User.ID] = append(userClients[:i], userClients[i+1:]...)
+							break
+						}
+					}
+
+					// Clean up the map key if the user has no more clients
+					if len(h.clientsByUserID[client.User.ID]) == 0 {
+						delete(h.clientsByUserID, client.User.ID)
+					}
+				}
 			}
 			h.mu.Unlock()
 			log.Printf("ClientConnection unregistered: %s", client.ID)
@@ -110,6 +134,7 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	clientID := r.Header.Get("MC-Client-ID")
 	clientHostname := r.Header.Get("MC-Client-Hostname")
 	clientType := r.Header.Get("MC-Connection-Type")
+	clientProjects := r.Header.Get("MC-Client-Projects")
 
 	switch {
 	case clientID == "":
@@ -141,12 +166,14 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		Hostname: clientHostname,
 		Type:     clientType,
 		User:     user,
+		Projects: h.commaSeparatedProjectIDsToProjects(clientProjects),
 		Conn:     conn,
 		Send:     make(chan Message, 256),
 		Hub:      hub,
 	}
 
 	client.Hub.register <- client
+	fmt.Println("Client registered!")
 
 	// Send connection acknowledgment
 	connectMsg := Message{
@@ -158,8 +185,11 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 	client.Send <- connectMsg
 
+	fmt.Println("Client connectMsg sent!")
+
 	go client.writePump()
 	go client.readPump()
+	fmt.Println("Client readPump and writePump started!")
 }
 
 // ****** NOTE ******
@@ -214,11 +244,12 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
 }
 
-type ClientResp struct {
+type ListClientsResp struct {
 	ClientID string `json:"client_id"`
 	Type     string `json:"type"`
 	Hostname string `json:"hostname"`
 	UserID   int    `json:"user_id"`
+	Projects []int  `json:"projects"`
 }
 
 func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
@@ -228,15 +259,72 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.RLock()
-	clients := make([]ClientResp, 0, len(h.clients))
+	defer h.mu.RUnlock()
+	clients := make([]ListClientsResp, 0, len(h.clients))
 	for id, client := range h.clients {
-		cr := ClientResp{ClientID: id, Type: client.Type, Hostname: client.Hostname, UserID: client.User.ID}
+
+		cr := ListClientsResp{
+			ClientID: id,
+			Type:     client.Type,
+			Hostname: client.Hostname,
+			UserID:   client.User.ID,
+			Projects: getProjectIds(client.Projects),
+		}
 		clients = append(clients, cr)
 	}
-	defer h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(clients)
+}
+
+func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userIDStr := r.PathValue("id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	clientsForUser, found := h.clientsByUserID[userID]
+	if !found {
+		empty := make([]ListClientsResp, 0)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(empty)
+		return
+	}
+	clients := make([]ListClientsResp, 0, len(clientsForUser))
+	for _, client := range clientsForUser {
+		if client.User.ID != userID {
+			continue
+		}
+
+		cr := ListClientsResp{
+			ClientID: client.ID,
+			Type:     client.Type,
+			Hostname: client.Hostname,
+			UserID:   client.User.ID,
+			Projects: getProjectIds(client.Projects),
+		}
+		clients = append(clients, cr)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(clients)
+}
+
+func getProjectIds(projects []*mcmodel.Project) []int {
+	ids := make([]int, len(projects))
+	for i, p := range projects {
+		ids[i] = p.ID
+	}
+	return ids
 }
 
 // private utility methods
@@ -245,6 +333,28 @@ func sendCommandResponse(w http.ResponseWriter, resp HubCommandResponse, httpSta
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatus)
 	return json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Hub) commaSeparatedProjectIDsToProjects(commaSeparatedIDs string) []*mcmodel.Project {
+	var projects []*mcmodel.Project
+
+	if commaSeparatedIDs == "" {
+		return projects
+	}
+
+	for _, projectID := range strings.Split(commaSeparatedIDs, ",") {
+		idAsInt, err := strconv.Atoi(strings.TrimSpace(projectID))
+		if err != nil {
+			continue
+		}
+		project, err := h.projectStor.GetProjectByID(idAsInt)
+		if err != nil {
+			continue
+		}
+		projects = append(projects, project)
+	}
+
+	return projects
 }
 
 func (h *Hub) validateAuthorizationAndUser(authHeader string) (error, *mcmodel.User) {
