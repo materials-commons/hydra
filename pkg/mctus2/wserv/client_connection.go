@@ -29,7 +29,7 @@ const (
 )
 
 type Message struct {
-	Type      string                 `json:"type"`
+	Command   string                 `json:"command"`
 	ID        string                 `json:"id"`
 	Timestamp time.Time              `json:"timestamp"`
 	ClientID  string                 `json:"clientId"`
@@ -70,7 +70,7 @@ func (c *ClientConnection) readPump() {
 		}
 
 		msg.Timestamp = time.Now()
-		log.Printf("Received message: type=%s from=%s", msg.Type, c.ID)
+		log.Printf("Received message: command=%s from=%s", msg.Command, c.ID)
 
 		// Handle message based on type
 		c.handleMessage(msg)
@@ -107,7 +107,7 @@ func (c *ClientConnection) writePump() {
 }
 
 func (c *ClientConnection) handleMessage(msg Message) {
-	switch msg.Type {
+	switch msg.Command {
 	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
 		// Forward control messages to target Python client
 		c.Hub.broadcast <- msg
@@ -119,7 +119,7 @@ func (c *ClientConnection) handleMessage(msg Message) {
 	case MsgHeartbeat:
 		// Respond to heartbeat
 		response := Message{
-			Type:      "HEARTBEAT_ACK",
+			Command:   "HEARTBEAT_ACK",
 			ID:        msg.ID,
 			Timestamp: time.Now(),
 			ClientID:  msg.ClientID,
