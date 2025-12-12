@@ -1,6 +1,7 @@
 package wserv
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -26,14 +27,15 @@ const (
 	MsgUploadComplete     = "UPLOAD_COMPLETE"
 	MsgUploadFailed       = "UPLOAD_FAILED"
 	MsgClientStatus       = "CLIENT_STATUS"
+	MsgListProjects       = "list_projects"
 )
 
 type Message struct {
-	Command   string                 `json:"command"`
-	ID        string                 `json:"id"`
-	Timestamp time.Time              `json:"timestamp"`
-	ClientID  string                 `json:"clientId"`
-	Payload   map[string]interface{} `json:"payload"`
+	Command   string    `json:"command"`
+	ID        string    `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	ClientID  string    `json:"clientId"`
+	Payload   any       `json:"payload"`
 }
 
 type ClientConnection struct {
@@ -79,7 +81,7 @@ func (c *ClientConnection) readPump() {
 }
 
 func (c *ClientConnection) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(20 * time.Second)
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
@@ -103,6 +105,13 @@ func (c *ClientConnection) writePump() {
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
+			msg := Message{
+				Command: MsgListProjects,
+			}
+			fmt.Println("Sending MsgListProjects")
+			if err := c.Conn.WriteJSON(msg); err != nil {
+				fmt.Println("Error sending MsgListProjects:", err)
+			}
 		}
 	}
 }
@@ -116,6 +125,9 @@ func (c *ClientConnection) handleMessage(msg Message) {
 	case MsgUploadProgress, MsgUploadComplete, MsgUploadFailed, MsgClientStatus:
 		// Forward status messages to Laravel UI
 		c.Hub.broadcast <- msg
+
+	case MsgListProjects:
+		c.handleListProjects(msg)
 
 	case MsgHeartbeat:
 		// Respond to heartbeat
@@ -132,5 +144,26 @@ func (c *ClientConnection) handleMessage(msg Message) {
 
 	case MsgClientDisconnected:
 		log.Printf("ClientConnection %s disconnected", msg.ClientID)
+	}
+}
+
+type ProjectItem struct {
+	Directory string `json:"directory"`
+	ProjectID int    `json:"project_id"`
+}
+
+func (c *ClientConnection) handleListProjects(msg Message) {
+	fmt.Printf("handleListProjects: %+v\n", msg.Payload)
+	projectsList := msg.Payload.([]interface{})
+	for _, projectItem := range projectsList {
+		projectItem := toProjectItem(projectItem.(map[string]interface{}))
+		fmt.Printf("projectItem: %+v\n", projectItem)
+	}
+}
+
+func toProjectItem(project map[string]interface{}) ProjectItem {
+	return ProjectItem{
+		Directory: project["directory"].(string),
+		ProjectID: int(project["project_id"].(float64)),
 	}
 }
