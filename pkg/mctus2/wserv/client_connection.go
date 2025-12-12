@@ -1,7 +1,6 @@
 package wserv
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -105,13 +104,13 @@ func (c *ClientConnection) writePump() {
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-			msg := Message{
-				Command: MsgListProjects,
-			}
-			fmt.Println("Sending MsgListProjects")
-			if err := c.Conn.WriteJSON(msg); err != nil {
-				fmt.Println("Error sending MsgListProjects:", err)
-			}
+			//msg := Message{
+			//	Command: MsgListProjects,
+			//}
+			//fmt.Println("Sending MsgListProjects")
+			//if err := c.Conn.WriteJSON(msg); err != nil {
+			//	fmt.Println("Error sending MsgListProjects:", err)
+			//}
 		}
 	}
 }
@@ -153,11 +152,12 @@ type ProjectItem struct {
 }
 
 func (c *ClientConnection) handleListProjects(msg Message) {
-	fmt.Printf("handleListProjects: %+v\n", msg.Payload)
+	//fmt.Printf("handleListProjects: %+v\n", msg.Payload)
 	projectsList := msg.Payload.([]interface{})
 	for _, projectItem := range projectsList {
 		projectItem := toProjectItem(projectItem.(map[string]interface{}))
-		fmt.Printf("projectItem: %+v\n", projectItem)
+		_ = projectItem
+		//fmt.Printf("projectItem: %+v\n", projectItem)
 	}
 }
 
