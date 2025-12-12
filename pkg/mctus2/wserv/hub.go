@@ -27,6 +27,13 @@ type Hub struct {
 	projectStor     stor.ProjectStor
 }
 
+type ConnectionAttributes struct {
+	ClientID string `json:"client_id"`
+	Type     string `json:"type"`
+	Hostname string `json:"hostname"`
+	Projects string `json:"projects"`
+}
+
 type HubCommandRequest struct {
 	ClientID string                 `json:"client_id"`
 	Command  string                 `json:"command"`
@@ -121,34 +128,30 @@ var upgrader = websocket.Upgrader{
 func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	// Extract bearer token from the Authorization header
 	fmt.Println("Connection!")
-	authHeader := r.Header.Get("Authorization")
 
 	// Validate token and get client info
-	err, user := h.validateAuthorizationAndUser(authHeader)
+	user, err := h.validateAuthAndGetUser(r)
 	if err != nil {
 		fmt.Println("Invalid or expired token")
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	clientID := r.Header.Get("MC-Client-ID")
-	clientHostname := r.Header.Get("MC-Client-Hostname")
-	clientType := r.Header.Get("MC-Connection-Type")
-	clientProjects := r.Header.Get("MC-Client-Projects")
+	clientConnectionAttrs := getClientConnectionAttributes(r)
 
 	switch {
-	case clientID == "":
+	case clientConnectionAttrs.ClientID == "":
 		fmt.Println("Missing MC-Client-ID header")
-		http.Error(w, "Missing MC-Client-ID header", http.StatusBadRequest)
+		http.Error(w, "Missing MC-Client-ID header or client_id param", http.StatusBadRequest)
 		return
 
-	case clientHostname == "":
+	case clientConnectionAttrs.Hostname == "":
 		fmt.Println("Missing MC-Client-Hostname header")
-		http.Error(w, "Missing MC-Client-Hostname header", http.StatusBadRequest)
+		http.Error(w, "Missing MC-Client-Hostname header or hostname param", http.StatusBadRequest)
 		return
 
-	case clientType == "":
-		fmt.Println("Missing MC-Connection-Type header")
+	case clientConnectionAttrs.Type == "":
+		fmt.Println("Missing MC-Connection-Type header or connection_type param")
 		http.Error(w, "Missing MC-Connection-Type header", http.StatusBadRequest)
 		return
 	}
@@ -162,11 +165,11 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Creating client!")
 	client := &ClientConnection{
-		ID:       clientID,
-		Hostname: clientHostname,
-		Type:     clientType,
+		ID:       clientConnectionAttrs.ClientID,
+		Hostname: clientConnectionAttrs.Hostname,
+		Type:     clientConnectionAttrs.Type,
 		User:     user,
-		Projects: h.commaSeparatedProjectIDsToProjects(clientProjects),
+		Projects: h.commaSeparatedProjectIDsToProjects(clientConnectionAttrs.Projects),
 		Conn:     conn,
 		Send:     make(chan Message, 256),
 		Hub:      hub,
@@ -180,7 +183,7 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		Command:   "CONNECTED",
 		ID:        "system",
 		Timestamp: time.Now(),
-		ClientID:  clientID,
+		ClientID:  clientConnectionAttrs.ClientID,
 		Payload:   map[string]interface{}{"status": "connected"},
 	}
 	client.Send <- connectMsg
@@ -357,28 +360,59 @@ func (h *Hub) commaSeparatedProjectIDsToProjects(commaSeparatedIDs string) []*mc
 	return projects
 }
 
-func (h *Hub) validateAuthorizationAndUser(authHeader string) (error, *mcmodel.User) {
-	if authHeader == "" {
-		fmt.Println("Missing Authorization header")
-		return fmt.Errorf("missing authorization header"), nil
+func (h *Hub) validateAuthAndGetUser(r *http.Request) (*mcmodel.User, error) {
+	token, err := h.getAuthToken(r)
+	if err != nil {
+		return nil, err
 	}
 
+	return h.userStor.GetUserByAPIToken(token)
+}
+
+func (h *Hub) getAuthToken(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		return h.extractTokenFromAuthHeader(authHeader)
+	}
+
+	// If we are here, then the token was passed in the query string
+	token := r.URL.Query().Get("api_token")
+	if token == "" {
+		return "", fmt.Errorf("api_token is empty")
+	}
+
+	return token, nil
+}
+
+func (h *Hub) extractTokenFromAuthHeader(authHeader string) (string, error) {
 	parts := strings.SplitN(authHeader, " ", 2)
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 		fmt.Println("Invalid Authorization header format")
-		return fmt.Errorf("invalid authorization header format"), nil
+		return "", fmt.Errorf("invalid authorization header format")
 	}
 
 	token := parts[1]
 	if token == "" {
 		fmt.Println("Bearer token is empty")
-		return fmt.Errorf("bearer token is empty"), nil
+		return "", fmt.Errorf("bearer token is empty")
 	}
 
-	user, err := h.userStor.GetUserByAPIToken(token)
-	if err != nil {
-		fmt.Printf("No user found for token: %s\n", token)
-	}
+	return token, nil
+}
 
-	return err, user
+func getClientConnectionAttributes(r *http.Request) *ConnectionAttributes {
+	return &ConnectionAttributes{
+		ClientID: getClientConnectionAttr(r, "MC-Client-ID", "client_id"),
+		Type:     getClientConnectionAttr(r, "MC-Connection-Type", "connection_type"),
+		Hostname: getClientConnectionAttr(r, "MC-Client-Hostname", "hostname"),
+		Projects: getClientConnectionAttr(r, "MC-Client-Projects", "projects"),
+	}
+}
+
+func getClientConnectionAttr(r *http.Request, headerAttr string, attr string) string {
+	val := r.Header.Get(headerAttr)
+	if val == "" {
+		return r.URL.Query().Get(attr)
+	}
+	return val
 }
