@@ -180,11 +180,11 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	// Send connection acknowledgment
 	connectMsg := Message{
-		Command:   "CONNECTED",
+		Command:   "connected",
 		ID:        "system",
 		Timestamp: time.Now(),
 		ClientID:  clientConnectionAttrs.ClientID,
-		Payload:   map[string]interface{}{"status": "connected"},
+		Payload:   map[string]interface{}{"status": "connected", "user_id": user.ID},
 	}
 	client.Send <- connectMsg
 
