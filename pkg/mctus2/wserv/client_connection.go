@@ -2,6 +2,7 @@ package wserv
 
 import (
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -37,6 +38,26 @@ type Message struct {
 	Payload   any       `json:"payload"`
 }
 
+type FileTransfer struct {
+	TransferID   string
+	ProjectID    int
+	DirectoryID  int
+	FileName     string
+	FilePath     string
+	File         *os.File
+	ExpectedSize int64
+	BytesWritten int64
+	ChunkSize    int
+	NextChunkSeq int
+	LastActivity time.Time
+
+	// For periodic DB updates
+	chunksSinceUpdate int
+	lastDBUpdate      time.Time
+
+	mu sync.Mutex
+}
+
 type ClientConnection struct {
 	ID       string
 	Conn     *websocket.Conn
@@ -47,17 +68,21 @@ type ClientConnection struct {
 	User     *mcmodel.User
 	Projects []*mcmodel.Project
 	mu       sync.Mutex
+
+	// File transfer state
+	activeTransfers map[string]*FileTransfer
+	transferMu      sync.RWMutex
 }
 
 func (c *ClientConnection) readPump() {
 	defer func() {
 		c.Hub.unregister <- c
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}()
 
-	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 
@@ -83,15 +108,15 @@ func (c *ClientConnection) writePump() {
 	ticker := time.NewTicker(20 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -100,70 +125,46 @@ func (c *ClientConnection) writePump() {
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-			//msg := Message{
-			//	Command: MsgListProjects,
-			//}
-			//fmt.Println("Sending MsgListProjects")
-			//if err := c.Conn.WriteJSON(msg); err != nil {
-			//	fmt.Println("Error sending MsgListProjects:", err)
-			//}
 		}
 	}
 }
 
 func (c *ClientConnection) handleMessage(msg Message) {
-	switch msg.Command {
-	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
-		// Forward control messages to target Python client
-		c.Hub.broadcast <- msg
-
-	case MsgUploadProgress, MsgUploadComplete, MsgUploadFailed, MsgClientStatus:
-		// Forward status messages to Laravel UI
-		c.Hub.broadcast <- msg
-
-	case MsgListProjects:
-		c.handleListProjects(msg)
-
-	case MsgHeartbeat:
-		// Respond to heartbeat
-		response := Message{
-			Command:   "HEARTBEAT_ACK",
-			ID:        msg.ID,
-			Timestamp: time.Now(),
-			ClientID:  msg.ClientID,
+	if handler, ok := Handlers[msg.Command]; ok {
+		if err := handler(msg, c); err != nil {
+			log.Printf("Error handling message (%s): %v", msg.Command, err)
 		}
-		c.Send <- response
-
-	case MsgClientConnected:
-		log.Printf("ClientConnection %s connected", msg.ClientID)
-
-	case MsgClientDisconnected:
-		log.Printf("ClientConnection %s disconnected", msg.ClientID)
 	}
-}
-
-type ProjectItem struct {
-	Directory string `json:"directory"`
-	ProjectID int    `json:"project_id"`
-}
-
-func (c *ClientConnection) handleListProjects(msg Message) {
-	//fmt.Printf("handleListProjects: %+v\n", msg.Payload)
-	projectsList := msg.Payload.([]interface{})
-	for _, projectItem := range projectsList {
-		projectItem := toProjectItem(projectItem.(map[string]interface{}))
-		_ = projectItem
-		//fmt.Printf("projectItem: %+v\n", projectItem)
-	}
-}
-
-func toProjectItem(project map[string]interface{}) ProjectItem {
-	return ProjectItem{
-		Directory: project["directory"].(string),
-		ProjectID: int(project["project_id"].(float64)),
-	}
+	//switch msg.Command {
+	//case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
+	//	// Forward control messages to target Python client
+	//	c.Hub.broadcast <- msg
+	//
+	//case MsgUploadProgress, MsgUploadComplete, MsgUploadFailed, MsgClientStatus:
+	//	// Forward status messages to Laravel UI
+	//	c.Hub.broadcast <- msg
+	//
+	//case MsgListProjects:
+	//	c.handleListProjects(msg)
+	//
+	//case MsgHeartbeat:
+	//	// Respond to heartbeat
+	//	response := Message{
+	//		Command:   "HEARTBEAT_ACK",
+	//		ID:        msg.ID,
+	//		Timestamp: time.Now(),
+	//		ClientID:  msg.ClientID,
+	//	}
+	//	c.Send <- response
+	//
+	//case MsgClientConnected:
+	//	log.Printf("ClientConnection %s connected", msg.ClientID)
+	//
+	//case MsgClientDisconnected:
+	//	log.Printf("ClientConnection %s disconnected", msg.ClientID)
+	//}
 }
