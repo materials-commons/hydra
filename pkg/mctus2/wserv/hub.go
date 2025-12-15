@@ -17,14 +17,16 @@ import (
 )
 
 type Hub struct {
-	clients         map[string]*ClientConnection
-	clientsByUserID map[int][]*ClientConnection
-	register        chan *ClientConnection
-	unregister      chan *ClientConnection
-	broadcast       chan Message
-	mu              sync.RWMutex
-	userStor        stor.UserStor
-	projectStor     stor.ProjectStor
+	clients                 map[string]*ClientConnection
+	clientsByUserID         map[int][]*ClientConnection
+	register                chan *ClientConnection
+	unregister              chan *ClientConnection
+	broadcast               chan Message
+	mu                      sync.RWMutex
+	userStor                stor.UserStor
+	projectStor             stor.ProjectStor
+	fileStor                stor.FileStor
+	partialTransferFileStor *stor.GormPartialTransferFileStor // TODO: Make this an interface
 }
 
 type ConnectionAttributes struct {
@@ -50,13 +52,14 @@ type HubCommandResponse struct {
 
 func NewHub(db *gorm.DB) *Hub {
 	return &Hub{
-		clients:         make(map[string]*ClientConnection),
-		clientsByUserID: make(map[int][]*ClientConnection),
-		register:        make(chan *ClientConnection),
-		unregister:      make(chan *ClientConnection),
-		broadcast:       make(chan Message),
-		userStor:        stor.NewGormUserStor(db),
-		projectStor:     stor.NewGormProjectStor(db),
+		clients:                 make(map[string]*ClientConnection),
+		clientsByUserID:         make(map[int][]*ClientConnection),
+		register:                make(chan *ClientConnection),
+		unregister:              make(chan *ClientConnection),
+		broadcast:               make(chan Message),
+		userStor:                stor.NewGormUserStor(db),
+		projectStor:             stor.NewGormProjectStor(db),
+		partialTransferFileStor: stor.NewGormPartialTransferFileStor(db),
 	}
 }
 
@@ -195,6 +198,27 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Client readPump and writePump started!")
 }
 
+func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	userClients, ok := h.clientsByUserID[userID]
+	if !ok {
+		return
+	}
+
+	for _, client := range userClients {
+		if clientType == "" || client.Type == clientType {
+			select {
+			case client.Send <- msg:
+			default:
+				// Channel full, skip this client
+				log.Printf("Warning: could not send to client %s (channel full)", client.ID)
+			}
+		}
+	}
+}
+
 // ****** NOTE ******
 // All REST endpoints are listening on localhost. The PHP app sends requests to them. The user is already
 // authenticated, so these endpoints don't need to do any authentication. However, we do check that the
@@ -278,6 +302,40 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(clients)
+}
+
+func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("HandleSubmitTestUpload")
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := r.PathValue("client_id")
+	fmt.Printf("  clientID: %s\n", clientID)
+	msg := Message{
+		Command:   "UPLOAD_FILE",
+		ID:        "ui",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload: map[string]any{
+			"file_path":    "/home/gtarcea/uploadme.txt",
+			"project_id":   438,
+			"directory_id": 143481,
+		},
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.clients[clientID]
+	if !ok {
+		http.Error(w, "Client not found", http.StatusNotFound)
+		fmt.Println("Client not found")
+		return
+	}
+
+	h.broadcast <- msg
+	_ = sendCommandResponse(w, HubCommandResponse{Command: "UPLOAD_FILE", Status: "ok"}, http.StatusOK)
 }
 
 func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,7 @@ import "time"
 
 type TransferRequestFile struct {
 	ID                int              `json:"id"`
-	UUID              string           `json:"string"`
+	UUID              string           `json:"uuid"`
 	Name              string           `json:"name"`
 	State             string           `json:"state"`
 	ExpectedSize      uint64           `json:"expected_size"`
