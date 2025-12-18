@@ -72,6 +72,12 @@ type GlobusTransferStor interface {
 	GetGlobusTransferByGlobusIdentityID(globusIdentityID string) (*mcmodel.GlobusTransfer, error)
 }
 
+type RemoteClient interface {
+	CreateRemoteClient(RemoteClient *mcmodel.RemoteClient) (*mcmodel.RemoteClient, error)
+	GetRemoteClientByClientID(clientID string) (*mcmodel.RemoteClient, error)
+	AddTransferRequestToRemoteClient(remoteClientID int, transferRequestID int) error
+}
+
 type UserStor interface {
 	CreateUser(user *mcmodel.User) (*mcmodel.User, error)
 	GetUsersWithGlobusAccount() ([]mcmodel.User, error)

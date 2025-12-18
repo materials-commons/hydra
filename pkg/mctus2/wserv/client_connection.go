@@ -84,6 +84,10 @@ type ClientConnection struct {
 	// The projects on the remote client. Only used for "server" connections and not "ui" connections.
 	Projects []*mcmodel.Project
 
+	// Track the remote client in the database. This gives access to the
+	// transfer requests and associated files.
+	RemoteClient *mcmodel.RemoteClient
+
 	// Mutex to protect the Projects slice.
 	mu sync.Mutex
 
@@ -597,6 +601,10 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 	log.Printf("Transfer cancelled: %s", transferID)
 }
 
+// handleTransferInit handles the initialization of an upload transfer. It creates
+// the transfer request and the ID associated with it, along with the mcmodel.File
+// and mcmodel.TransferRequestFile association. It will send back to the client
+// the transfer_id associated with this transfer.
 func (c *ClientConnection) handleTransferInit(msg Message) {
 	payload := msg.Payload.(map[string]interface{})
 
