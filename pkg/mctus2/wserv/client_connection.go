@@ -238,6 +238,157 @@ type ChunkHeader struct {
 	IsLast bool `json:"is_last"`
 }
 
+// broadcastProgress broadcasts the current progress of the given transfer to all UI clients for this user.
+func (c *ClientConnection) broadcastProgress(transfer *FileTransfer) {
+	progressMsg := Message{
+		Command:   MsgUploadProgress,
+		ID:        transfer.TransferID,
+		Timestamp: time.Now(),
+		ClientID:  c.ID,
+		Payload: map[string]interface{}{
+			"transfer_id":   transfer.TransferID,
+			"file_name":     transfer.FileName,
+			"bytes_written": transfer.BytesWritten,
+			"expected_size": transfer.ExpectedSize,
+			"progress_pct":  float64(transfer.BytesWritten) / float64(transfer.ExpectedSize) * 100,
+		},
+	}
+
+	_ = progressMsg
+	// Broadcast to all UI clients for this user
+	//c.Hub.broadcastToUserClients(c.User.ID, "ui", progressMsg)
+}
+
+// sendChunkError sends a chunk error message to the client.
+func (c *ClientConnection) sendChunkError(transferID string, sequence int, reason string) {
+	c.Send <- Message{
+		Command:   "CHUNK_ERROR",
+		ID:        transferID,
+		Timestamp: time.Now(),
+		ClientID:  c.ID,
+		Payload: map[string]interface{}{
+			"transfer_id":    transferID,
+			"chunk_sequence": sequence,
+			"error":          reason,
+		},
+	}
+}
+
+// handleTransferInit handles the initialization of an upload transfer. It creates
+// the transfer request and the ID associated with it, along with the mcmodel.File
+// and mcmodel.TransferRequestFile association. It will send back to the client
+// the transfer_id associated with this transfer.
+func (c *ClientConnection) handleTransferInit(msg Message) {
+	payload := msg.Payload.(map[string]interface{})
+
+	// The client sends details on the file to transfer, such as the name, size, and expected hash. It also
+	// send the project and directory path to upload the file to. The client can optionally send the chunk
+	// size. If it doesn't send a chunk size, then the server can set it or use the default (5mb).
+	transferID, _ := payload["transfer_id"].(string)
+	fileName, _ := payload["file_name"].(string)
+	// JSON numbers are float64 that we cast to an int
+	fileSize := int64(payload["file_size"].(float64))
+	chunkSize, _ := payload["chunk_size"].(float64)
+	projectID, _ := payload["project_id"].(float64)
+	directoryID, _ := payload["directory_id"].(float64)
+
+	// Validate
+	if transferID == "" || fileName == "" || fileSize <= 0 {
+		c.sendTransferReject(transferID, "invalid parameters")
+		return
+	}
+	// Each upload will get a separate transfer request file. The UUID for the transfer request file is the
+	// transfer id associated with this transfer.
+
+	// Check if user has access to project
+	//if !c.hasAccessToProject(int(projectID)) {
+	//	c.sendTransferReject(transferID, "no access to project")
+	//	return
+	//}
+
+	// Create file path (your storage convention)
+	// Example: /storage/projects/{projectID}/uploads/{transferID}_{fileName}
+	filePath := "" // c.Hub.buildUploadPath(int(projectID), transferID, fileName)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		c.sendTransferReject(transferID, "cannot create directory")
+		return
+	}
+
+	// Create the file (pre-allocated)
+	file, err := os.Create(filePath)
+	if err != nil {
+		c.sendTransferReject(transferID, "cannot create file")
+		return
+	}
+
+	// Optional: pre-allocate disk space
+	if err := file.Truncate(int64(fileSize)); err != nil {
+		file.Close()
+		c.sendTransferReject(transferID, "cannot allocate space")
+		return
+	}
+
+	// Create DB record
+	partialFile := &mcmodel.PartialTransferFile{
+		TransferID:   transferID,
+		UserID:       c.User.ID,
+		ProjectID:    int(projectID),
+		DirectoryID:  int(directoryID),
+		FileName:     fileName,
+		FilePath:     filePath,
+		ExpectedSize: int64(fileSize),
+		ChunkSize:    int(chunkSize),
+		Status:       "uploading",
+	}
+
+	if _, err := c.Hub.partialTransferFileStor.CreatePartialTransferFile(partialFile); err != nil {
+		file.Close()
+		os.Remove(filePath)
+		c.sendTransferReject(transferID, "database error")
+		return
+	}
+
+	// Create in-memory transfer state
+	transfer := &FileTransfer{
+		TransferID: transferID,
+		//ProjectID:    int(projectID),
+		//DirectoryID:  int(directoryID),
+		//FileName:     fileName,
+		//FilePath:     filePath,
+		File:         file,
+		ExpectedSize: int64(fileSize),
+		BytesWritten: 0,
+		ChunkSize:    int(chunkSize),
+		NextChunkSeq: 0,
+		LastActivity: time.Now(),
+		lastDBUpdate: time.Now(),
+	}
+
+	c.transferMu.Lock()
+	if c.activeTransfers == nil {
+		c.activeTransfers = make(map[string]*FileTransfer)
+	}
+	c.activeTransfers[transferID] = transfer
+	c.transferMu.Unlock()
+
+	// Send acceptance
+	c.Send <- Message{
+		Command:   MsgTransferAccept,
+		ID:        msg.ID,
+		Timestamp: time.Now(),
+		ClientID:  c.ID,
+		Payload: map[string]interface{}{
+			"transfer_id":     transferID,
+			"chunk_size":      int(chunkSize),
+			"expected_chunks": int(fileSize) / int(chunkSize),
+		},
+	}
+
+	log.Printf("Transfer initialized: %s (%s, %.2f MB)", transferID, fileName, fileSize/1024/1024)
+}
+
 func (c *ClientConnection) handleFileChunk(msg []byte) {
 	// Parse header. The first part of the mesage is a newline terminated JSON string. After
 	// that comes the bytes for the file.
@@ -292,42 +443,6 @@ func (c *ClientConnection) handleFileChunk(msg []byte) {
 	//if header.Sequence % 10 == 0 {
 	//	c.broadcastProgress(transfer)
 	//}
-}
-
-// broadcastProgress broadcasts the current progress of the given transfer to all UI clients for this user.
-func (c *ClientConnection) broadcastProgress(transfer *FileTransfer) {
-	progressMsg := Message{
-		Command:   MsgUploadProgress,
-		ID:        transfer.TransferID,
-		Timestamp: time.Now(),
-		ClientID:  c.ID,
-		Payload: map[string]interface{}{
-			"transfer_id":   transfer.TransferID,
-			"file_name":     transfer.FileName,
-			"bytes_written": transfer.BytesWritten,
-			"expected_size": transfer.ExpectedSize,
-			"progress_pct":  float64(transfer.BytesWritten) / float64(transfer.ExpectedSize) * 100,
-		},
-	}
-
-	_ = progressMsg
-	// Broadcast to all UI clients for this user
-	//c.Hub.broadcastToUserClients(c.User.ID, "ui", progressMsg)
-}
-
-// sendChunkError sends a chunk error message to the client.
-func (c *ClientConnection) sendChunkError(transferID string, sequence int, reason string) {
-	c.Send <- Message{
-		Command:   "CHUNK_ERROR",
-		ID:        transferID,
-		Timestamp: time.Now(),
-		ClientID:  c.ID,
-		Payload: map[string]interface{}{
-			"transfer_id":    transferID,
-			"chunk_sequence": sequence,
-			"error":          reason,
-		},
-	}
 }
 
 // handleTransferComplete handles a transfer complete message from the client. It finishes the transfer, notifies the
@@ -601,115 +716,6 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 	log.Printf("Transfer cancelled: %s", transferID)
 }
 
-// handleTransferInit handles the initialization of an upload transfer. It creates
-// the transfer request and the ID associated with it, along with the mcmodel.File
-// and mcmodel.TransferRequestFile association. It will send back to the client
-// the transfer_id associated with this transfer.
-func (c *ClientConnection) handleTransferInit(msg Message) {
-	payload := msg.Payload.(map[string]interface{})
-
-	transferID, _ := payload["transfer_id"].(string)
-	fileName, _ := payload["file_name"].(string)
-	fileSize, _ := payload["file_size"].(float64) // JSON numbers are float64
-	chunkSize, _ := payload["chunk_size"].(float64)
-	projectID, _ := payload["project_id"].(float64)
-	directoryID, _ := payload["directory_id"].(float64)
-
-	// Validate
-	if transferID == "" || fileName == "" || fileSize <= 0 {
-		c.sendTransferReject(transferID, "invalid parameters")
-		return
-	}
-
-	// Check if user has access to project
-	//if !c.hasAccessToProject(int(projectID)) {
-	//	c.sendTransferReject(transferID, "no access to project")
-	//	return
-	//}
-
-	// Create file path (your storage convention)
-	// Example: /storage/projects/{projectID}/uploads/{transferID}_{fileName}
-	filePath := "" // c.Hub.buildUploadPath(int(projectID), transferID, fileName)
-
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		c.sendTransferReject(transferID, "cannot create directory")
-		return
-	}
-
-	// Create the file (pre-allocated)
-	file, err := os.Create(filePath)
-	if err != nil {
-		c.sendTransferReject(transferID, "cannot create file")
-		return
-	}
-
-	// Optional: pre-allocate disk space
-	if err := file.Truncate(int64(fileSize)); err != nil {
-		file.Close()
-		c.sendTransferReject(transferID, "cannot allocate space")
-		return
-	}
-
-	// Create DB record
-	partialFile := &mcmodel.PartialTransferFile{
-		TransferID:   transferID,
-		UserID:       c.User.ID,
-		ProjectID:    int(projectID),
-		DirectoryID:  int(directoryID),
-		FileName:     fileName,
-		FilePath:     filePath,
-		ExpectedSize: int64(fileSize),
-		ChunkSize:    int(chunkSize),
-		Status:       "uploading",
-	}
-
-	if _, err := c.Hub.partialTransferFileStor.CreatePartialTransferFile(partialFile); err != nil {
-		file.Close()
-		os.Remove(filePath)
-		c.sendTransferReject(transferID, "database error")
-		return
-	}
-
-	// Create in-memory transfer state
-	transfer := &FileTransfer{
-		TransferID: transferID,
-		//ProjectID:    int(projectID),
-		//DirectoryID:  int(directoryID),
-		//FileName:     fileName,
-		//FilePath:     filePath,
-		File:         file,
-		ExpectedSize: int64(fileSize),
-		BytesWritten: 0,
-		ChunkSize:    int(chunkSize),
-		NextChunkSeq: 0,
-		LastActivity: time.Now(),
-		lastDBUpdate: time.Now(),
-	}
-
-	c.transferMu.Lock()
-	if c.activeTransfers == nil {
-		c.activeTransfers = make(map[string]*FileTransfer)
-	}
-	c.activeTransfers[transferID] = transfer
-	c.transferMu.Unlock()
-
-	// Send acceptance
-	c.Send <- Message{
-		Command:   MsgTransferAccept,
-		ID:        msg.ID,
-		Timestamp: time.Now(),
-		ClientID:  c.ID,
-		Payload: map[string]interface{}{
-			"transfer_id":     transferID,
-			"chunk_size":      int(chunkSize),
-			"expected_chunks": int(fileSize) / int(chunkSize),
-		},
-	}
-
-	log.Printf("Transfer initialized: %s (%s, %.2f MB)", transferID, fileName, fileSize/1024/1024)
-}
-
 //func (c *ClientConnection) handleTransferResume(transferID string) {
 //	// Load from DB
 //	partial, err := c.Hub.partialTransferFileStor.GetPartialTransferFileByID(transferID)
@@ -765,6 +771,10 @@ func (c *ClientConnection) sendTransferReject(transferID, reason string) {
 			"reason":      reason,
 		},
 	}
+}
+
+func (c *ClientConnection) sendTransferAccept(transferID string) {
+
 }
 
 type ProjectItem struct {

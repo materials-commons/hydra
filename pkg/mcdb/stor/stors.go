@@ -72,10 +72,18 @@ type GlobusTransferStor interface {
 	GetGlobusTransferByGlobusIdentityID(globusIdentityID string) (*mcmodel.GlobusTransfer, error)
 }
 
-type RemoteClient interface {
+type RemoteClientStor interface {
 	CreateRemoteClient(RemoteClient *mcmodel.RemoteClient) (*mcmodel.RemoteClient, error)
 	GetRemoteClientByClientID(clientID string) (*mcmodel.RemoteClient, error)
-	AddTransferRequestToRemoteClient(remoteClientID int, transferRequestID int) error
+}
+
+type RemoteClientTransferStor interface {
+	CreateRemoteClientTransfer(clientTransfer *mcmodel.RemoteClientTransfer) (*mcmodel.RemoteClientTransfer, error)
+	GetRemoteClientTransferByUUID(clientUUID string) (*mcmodel.RemoteClientTransfer, error)
+	UpdateRemoteClientTransferState(UUID string, state string) (*mcmodel.RemoteClientTransfer, error)
+	GetAllTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
+	GetAllUploadTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
+	GetAllDownloadTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
 }
 
 type UserStor interface {
@@ -86,33 +94,36 @@ type UserStor interface {
 	GetUserByAPIToken(apitoken string) (*mcmodel.User, error)
 }
 
-type ClientTransferStor interface {
-	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
-	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, *mcmodel.TransferRequestFile, error)
-	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
-	CloseClientTransfer(clientTransferID int) error
-	AbortClientTransfer(clientTransferID int) error
-}
+//type ClientTransferStor interface {
+//	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+//	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, *mcmodel.TransferRequestFile, error)
+//	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+//	CloseClientTransfer(clientTransferID int) error
+//	AbortClientTransfer(clientTransferID int) error
+//}
 
 type Stors struct {
-	ConversionStor          ConversionStor
-	FileStor                FileStor
-	ProjectStor             ProjectStor
-	TransferRequestFileStor TransferRequestFileStor
-	TransferRequestStor     TransferRequestStor
-	GlobusTransferStor      GlobusTransferStor
-	UserStor                UserStor
-	ClientTransferStor      ClientTransferStor
+	ConversionStor           ConversionStor
+	FileStor                 FileStor
+	ProjectStor              ProjectStor
+	TransferRequestFileStor  TransferRequestFileStor
+	TransferRequestStor      TransferRequestStor
+	GlobusTransferStor       GlobusTransferStor
+	UserStor                 UserStor
+	RemoteClientStor         RemoteClientStor
+	RemoteClientTransferStor RemoteClientTransferStor
 }
 
 func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
 	return &Stors{
-		ConversionStor:          NewGormConversionStor(db),
-		FileStor:                NewGormFileStor(db, mcfsRoot),
-		ProjectStor:             NewGormProjectStor(db),
-		TransferRequestFileStor: NewGormTransferRequestFileStor(db),
-		TransferRequestStor:     NewGormTransferRequestStor(db, mcfsRoot),
-		GlobusTransferStor:      NewGormGlobusTransferStor(db),
-		UserStor:                NewGormUserStor(db),
+		ConversionStor:           NewGormConversionStor(db),
+		FileStor:                 NewGormFileStor(db, mcfsRoot),
+		ProjectStor:              NewGormProjectStor(db),
+		TransferRequestFileStor:  NewGormTransferRequestFileStor(db),
+		TransferRequestStor:      NewGormTransferRequestStor(db, mcfsRoot),
+		GlobusTransferStor:       NewGormGlobusTransferStor(db),
+		UserStor:                 NewGormUserStor(db),
+		RemoteClientStor:         NewGormRemoteClientStor(db),
+		RemoteClientTransferStor: NewGormRemoteClientTransferStor(db),
 	}
 }

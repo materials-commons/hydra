@@ -1,0 +1,26 @@
+package mcmodel
+
+import (
+	"time"
+)
+
+type RemoteClientTransfer struct {
+	ID               int           `json:"id"`
+	UUID             string        `json:"uuid"`
+	State            string        `json:"state"`
+	TransferType     string        `json:"transfer_type"`
+	ExpectedSize     uint64        `json:"expected_size"`
+	ExpectedChecksum string        `json:"expected_checksum"`
+	RemotePath       string        `json:"remote_path"`
+	RemoteClientID   int           `json:"remote_client_id"`
+	RemoteClient     *RemoteClient `gorm:"foreignKey:RemoteClientID;references:ID"`
+	OwnerID          int           `json:"owner_id"`
+	Owner            *User         `gorm:"foreignKey:OwnerID;references:ID"`
+	ProjectID        int           `json:"project_id"`
+	Project          *Project      `gorm:"foreignKey:ProjectID;references:ID"`
+	FileID           int           `json:"file_id"`
+	File             *File         `gorm:"foreignKey:FileID;references:ID"`
+	LastActiveAt     time.Time     `json:"last_active_at"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
+}
