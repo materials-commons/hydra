@@ -475,16 +475,19 @@ func (h *Hub) getOrCreateRemoteClient(attrs *ConnectionAttributes, user *mcmodel
 	remoteClient, err := h.remoteClientStor.GetRemoteClientByClientID(attrs.ClientID)
 	if err == nil {
 		// Found the remote client
+
+		// TODO: Update LastSeenAt when we find an existing client.
 		return remoteClient, nil
 	}
 
 	// remote client not found, create it
 	remoteClient = &mcmodel.RemoteClient{
-		ClientID: attrs.ClientID,
-		Hostname: attrs.Hostname,
-		Name:     attrs.Hostname,
-		Type:     attrs.Type,
-		OwnerID:  user.ID,
+		ClientID:   attrs.ClientID,
+		Hostname:   attrs.Hostname,
+		Name:       attrs.Hostname,
+		Type:       attrs.Type,
+		OwnerID:    user.ID,
+		LastSeenAt: time.Now(),
 	}
 
 	return h.remoteClientStor.CreateRemoteClient(remoteClient)

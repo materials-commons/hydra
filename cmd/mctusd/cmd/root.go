@@ -84,7 +84,7 @@ var rootCmd = &cobra.Command{
 			progressController.GetUploadProgressHandler(w, r)
 		})
 
-		hub := wserv.NewHub(db)
+		hub := wserv.NewHub(db, mcfsDir)
 		go hub.Run()
 
 		http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
