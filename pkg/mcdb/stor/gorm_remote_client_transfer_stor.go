@@ -33,25 +33,25 @@ func (s *GormRemoteClientTransferStor) CreateRemoteClientTransfer(clientTransfer
 	return clientTransfer, nil
 }
 
-func (s *GormRemoteClientTransferStor) GetRemoteClientTransferByUUID(clientUUID string) (*mcmodel.RemoteClientTransfer, error) {
+func (s *GormRemoteClientTransferStor) GetRemoteClientTransferByTransferID(transferID string) (*mcmodel.RemoteClientTransfer, error) {
 	var transfer mcmodel.RemoteClientTransfer
-	err := s.db.Where("uuid = ?", clientUUID).First(&transfer).Error
+	err := s.db.Where("transfer_id = ?", transferID).First(&transfer).Error
 	if err != nil {
 		return nil, err
 	}
 	return &transfer, nil
 }
 
-func (s *GormRemoteClientTransferStor) UpdateRemoteClientTransferState(UUID string, state string) (*mcmodel.RemoteClientTransfer, error) {
+func (s *GormRemoteClientTransferStor) UpdateRemoteClientTransferState(transferID string, state string) (*mcmodel.RemoteClientTransfer, error) {
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
-		return tx.Model(&mcmodel.RemoteClientTransfer{}).Where("uuid = ?", UUID).Update("state", state).Error
+		return tx.Model(&mcmodel.RemoteClientTransfer{}).Where("transfer_id = ?", transferID).Update("state", state).Error
 	})
 
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetRemoteClientTransferByUUID(UUID)
+	return s.GetRemoteClientTransferByTransferID(transferID)
 }
 
 func (s *GormRemoteClientTransferStor) GetAllTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error) {

@@ -79,7 +79,7 @@ type RemoteClientStor interface {
 
 type RemoteClientTransferStor interface {
 	CreateRemoteClientTransfer(clientTransfer *mcmodel.RemoteClientTransfer) (*mcmodel.RemoteClientTransfer, error)
-	GetRemoteClientTransferByUUID(clientUUID string) (*mcmodel.RemoteClientTransfer, error)
+	GetRemoteClientTransferByTransferID(transferID string) (*mcmodel.RemoteClientTransfer, error)
 	UpdateRemoteClientTransferState(UUID string, state string) (*mcmodel.RemoteClientTransfer, error)
 	GetAllTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
 	GetAllUploadTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)

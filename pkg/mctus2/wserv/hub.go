@@ -17,16 +17,18 @@ import (
 )
 
 type Hub struct {
-	clients                 map[string]*ClientConnection
-	clientsByUserID         map[int][]*ClientConnection
-	register                chan *ClientConnection
-	unregister              chan *ClientConnection
-	broadcast               chan Message
-	mu                      sync.RWMutex
-	userStor                stor.UserStor
-	projectStor             stor.ProjectStor
-	fileStor                stor.FileStor
-	partialTransferFileStor *stor.GormPartialTransferFileStor // TODO: Make this an interface
+	clients                  map[string]*ClientConnection
+	clientsByUserID          map[int][]*ClientConnection
+	register                 chan *ClientConnection
+	unregister               chan *ClientConnection
+	broadcast                chan Message
+	mu                       sync.RWMutex
+	userStor                 stor.UserStor
+	projectStor              stor.ProjectStor
+	fileStor                 stor.FileStor
+	remoteClientStor         stor.RemoteClientStor
+	remoteClientTransferStor stor.RemoteClientTransferStor
+	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
 }
 
 type ConnectionAttributes struct {
@@ -50,16 +52,19 @@ type HubCommandResponse struct {
 	Status   string `json:"status"`
 }
 
-func NewHub(db *gorm.DB) *Hub {
+func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 	return &Hub{
-		clients:                 make(map[string]*ClientConnection),
-		clientsByUserID:         make(map[int][]*ClientConnection),
-		register:                make(chan *ClientConnection),
-		unregister:              make(chan *ClientConnection),
-		broadcast:               make(chan Message),
-		userStor:                stor.NewGormUserStor(db),
-		projectStor:             stor.NewGormProjectStor(db),
-		partialTransferFileStor: stor.NewGormPartialTransferFileStor(db),
+		clients:                  make(map[string]*ClientConnection),
+		clientsByUserID:          make(map[int][]*ClientConnection),
+		register:                 make(chan *ClientConnection),
+		unregister:               make(chan *ClientConnection),
+		broadcast:                make(chan Message),
+		userStor:                 stor.NewGormUserStor(db),
+		projectStor:              stor.NewGormProjectStor(db),
+		remoteClientStor:         stor.NewGormRemoteClientStor(db),
+		fileStor:                 stor.NewGormFileStor(db, mcfsDir),
+		remoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
+		partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
 	}
 }
 
@@ -166,16 +171,24 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	remoteClient, err := h.getOrCreateRemoteClient(clientConnectionAttrs, user)
+	if err != nil {
+		fmt.Println("Error getting or creating remote client")
+		log.Printf("Error getting or creating remote client: %v", err)
+		return
+	}
+
 	fmt.Println("Creating client!")
 	client := &ClientConnection{
-		ID:       clientConnectionAttrs.ClientID,
-		Hostname: clientConnectionAttrs.Hostname,
-		Type:     clientConnectionAttrs.Type,
-		User:     user,
-		Projects: h.commaSeparatedProjectIDsToProjects(clientConnectionAttrs.Projects),
-		Conn:     conn,
-		Send:     make(chan Message, 256),
-		Hub:      hub,
+		ID:           clientConnectionAttrs.ClientID,
+		Hostname:     clientConnectionAttrs.Hostname,
+		Type:         clientConnectionAttrs.Type,
+		RemoteClient: remoteClient,
+		User:         user,
+		Projects:     h.commaSeparatedProjectIDsToProjects(clientConnectionAttrs.Projects),
+		Conn:         conn,
+		Send:         make(chan Message, 256),
+		Hub:          hub,
 	}
 
 	client.Hub.register <- client
@@ -456,6 +469,25 @@ func (h *Hub) extractTokenFromAuthHeader(authHeader string) (string, error) {
 	}
 
 	return token, nil
+}
+
+func (h *Hub) getOrCreateRemoteClient(attrs *ConnectionAttributes, user *mcmodel.User) (*mcmodel.RemoteClient, error) {
+	remoteClient, err := h.remoteClientStor.GetRemoteClientByClientID(attrs.ClientID)
+	if err == nil {
+		// Found the remote client
+		return remoteClient, nil
+	}
+
+	// remote client not found, create it
+	remoteClient = &mcmodel.RemoteClient{
+		ClientID: attrs.ClientID,
+		Hostname: attrs.Hostname,
+		Name:     attrs.Hostname,
+		Type:     attrs.Type,
+		OwnerID:  user.ID,
+	}
+
+	return h.remoteClientStor.CreateRemoteClient(remoteClient)
 }
 
 func getClientConnectionAttributes(r *http.Request) *ConnectionAttributes {

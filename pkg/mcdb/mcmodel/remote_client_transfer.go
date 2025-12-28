@@ -8,6 +8,7 @@ type RemoteClientTransfer struct {
 	ID               int           `json:"id"`
 	UUID             string        `json:"uuid"`
 	State            string        `json:"state"`
+	TransferID       string        `json:"transfer_id"`
 	TransferType     string        `json:"transfer_type"`
 	ExpectedSize     uint64        `json:"expected_size"`
 	ExpectedChecksum string        `json:"expected_checksum"`

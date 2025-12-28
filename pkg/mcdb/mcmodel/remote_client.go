@@ -11,9 +11,12 @@ type RemoteClient struct {
 	ClientID              string                 `json:"client_id"`
 	Hostname              string                 `json:"hostname"`
 	Name                  string                 `json:"name"`
+	Version               string                 `json:"version"`
+	Type                  string                 `json:"type"`
 	RemoteClientTransfers []RemoteClientTransfer `gorm:"foreignKey:RemoteClientID"`
 	OwnerID               int                    `json:"owner_id"`
 	Owner                 *User                  `gorm:"foreignKey:OwnerID;references:ID"`
+	LastSeenAt            time.Time              `json:"last_seen_at"`
 	CreatedAt             time.Time              `json:"created_at"`
 	UpdatedAt             time.Time              `json:"updated_at"`
 }

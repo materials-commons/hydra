@@ -7,21 +7,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
 type FileTransfer struct {
-	TransferID   string
-	File         *os.File
-	ProjectID    int
-	DirectoryID  int
-	FileName     string
-	FilePath     string
-	ExpectedSize int64
-	BytesWritten int64
-	ChunkSize    int
-	NextChunkSeq int
-	LastActivity time.Time
+	TransferID           string
+	File                 *os.File
+	ProjectID            int
+	DirectoryID          int
+	FileID               int
+	OwnerID              int
+	remoteClientTransfer *mcmodel.RemoteClientTransfer
+	FileName             string
+	FilePath             string
+	ExpectedSize         int64
+	BytesWritten         int64
+	ChunkSize            int
+	NextChunkSeq         int
+	LastActivity         time.Time
 
 	// For periodic DB updates
 	chunksSinceUpdate int
