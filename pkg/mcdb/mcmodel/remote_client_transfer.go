@@ -12,6 +12,7 @@ type RemoteClientTransfer struct {
 	TransferType     string        `json:"transfer_type"`
 	ExpectedSize     uint64        `json:"expected_size"`
 	ExpectedChecksum string        `json:"expected_checksum"`
+	ChunkSize        int           `json:"chunk_size"`
 	RemotePath       string        `json:"remote_path"`
 	RemoteClientID   int           `json:"remote_client_id"`
 	RemoteClient     *RemoteClient `gorm:"foreignKey:RemoteClientID;references:ID"`

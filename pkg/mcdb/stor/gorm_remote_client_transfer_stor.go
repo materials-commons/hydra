@@ -35,7 +35,9 @@ func (s *GormRemoteClientTransferStor) CreateRemoteClientTransfer(clientTransfer
 
 func (s *GormRemoteClientTransferStor) GetRemoteClientTransferByTransferID(transferID string) (*mcmodel.RemoteClientTransfer, error) {
 	var transfer mcmodel.RemoteClientTransfer
-	err := s.db.Where("transfer_id = ?", transferID).First(&transfer).Error
+	err := s.db.Preload("File.Directory").
+		Where("transfer_id = ?", transferID).
+		First(&transfer).Error
 	if err != nil {
 		return nil, err
 	}

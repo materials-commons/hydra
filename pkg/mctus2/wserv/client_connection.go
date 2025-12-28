@@ -335,10 +335,11 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		TransferID:       transferID,
 		ExpectedSize:     uint64(fileSize),
 		ExpectedChecksum: checksum,
-		RemotePath:       filePath, // have the client send this
+		RemotePath:       filePath, // Have the client send this
 		OwnerID:          c.User.ID,
 		ProjectID:        projectID,
 		FileID:           f.ID,
+		ChunkSize:        chunkSize,
 		RemoteClientID:   c.RemoteClient.ID,
 	}
 
@@ -522,10 +523,11 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	transfer.mu.Lock()
 	defer transfer.mu.Unlock()
 
-	// Flush and close file
+	// Flush and close the file
 	if err := transfer.File.Sync(); err != nil {
 		return fmt.Errorf("sync error: %v", err)
 	}
+
 	transfer.File.Close()
 
 	// Verify file size
@@ -539,36 +541,26 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 			transfer.ExpectedSize, fileInfo.Size())
 	}
 
+	// TODO: Update to calculate the hash as we write chunks. Only do this if the hash state is out of date.
 	hash, err := calculateMD5(transfer.FilePath)
 	if err != nil {
 		log.Printf("Warning: could not calculate hash: %v", err)
 	}
 
-	// Update DB record to "complete"
-	if err := c.Hub.partialTransferFileStor.MarkComplete(transfer.TransferID, hash); err != nil {
-		return fmt.Errorf("database error: %v", err)
+	if hash != transfer.remoteClientTransfer.ExpectedChecksum {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, hash)
 	}
 
-	// Create entry in main files table (for Laravel UI)
-	file := &mcmodel.File{
-		Name:        transfer.FileName,
-		Path:        transfer.FilePath,
-		Size:        uint64(fileInfo.Size()),
-		OwnerID:     c.User.ID,
-		ProjectID:   transfer.ProjectID,
-		DirectoryID: transfer.DirectoryID,
-		//TransferID:   transfer.TransferID,
-		//UploadStatus: "complete",
-		MimeType: mc.DetectMimeType(transfer.FilePath),
-		Checksum: hash,
+	f, err := c.Hub.fileStor.GetFileByID(transfer.FileID)
+	if err != nil {
+		return fmt.Errorf("file not found: %v", err)
 	}
 
-	_ = file
-
-	_, err = c.Hub.fileStor.CreateFile(transfer.FileName, transfer.ProjectID, transfer.DirectoryID, c.User.ID, mc.DetectMimeType(transfer.FilePath))
+	// Update the file entry.
+	_, err = c.Hub.fileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.conversionStor)
 
 	if err != nil {
-		return fmt.Errorf("file creation error: %v", err)
+		return fmt.Errorf("file update error: %v", err)
 	}
 
 	return nil
@@ -601,34 +593,33 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 	}
 	c.transferMu.RUnlock()
 
-	// Load from database
-	partialFile, err := c.Hub.partialTransferFileStor.GetPartialTransferFileByID(transferID)
+	remoteTransfer, err := c.Hub.remoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
 	if err != nil {
 		c.sendTransferReject(transferID, "transfer not found")
 		return
 	}
 
 	// Verify this transfer belongs to this user
-	if partialFile.UserID != c.User.ID {
+	if remoteTransfer.OwnerID != c.User.ID {
 		c.sendTransferReject(transferID, "unauthorized")
 		return
 	}
 
 	// Check if already complete
-	if partialFile.Status == "complete" {
+	if remoteTransfer.State == "complete" {
 		c.sendTransferReject(transferID, "already completed")
 		return
 	}
 
 	// Verify file exists on disk
-	fileInfo, err := os.Stat(partialFile.FilePath)
+	fileInfo, err := os.Stat(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "file not found on disk")
 		return
 	}
 
-	// Open file for writing
-	file, err := os.OpenFile(partialFile.FilePath, os.O_WRONLY, 0644)
+	// Open the file for writing
+	file, err := os.OpenFile(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()), os.O_WRONLY, 0644)
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot open file")
 		return
@@ -636,19 +627,19 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 
 	// Calculate where to resume from
 	actualSize := fileInfo.Size()
-	nextChunkSeq := int(actualSize / int64(partialFile.ChunkSize))
+	nextChunkSeq := int(actualSize / int64(remoteTransfer.ChunkSize))
 
-	// Create in-memory transfer state
+	// Create the in-memory transfer state
 	transfer := &FileTransfer{
 		TransferID:   transferID,
-		ProjectID:    partialFile.ProjectID,
-		DirectoryID:  partialFile.DirectoryID,
-		FileName:     partialFile.FileName,
-		FilePath:     partialFile.FilePath,
+		ProjectID:    remoteTransfer.ProjectID,
+		DirectoryID:  remoteTransfer.File.DirectoryID,
+		FileName:     filepath.Base(remoteTransfer.RemotePath),
+		FilePath:     remoteTransfer.RemotePath,
 		File:         file,
-		ExpectedSize: partialFile.ExpectedSize,
+		ExpectedSize: int64(remoteTransfer.ExpectedSize),
 		BytesWritten: actualSize,
-		ChunkSize:    partialFile.ChunkSize,
+		ChunkSize:    remoteTransfer.ChunkSize,
 		NextChunkSeq: nextChunkSeq,
 		LastActivity: time.Now(),
 		lastDBUpdate: time.Now(),

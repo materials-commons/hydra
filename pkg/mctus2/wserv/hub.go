@@ -28,6 +28,7 @@ type Hub struct {
 	fileStor                 stor.FileStor
 	remoteClientStor         stor.RemoteClientStor
 	remoteClientTransferStor stor.RemoteClientTransferStor
+	conversionStor           stor.ConversionStor
 	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
 }
 
@@ -64,6 +65,7 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 		remoteClientStor:         stor.NewGormRemoteClientStor(db),
 		fileStor:                 stor.NewGormFileStor(db, mcfsDir),
 		remoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
+		conversionStor:           stor.NewGormConversionStor(db),
 		partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
 	}
 }
