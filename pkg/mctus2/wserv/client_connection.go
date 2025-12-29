@@ -365,11 +365,12 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		return
 	}
 
-	// Create in-memory transfer state
+	// Create the in-memory transfer state
 	transfer := &FileTransfer{
 		TransferID:           transferID,
 		ProjectID:            projectID,
 		DirectoryID:          dir.ID,
+		FileID:               f.ID,
 		FileName:             fileName,
 		FilePath:             filePath,
 		File:                 file,
@@ -406,8 +407,8 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 }
 
 func (c *ClientConnection) handleFileChunk(msg []byte) {
-	// Parse header. The first part of the mesage is a newline terminated JSON string. After
-	// that comes the bytes for the file.
+	// Parse header. The first part of the message is a newline terminated JSON string. After
+	// that come the bytes for the file.
 	newLineIdx := bytes.IndexByte(msg, '\n')
 	if newLineIdx == -1 {
 		log.Printf("Error parsing chunk header: %s", msg)
@@ -432,7 +433,7 @@ func (c *ClientConnection) handleFileChunk(msg []byte) {
 		return
 	}
 
-	// Write chunk to the underlying file
+	// Write the chunk to the underlying file
 	if err := transfer.writeChunk(header.Sequence, chunkBytes); err != nil {
 		log.Printf("Error writing chunk: %v", err)
 		c.sendChunkError(header.TransferID, header.Sequence, "transfer not found")
@@ -483,6 +484,11 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 		log.Printf("Error finalizing transfer %s: %v", transferID, err)
 		c.sendTransferError(transferID, err.Error())
 		return
+	}
+
+	// Delete the transfer request from the database.
+	if err := c.Hub.remoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
+		log.Printf("Error deleting transfer %s: %v", transferID, err)
 	}
 
 	// Send success response
@@ -579,6 +585,10 @@ func (c *ClientConnection) sendTransferError(transferID, reason string) {
 	}
 }
 
+// handleTransferResume will resume an upload request. The easy case is that the transfer is still
+// in the c.activeTransfers map. If it's not, we need to check the database to see if the transfer
+// exists. If it does, we need to check that the user owns the transfer and that the transfer hasn't
+// already been completed. If all of those checks pass, we can open the file and resume writing.
 func (c *ClientConnection) handleTransferResume(msg Message) {
 	payload := msg.Payload.(map[string]interface{})
 	transferID, _ := payload["transfer_id"].(string)
@@ -587,12 +597,14 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 	c.transferMu.RLock()
 	if _, exists := c.activeTransfers[transferID]; exists {
 		c.transferMu.RUnlock()
-		// Already active, just return current state
+		// Already active, just return the current state
 		c.sendResumeResponse(transferID, c.activeTransfers[transferID])
 		return
 	}
 	c.transferMu.RUnlock()
 
+	// If we are here, then the transfer wasn't in the activeTransfers map. So lets retrieve it
+	// from the database and reset up the state.
 	remoteTransfer, err := c.Hub.remoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
 	if err != nil {
 		c.sendTransferReject(transferID, "transfer not found")
@@ -612,6 +624,7 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 	}
 
 	// Verify file exists on disk
+	// TODO: We could just re-create the file and have the resume start from the beginning.
 	fileInfo, err := os.Stat(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "file not found on disk")
@@ -631,18 +644,19 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 
 	// Create the in-memory transfer state
 	transfer := &FileTransfer{
-		TransferID:   transferID,
-		ProjectID:    remoteTransfer.ProjectID,
-		DirectoryID:  remoteTransfer.File.DirectoryID,
-		FileName:     filepath.Base(remoteTransfer.RemotePath),
-		FilePath:     remoteTransfer.RemotePath,
-		File:         file,
-		ExpectedSize: int64(remoteTransfer.ExpectedSize),
-		BytesWritten: actualSize,
-		ChunkSize:    remoteTransfer.ChunkSize,
-		NextChunkSeq: nextChunkSeq,
-		LastActivity: time.Now(),
-		lastDBUpdate: time.Now(),
+		TransferID:           transferID,
+		ProjectID:            remoteTransfer.ProjectID,
+		DirectoryID:          remoteTransfer.File.DirectoryID,
+		FileName:             filepath.Base(remoteTransfer.RemotePath),
+		FilePath:             remoteTransfer.RemotePath,
+		remoteClientTransfer: remoteTransfer,
+		File:                 file,
+		ExpectedSize:         int64(remoteTransfer.ExpectedSize),
+		BytesWritten:         actualSize,
+		ChunkSize:            remoteTransfer.ChunkSize,
+		NextChunkSeq:         nextChunkSeq,
+		LastActivity:         time.Now(),
+		lastDBUpdate:         time.Now(),
 	}
 
 	c.transferMu.Lock()
@@ -677,9 +691,14 @@ func (c *ClientConnection) sendResumeResponse(transferID string, transfer *FileT
 	}
 }
 
+// handleTransferCancel will cancel a transfer request. Cancelling a transfer request
+// will remove the following items from the database: RemoteClientTransfer, File associated
+// with the RemoteClientTransfer. Note that if a directory was created for this transfer, it
+// will be left in place. Lastly, this function will remove the underlying filesystem file
+// this transfer was writing to.
 func (c *ClientConnection) handleTransferCancel(msg Message) {
 	payload := msg.Payload.(map[string]interface{})
-	transferID, _ := payload["transfer_id"].(string)
+	transferID, _ := payload["transfer_id"].(string) // TODO: Error check this
 
 	// Remove from active transfers
 	c.transferMu.Lock()
@@ -690,23 +709,26 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 	c.transferMu.Unlock()
 
 	if !exists {
-		// Not active, but might exist in DB
-		c.Hub.partialTransferFileStor.MarkFailed(transferID, "cancelled by user")
+		// Nothing to do. Everything should have been cleaned up.
 		return
 	}
 
-	// Close and delete file
+	// Close the OS file and delete it. We grab the lock on the transfer just in case another
+	// thread is accessing the transfer.
 	transfer.mu.Lock()
 	transfer.File.Close()
-	filePath := transfer.FilePath
 	transfer.mu.Unlock()
+	// Lets, remove the underlying filesystem file. We can safely ignore the error here.
+	_ = os.Remove(transfer.remoteClientTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()))
 
-	if err := os.Remove(filePath); err != nil {
-		log.Printf("Error removing cancelled transfer file: %v", err)
+	// Delete the RemoteClientTransfer, and the File from the database.
+	if err := c.Hub.remoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
+		log.Printf("Error deleting transfer %s: %v", transferID, err)
 	}
 
-	// Update DB
-	c.Hub.partialTransferFileStor.MarkFailed(transferID, "cancelled by user")
+	if err := c.Hub.fileStor.DeleteFileByID(transfer.remoteClientTransfer.File.ID); err != nil {
+		log.Printf("Error deleting file %d: %v", transfer.remoteClientTransfer.File.ID, err)
+	}
 
 	// Send confirmation
 	c.Send <- Message{
@@ -722,50 +744,6 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 	log.Printf("Transfer cancelled: %s", transferID)
 }
 
-//func (c *ClientConnection) handleTransferResume(transferID string) {
-//	// Load from DB
-//	partial, err := c.Hub.partialTransferFileStor.GetPartialTransferFileByID(transferID)
-//	if err != nil {
-//		c.sendTransferReject(transferID, "not found")
-//		return
-//	}
-//
-//	// Check actual file size on disk
-//	fileInfo, err := os.Stat(partial.FilePath)
-//	if err != nil {
-//		c.sendTransferReject(transferID, "file missing")
-//		return
-//	}
-//
-//	// Open file in append mode
-//	file, err := os.OpenFile(partial.FilePath, os.O_WRONLY, 0644)
-//	if err != nil {
-//		c.sendTransferReject(transferID, "cannot open file")
-//		return
-//	}
-//
-//	// Create in-memory transfer state
-//	transfer := &FileTransfer{
-//		TransferID:   transferID,
-//		File:         file,
-//		ExpectedSize: partial.ExpectedSize,
-//		BytesWritten: fileInfo.Size(),
-//		NextChunkSeq: int(fileInfo.Size() / int64(partial.ChunkSize)),
-//	}
-//
-//	c.activeTransfers[transferID] = transfer
-//
-//	// Tell client where to resume from
-//	c.Send <- Message{
-//		Command: MsgTransferResumeResponse,
-//		Payload: map[string]interface{}{
-//			"transfer_id":       transferID,
-//			"resume_from_byte":  fileInfo.Size(),
-//			"resume_from_chunk": transfer.NextChunkSeq,
-//		},
-//	}
-//}
-
 func (c *ClientConnection) sendTransferReject(transferID, reason string) {
 	c.Send <- Message{
 		Command:   MsgTransferReject,
@@ -779,9 +757,19 @@ func (c *ClientConnection) sendTransferReject(transferID, reason string) {
 	}
 }
 
-func (c *ClientConnection) sendTransferAccept(transferID string) {
-
-}
+//func (c *ClientConnection) sendTransferAccept(transferID string) {
+//	c.Send <- Message{
+//		Command:   MsgTransferAccept,
+//		ID:        msg.ID,
+//		Timestamp: time.Now(),
+//		ClientID:  c.ID,
+//		Payload: map[string]interface{}{
+//			"transfer_id":     transferID,
+//			"chunk_size":      int(chunkSize),
+//			"expected_chunks": int(fileSize) / int(chunkSize),
+//		},
+//	}
+//}
 
 type ProjectItem struct {
 	Directory string `json:"directory"`

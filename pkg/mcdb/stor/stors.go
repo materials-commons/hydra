@@ -30,6 +30,7 @@ type FileStor interface {
 	SetFileHealthMissing(file *mcmodel.File, determinedBy string, source string) (*mcmodel.File, error)
 	SetFileHealthFixed(file *mcmodel.File, fixedBy string, source string) (*mcmodel.File, error)
 	FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error)
+	DeleteFileByID(ID int) error
 	Root() string
 }
 
@@ -81,6 +82,7 @@ type RemoteClientTransferStor interface {
 	CreateRemoteClientTransfer(clientTransfer *mcmodel.RemoteClientTransfer) (*mcmodel.RemoteClientTransfer, error)
 	GetRemoteClientTransferByTransferID(transferID string) (*mcmodel.RemoteClientTransfer, error)
 	UpdateRemoteClientTransferState(UUID string, state string) (*mcmodel.RemoteClientTransfer, error)
+	DeleteRemoteClientTransferByTransferID(transferID string) error
 	GetAllTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
 	GetAllUploadTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)
 	GetAllDownloadTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error)

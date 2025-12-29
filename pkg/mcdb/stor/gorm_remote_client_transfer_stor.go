@@ -1,6 +1,8 @@
 package stor
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/go-uuid"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
@@ -54,6 +56,16 @@ func (s *GormRemoteClientTransferStor) UpdateRemoteClientTransferState(transferI
 	}
 
 	return s.GetRemoteClientTransferByTransferID(transferID)
+}
+
+func (s *GormRemoteClientTransferStor) DeleteRemoteClientTransferByTransferID(transferID string) error {
+	if transferID == "" {
+		return fmt.Errorf("transferID cannot be empty")
+	}
+
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Where("transfer_id = ?", transferID).Delete(&mcmodel.RemoteClientTransfer{}).Error
+	})
 }
 
 func (s *GormRemoteClientTransferStor) GetAllTransfersForRemoteClient(remoteClientID int) ([]mcmodel.RemoteClientTransfer, error) {

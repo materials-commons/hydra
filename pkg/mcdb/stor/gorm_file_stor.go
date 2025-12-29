@@ -451,14 +451,14 @@ func (s *GormFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy str
 	}
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		err := tx.Model(file).
-			Updates(map[string]interface{}{
-				"health":                     "missing",
-				"file_missing_at":            time.Now(),
-				"file_missing_determined_by": determinedBy,
-				"health_fixed_at":            gorm.Expr("NULL"),
-				"health_fixed_by":            gorm.Expr("NULL"),
-				"upload_source":              source,
-			}).Error
+				Updates(map[string]interface{}{
+					"health":                     "missing",
+					"file_missing_at":            time.Now(),
+					"file_missing_determined_by": determinedBy,
+					"health_fixed_at":            gorm.Expr("NULL"),
+					"health_fixed_by":            gorm.Expr("NULL"),
+					"upload_source":              source,
+				}).Error
 
 		if err != nil {
 			log.Errorf("failed setting file %d health to missing: %s", file.ID, err)
@@ -467,13 +467,13 @@ func (s *GormFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy str
 
 		err = tx.Model(&mcmodel.File{}).
 			Where("uses_uuid = ?", file.UUIDForUses()).
-			Updates(map[string]interface{}{
-				"health":                     "missing",
-				"file_missing_at":            time.Now(),
-				"file_missing_determined_by": determinedBy,
-				"health_fixed_at":            gorm.Expr("NULL"),
-				"health_fixed_by":            gorm.Expr("NULL"),
-			}).Error
+				Updates(map[string]interface{}{
+					"health":                     "missing",
+					"file_missing_at":            time.Now(),
+					"file_missing_determined_by": determinedBy,
+					"health_fixed_at":            gorm.Expr("NULL"),
+					"health_fixed_by":            gorm.Expr("NULL"),
+				}).Error
 
 		if err != nil {
 			log.Errorf("failed setting file %d uses_uuid %s health to missing: %s", file.ID, file.UsesUUID, err)
@@ -491,14 +491,14 @@ func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, so
 	}
 	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
 		err := tx.Model(file).
-			Updates(map[string]interface{}{
-				"health":                     "fixed",
-				"health_fixed_by":            fixedBy,
-				"health_fixed_at":            time.Now(),
-				"file_missing_at":            gorm.Expr("NULL"),
-				"file_missing_determined_by": gorm.Expr("NULL"),
-				"upload_source":              source,
-			}).Error
+				Updates(map[string]interface{}{
+					"health":                     "fixed",
+					"health_fixed_by":            fixedBy,
+					"health_fixed_at":            time.Now(),
+					"file_missing_at":            gorm.Expr("NULL"),
+					"file_missing_determined_by": gorm.Expr("NULL"),
+					"upload_source":              source,
+				}).Error
 
 		if err != nil {
 			log.Errorf("failed setting file %d health to fixed: %s", file.ID, err)
@@ -507,13 +507,13 @@ func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, so
 
 		err = tx.Model(&mcmodel.File{}).
 			Where("uses_uuid = ?", file.UUIDForUses()).
-			Updates(map[string]interface{}{
-				"health":                     "fixed",
-				"health_fixed_by":            fixedBy,
-				"health_fixed_at":            time.Now(),
-				"file_missing_at":            gorm.Expr("NULL"),
-				"file_missing_determined_by": gorm.Expr("NULL"),
-			}).Error
+				Updates(map[string]interface{}{
+					"health":                     "fixed",
+					"health_fixed_by":            fixedBy,
+					"health_fixed_at":            time.Now(),
+					"file_missing_at":            gorm.Expr("NULL"),
+					"file_missing_determined_by": gorm.Expr("NULL"),
+				}).Error
 
 		if err != nil {
 			log.Errorf("failed setting file %d uses_uuid %s health to fixed: %s", file.ID, file.UUIDForUses(), err)
@@ -537,4 +537,10 @@ func (s *GormFileStor) FindMatchingFileByChecksum(checksum string) (*mcmodel.Fil
 	}
 
 	return &file, nil
+}
+
+func (s *GormFileStor) DeleteFileByID(ID int) error {
+	return WithTxRetry(s.db, func(tx *gorm.DB) error {
+		return tx.Delete(&mcmodel.File{}, ID).Error
+	})
 }
