@@ -330,13 +330,13 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("  clientID: %s\n", clientID)
 	msg := Message{
 		Command:   "UPLOAD_FILE",
-		ID:        "ui",
+		ID:        "ui", // Should this be the ID of the initiating client (Web UI)?
 		Timestamp: time.Now(),
 		ClientID:  clientID,
 		Payload: map[string]any{
 			"file_path":    "/home/gtarcea/uploadme.txt",
+			"project_path": "/uploadme.txt",
 			"project_id":   438,
-			"directory_id": 143481,
 		},
 	}
 

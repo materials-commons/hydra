@@ -2,6 +2,8 @@ package mcmodel
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type RemoteClientTransfer struct {
@@ -25,4 +27,18 @@ type RemoteClientTransfer struct {
 	LastActiveAt     time.Time     `json:"last_active_at"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+func (r *RemoteClientTransfer) BeforeCreate(tx *gorm.DB) (err error) {
+	if r.LastActiveAt.IsZero() {
+		r.LastActiveAt = time.Now()
+	}
+	return
+}
+
+func (r *RemoteClientTransfer) BeforeUpdate(tx *gorm.DB) (err error) {
+	if r.LastActiveAt.IsZero() {
+		r.LastActiveAt = time.Now()
+	}
+	return
 }

@@ -281,12 +281,13 @@ func (c *ClientConnection) sendChunkError(transferID string, sequence int, reaso
 func (c *ClientConnection) handleTransferInit(msg Message) {
 	// TODO: This message should be a type and we have a function that deserializes and validates it.
 	payload := msg.Payload.(map[string]interface{})
+	fmt.Printf("handleTransferInit: %+v\n", payload)
 
 	// The client sends details on the file to transfer, such as the name, size, and expected hash. It also
 	// send the project and directory path to upload the file to. The client can optionally send the chunk
 	// size. If it doesn't send a chunk size, then the server can set it or use the default (5mb).
 	transferID, _ := payload["transfer_id"].(string)
-	projectFilePath := payload["project_file_path"].(string)
+	projectFilePath := payload["project_path"].(string)
 	filePath, _ := payload["file_path"].(string)
 	// JSON numbers are float64 that we cast to an int
 	fileSize := int64(payload["file_size"].(float64))
@@ -345,11 +346,10 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	remoteClientTransfer, err = c.Hub.remoteClientTransferStor.CreateRemoteClientTransfer(remoteClientTransfer)
 	if err != nil {
+		fmt.Printf("Error creating remote client transfer: %v\n", err)
 		c.sendTransferReject(transferID, "cannot create transfer")
 		return
 	}
-
-	_ = remoteClientTransfer
 
 	// Create the file we are writing to
 	file, err := f.CreateReturningHandleToUnderlyingFile(c.Hub.fileStor.Root())

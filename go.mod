@@ -1,13 +1,12 @@
 module github.com/materials-commons/hydra
 
-go 1.22.1
-
-toolchain go1.22.7
+go 1.25.5
 
 require (
 	github.com/apex/log v1.9.0
 	github.com/charmbracelet/ssh v0.0.0-20240725163421-eb71b85b27aa
 	github.com/charmbracelet/wish v1.4.1
+	github.com/feather-lang/feather v0.0.0-20260101175138-7ac5c3f88fc1
 	github.com/gliderlabs/ssh v0.3.7
 	github.com/go-resty/resty/v2 v2.14.0
 	github.com/gorilla/websocket v1.5.3
@@ -19,7 +18,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.6
 	github.com/saracen/walker v0.1.4
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0
@@ -86,7 +85,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/tus/lockfile v1.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
