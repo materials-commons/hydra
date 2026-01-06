@@ -23,6 +23,9 @@ type Hub struct {
 	unregister               chan *ClientConnection
 	broadcast                chan Message
 	mu                       sync.RWMutex
+	userBroadcast            chan UserMessage
+	sseConnections           map[int]map[string]chan Message // UserID -> ConnectionID -> channel
+	sseConnectionsMu         sync.RWMutex
 	userStor                 stor.UserStor
 	projectStor              stor.ProjectStor
 	fileStor                 stor.FileStor
@@ -30,6 +33,12 @@ type Hub struct {
 	remoteClientTransferStor stor.RemoteClientTransferStor
 	conversionStor           stor.ConversionStor
 	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
+}
+
+type UserMessage struct {
+	UserID     int     `json:"user_id"`
+	ClientType string  `json:"client_type"` // Filter by client type (blank = all)
+	Message    Message `json:"message"`
 }
 
 type ConnectionAttributes struct {
@@ -57,9 +66,11 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 	return &Hub{
 		clients:                  make(map[string]*ClientConnection),
 		clientsByUserID:          make(map[int][]*ClientConnection),
+		sseConnections:           make(map[int]map[string]chan Message),
 		register:                 make(chan *ClientConnection),
 		unregister:               make(chan *ClientConnection),
 		broadcast:                make(chan Message),
+		userBroadcast:            make(chan UserMessage, 100), // Buffered
 		userStor:                 stor.NewGormUserStor(db),
 		projectStor:              stor.NewGormProjectStor(db),
 		remoteClientStor:         stor.NewGormRemoteClientStor(db),
@@ -122,6 +133,11 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case userMessage := <-h.userBroadcast:
+			fmt.Println("User broadcast!")
+			h.broadcastToUserWSClients(userMessage.UserID, userMessage.ClientType, userMessage.Message)
+			h.broadcastToUserSSEConnections(userMessage)
 		}
 	}
 }
@@ -214,6 +230,14 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message) {
+	h.userBroadcast <- UserMessage{
+		UserID:     userID,
+		ClientType: clientType,
+		Message:    msg,
+	}
+}
+
+func (h *Hub) broadcastToUserWSClients(userID int, clientType string, msg Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -230,6 +254,25 @@ func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message)
 				// Channel full, skip this client
 				log.Printf("Warning: could not send to client %s (channel full)", client.ID)
 			}
+		}
+	}
+}
+
+func (h *Hub) broadcastToUserSSEConnections(userMsg UserMessage) {
+	h.sseConnectionsMu.RLock()
+	defer h.sseConnectionsMu.RUnlock()
+
+	sseConns, ok := h.sseConnections[userMsg.UserID]
+	if !ok {
+		return
+	}
+
+	for _, sseChan := range sseConns {
+		select {
+		case sseChan <- userMsg.Message:
+		default:
+			// SSE channel full, skip this client
+			log.Printf("Warning: could not send to SSE client %d (channel full)", userMsg.UserID)
 		}
 	}
 }
@@ -285,6 +328,8 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 	h.broadcast <- msg
 	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
 }
+
+/////////////////// REST API Handlers ///////////////////
 
 type ListClientsResp struct {
 	ClientID string `json:"client_id"`
@@ -394,6 +439,96 @@ func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(clients)
 }
+
+func (h *Hub) HandleSSE(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("HandleSSE")
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Ensure the user is authenticated
+	user, err := h.validateAuthAndGetUser(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// CORS for now
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Make sure we can do streaming
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// Create the event channel for this SSE connection
+	eventChan := make(chan Message, 256)
+	connectionID := fmt.Sprintf("sse-%d-%d", user.ID, time.Now().UnixNano())
+
+	// Register the connection
+	h.sseConnectionsMu.Lock()
+	if h.sseConnections[user.ID] == nil {
+		h.sseConnections[user.ID] = make(map[string]chan Message)
+	}
+	h.sseConnections[user.ID][connectionID] = eventChan
+	h.sseConnectionsMu.Unlock()
+
+	// Cleanup state on disconnect
+	defer func() {
+		h.sseConnectionsMu.Lock()
+		delete(h.sseConnections[user.ID], connectionID)
+		h.sseConnectionsMu.Unlock()
+		// Remove from sseConnections if the user has no more connections
+		if len(h.sseConnections[user.ID]) == 0 {
+			delete(h.sseConnections, user.ID)
+		}
+		close(eventChan)
+		log.Printf("SSE connection %s closed for user %d", connectionID, user.ID)
+	}()
+
+	// Send the initial connection acknowledgment
+	_, _ = fmt.Fprintf(w, "data: {\"event\":\"connected\",\"user_id\":%d}\n\n", user.ID)
+	flusher.Flush()
+
+	// Setup keep alive, then loop on select
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	ctx := r.Context() // detect if we are done
+	for {
+		select {
+		case <-ctx.Done():
+			return // disconnect
+
+		case msg := <-eventChan:
+			// Send the message
+			data, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("Error marshalling SSE message: %v", err)
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+
+		case <-ticker.C:
+			// Keep alive!
+			_, _ = fmt.Fprintf(w, "data: {\"event\":\"keepalive\"}\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+/////////////////// Utility functions/methods ///////////////////
 
 func getProjectIds(projects []*mcmodel.Project) []int {
 	ids := make([]int, len(projects))

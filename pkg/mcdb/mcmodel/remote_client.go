@@ -2,6 +2,8 @@ package mcmodel
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type RemoteClient struct {
@@ -23,4 +25,18 @@ type RemoteClient struct {
 
 func (RemoteClient) TableName() string {
 	return "remote_clients"
+}
+
+func (r *RemoteClient) BeforeCreate(tx *gorm.DB) (err error) {
+	if r.LastSeenAt.IsZero() {
+		r.LastSeenAt = time.Now()
+	}
+	return
+}
+
+func (r *RemoteClient) BeforeUpdate(tx *gorm.DB) (err error) {
+	if r.LastSeenAt.IsZero() {
+		r.LastSeenAt = time.Now()
+	}
+	return
 }
