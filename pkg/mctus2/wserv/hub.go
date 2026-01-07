@@ -37,7 +37,7 @@ type Hub struct {
 
 type UserMessage struct {
 	UserID     int     `json:"user_id"`
-	ClientType string  `json:"client_type"` // Filter by client type (blank = all)
+	ClientType string  `json:"client_type"` // Filter by client type (blank = all, sse, ws)
 	Message    Message `json:"message"`
 }
 
@@ -95,6 +95,9 @@ func (h *Hub) Run() {
 			for _, p := range client.Projects {
 				log.Printf("  %s (id: %d)", p.Name, p.ID)
 			}
+			h.broadcastToUserClients(client.User.ID, "sse", Message{
+				Command: "register",
+			})
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -119,6 +122,9 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.Unlock()
+			h.broadcastToUserClients(client.User.ID, "sse", Message{
+				Command: "unregister",
+			})
 			log.Printf("ClientConnection unregistered: %s", client.ID)
 
 		case message := <-h.broadcast:
