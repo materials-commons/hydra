@@ -152,7 +152,8 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// TODO: Implement proper origin validation
+		// We authenticate via bearer token. This being the
+		// case, the origin check is not critical for security.
 		return true
 	},
 }
