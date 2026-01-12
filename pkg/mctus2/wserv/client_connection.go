@@ -353,6 +353,7 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	// Create the file we are writing to
 	file, err := f.CreateReturningHandleToUnderlyingFile(c.Hub.fileStor.Root())
+	fmt.Printf("Created file at path: %+s\n", f.ToUnderlyingFilePath(c.Hub.fileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot create file")
 		return
@@ -548,7 +549,14 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	}
 
 	// TODO: Update to calculate the hash as we write chunks. Only do this if the hash state is out of date.
-	hash, err := calculateMD5(transfer.FilePath)
+
+	f, err := c.Hub.fileStor.GetFileByID(transfer.FileID)
+	if err != nil {
+		return fmt.Errorf("file not found: %v", err)
+	}
+
+	fmt.Printf("Calculating hash for %s\n", transfer.FilePath)
+	hash, err := calculateMD5(f.ToUnderlyingFilePath(c.Hub.fileStor.Root()))
 	if err != nil {
 		log.Printf("Warning: could not calculate hash: %v", err)
 	}
@@ -557,16 +565,18 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, hash)
 	}
 
-	f, err := c.Hub.fileStor.GetFileByID(transfer.FileID)
-	if err != nil {
-		return fmt.Errorf("file not found: %v", err)
-	}
-
 	// Update the file entry.
-	_, err = c.Hub.fileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.conversionStor)
+	switched, err := c.Hub.fileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.conversionStor)
+	fmt.Printf("Switched file %d: %v\n", f.ID, switched)
 
 	if err != nil {
 		return fmt.Errorf("file update error: %v", err)
+	}
+
+	if switched {
+		if err := os.Remove(f.ToUnderlyingFilePath(c.Hub.fileStor.Root())); err != nil {
+			fmt.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.fileStor.Root()), err)
+		}
 	}
 
 	return nil
