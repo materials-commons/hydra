@@ -386,8 +386,8 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 		Timestamp: time.Now(),
 		ClientID:  clientID,
 		Payload: map[string]any{
-			"file_path":    "/home/gtarcea/uploadme.txt",
-			"project_path": "/uploadme.txt",
+			"file_path":    "/home/gtarcea/proj/Aging/random_250MiB.bin",
+			"project_path": "/random_250MiB.bin",
 			"project_id":   438,
 		},
 	}
