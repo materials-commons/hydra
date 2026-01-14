@@ -53,8 +53,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8Yc
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f h1:Y/CXytFA4m6baUTXGLOoWe4PQhGxaX0KpnayAqC48p4=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f/go.mod h1:vw97MGsxSvLiUE2X8qFplwetxpGLQrlU1Q9AUEIzCaM=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
-github.com/feather-lang/feather v0.0.0-20260101175138-7ac5c3f88fc1 h1:BwIqr+w/t3K2YKIoej76qmb2V5HxPXV1qTprObmKajs=
-github.com/feather-lang/feather v0.0.0-20260101175138-7ac5c3f88fc1/go.mod h1:8LTN32gAYy2GTxCSMRDgK5QbyvdahV1ZvB27+yzYY1s=
+github.com/feather-lang/feather v0.0.0-20251227222940-8b153391b49e h1:bu6JpNQw+10eDEMuwXZzYqbPMOo8e5lPbOtuK/HoYG8=
+github.com/feather-lang/feather v0.0.0-20251227222940-8b153391b49e/go.mod h1:8LTN32gAYy2GTxCSMRDgK5QbyvdahV1ZvB27+yzYY1s=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
