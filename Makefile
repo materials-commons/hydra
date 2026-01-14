@@ -92,6 +92,9 @@ mql-cli:
 mqlservd:
 	(cd ./cmd/mqlservd; go build)
 
+mqld:
+	(cd ./cmd/mqld; go build)
+
 mql-deploy: deploy-mql-cli deploy-mql-server
 
 deploy-mql-cli: mql-cli
