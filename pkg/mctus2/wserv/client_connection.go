@@ -105,7 +105,7 @@ type ClientConnection struct {
 // readPump is the only method that reads from the websocket connection.
 func (c *ClientConnection) readPump() {
 	defer func() {
-		c.Hub.unregister <- c
+		c.Hub.wsManager.Unregister() <- c
 		_ = c.Conn.Close()
 	}()
 
@@ -182,11 +182,11 @@ func (c *ClientConnection) handleMessage(msg Message) {
 	switch msg.Command {
 	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
 		// Forward control messages to target client
-		c.Hub.broadcast <- msg
+		c.Hub.wsManager.Broadcast() <- msg
 
 	case MsgUploadProgress, MsgUploadComplete, MsgUploadFailed, MsgClientStatus:
 		// Forward status messages to target client
-		c.Hub.broadcast <- msg
+		c.Hub.wsManager.Broadcast() <- msg
 
 	case MsgListProjects:
 		c.handleListProjects(msg)
@@ -518,7 +518,7 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 			"file_size":   transfer.BytesWritten,
 		},
 	}
-	c.Hub.broadcastToUserClients(c.User.ID, "ui", completeMsg)
+	c.Hub.wsManager.BroadcastToUser(c.User.ID, "ui", completeMsg)
 
 	log.Printf("Transfer completed: %s (%s, %.2f MB)",
 		transferID, transfer.FileName, float64(transfer.BytesWritten)/1024/1024)

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -17,15 +16,12 @@ import (
 )
 
 type Hub struct {
-	clients                  map[string]*ClientConnection
-	clientsByUserID          map[int][]*ClientConnection
-	register                 chan *ClientConnection
-	unregister               chan *ClientConnection
-	broadcast                chan Message
-	mu                       sync.RWMutex
-	userBroadcast            chan UserMessage
-	sseConnections           map[int]map[string]chan Message // UserID -> ConnectionID -> channel
-	sseConnectionsMu         sync.RWMutex
+	// Connection managers
+	wsManager  *WebSocketManager
+	sseManager *SSEManager
+	rrManager  *RequestResponseManager
+
+	// Database storage interfaces
 	userStor                 stor.UserStor
 	projectStor              stor.ProjectStor
 	fileStor                 stor.FileStor
@@ -64,13 +60,12 @@ type HubCommandResponse struct {
 
 func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 	return &Hub{
-		clients:                  make(map[string]*ClientConnection),
-		clientsByUserID:          make(map[int][]*ClientConnection),
-		sseConnections:           make(map[int]map[string]chan Message),
-		register:                 make(chan *ClientConnection),
-		unregister:               make(chan *ClientConnection),
-		broadcast:                make(chan Message),
-		userBroadcast:            make(chan UserMessage, 100), // Buffered
+		// Initialize connection managers
+		wsManager:  NewWebSocketManager(),
+		sseManager: NewSSEManager(),
+		rrManager:  NewRequestResponseManager(30 * time.Second), // 30s default timeout
+
+		// Initialize storage interfaces
 		userStor:                 stor.NewGormUserStor(db),
 		projectStor:              stor.NewGormProjectStor(db),
 		remoteClientStor:         stor.NewGormRemoteClientStor(db),
@@ -84,66 +79,33 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.register:
+		case client := <-h.wsManager.register:
 			fmt.Println("Registering client trying to get lock!")
-			h.mu.Lock()
-			h.clients[client.ID] = client
-			h.clientsByUserID[client.User.ID] = append(h.clientsByUserID[client.User.ID], client)
-			h.mu.Unlock()
-			log.Printf("ClientConnection registered: %s (type: %s), (host: %s), (userID: %d)", client.ID, client.Type, client.Hostname, client.User.ID)
-			log.Printf("With Projects:")
-			for _, p := range client.Projects {
-				log.Printf("  %s (id: %d)", p.Name, p.ID)
-			}
-			h.broadcastToUserClients(client.User.ID, "sse", Message{
+			h.wsManager.HandleRegister(client)
+
+			// Notify SSE clients about the new registration
+			h.sseManager.BroadcastToUser(client.User.ID, Message{
 				Command: "register",
 			})
 
-		case client := <-h.unregister:
-			h.mu.Lock()
-			if _, ok := h.clients[client.ID]; ok {
-				delete(h.clients, client.ID)
-				close(client.Send)
+		case client := <-h.wsManager.unregister:
+			h.wsManager.HandleUnregister(client)
 
-				// Remove from clientsByUserID
-				if userClients, ok := h.clientsByUserID[client.User.ID]; ok {
-					for i, c := range userClients {
-						if c.ID == client.ID {
-							// Delete the entry at index i
-							h.clientsByUserID[client.User.ID] = append(userClients[:i], userClients[i+1:]...)
-							break
-						}
-					}
+			// Cancel any pending requests for this client
+			h.rrManager.CancelRequestsForClient(client.ID)
 
-					// Clean up the map key if the user has no more clients
-					if len(h.clientsByUserID[client.User.ID]) == 0 {
-						delete(h.clientsByUserID, client.User.ID)
-					}
-				}
-			}
-			h.mu.Unlock()
-			h.broadcastToUserClients(client.User.ID, "sse", Message{
+			// Notify SSE clients about the unregistration
+			h.sseManager.BroadcastToUser(client.User.ID, Message{
 				Command: "unregister",
 			})
-			log.Printf("ClientConnection unregistered: %s", client.ID)
 
-		case message := <-h.broadcast:
-			h.mu.RLock()
-			targetID := message.ClientID
-			if client, ok := h.clients[targetID]; ok {
-				select {
-				case client.Send <- message:
-				default:
-					close(client.Send)
-					delete(h.clients, client.ID)
-				}
-			}
-			h.mu.RUnlock()
+		case message := <-h.wsManager.broadcast:
+			h.wsManager.HandleBroadcast(message)
 
-		case userMessage := <-h.userBroadcast:
+		case userMessage := <-h.wsManager.userBroadcast:
 			fmt.Println("User broadcast!")
-			h.broadcastToUserWSClients(userMessage.UserID, userMessage.ClientType, userMessage.Message)
-			h.broadcastToUserSSEConnections(userMessage)
+			h.wsManager.HandleUserBroadcast(userMessage)
+			h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
 		}
 	}
 }
@@ -158,7 +120,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// Extract bearer token from the Authorization header
 	fmt.Println("Connection!")
 
@@ -213,10 +175,10 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		Projects:     h.commaSeparatedProjectIDsToProjects(clientConnectionAttrs.Projects),
 		Conn:         conn,
 		Send:         make(chan Message, 256),
-		Hub:          hub,
+		Hub:          h,
 	}
 
-	client.Hub.register <- client
+	client.Hub.wsManager.Register() <- client
 	fmt.Println("Client registered!")
 
 	// Send connection acknowledgment
@@ -236,53 +198,17 @@ func (h *Hub) ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Client readPump and writePump started!")
 }
 
+// broadcastToUserClients sends a message to all clients (WebSocket and SSE) for a specific user.
 func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message) {
-	h.userBroadcast <- UserMessage{
+	// Send to WebSocket clients via the user broadcast channel
+	h.wsManager.UserBroadcast() <- UserMessage{
 		UserID:     userID,
 		ClientType: clientType,
 		Message:    msg,
 	}
 }
 
-func (h *Hub) broadcastToUserWSClients(userID int, clientType string, msg Message) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	userClients, ok := h.clientsByUserID[userID]
-	if !ok {
-		return
-	}
-
-	for _, client := range userClients {
-		if clientType == "" || client.Type == clientType {
-			select {
-			case client.Send <- msg:
-			default:
-				// Channel full, skip this client
-				log.Printf("Warning: could not send to client %s (channel full)", client.ID)
-			}
-		}
-	}
-}
-
-func (h *Hub) broadcastToUserSSEConnections(userMsg UserMessage) {
-	h.sseConnectionsMu.RLock()
-	defer h.sseConnectionsMu.RUnlock()
-
-	sseConns, ok := h.sseConnections[userMsg.UserID]
-	if !ok {
-		return
-	}
-
-	for _, sseChan := range sseConns {
-		select {
-		case sseChan <- userMsg.Message:
-		default:
-			// SSE channel full, skip this client
-			log.Printf("Warning: could not send to SSE client %d (channel full)", userMsg.UserID)
-		}
-	}
-}
+/////////////////// REST API Handlers ///////////////////
 
 // ****** NOTE ******
 // All REST endpoints are listening on localhost. The PHP app sends requests to them. The user is already
@@ -311,17 +237,18 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ensure the client exists, and is associated with the userID
-	h.mu.RLock()
-	c, exists := h.clients[req.ClientID]
-	h.mu.RUnlock()
-
-	if !exists {
-		_ = sendCommandResponse(w, HubCommandResponse{}, http.StatusNotFound)
+	// ensure the client exists and is associated with the userID
+	c := h.wsManager.GetClient(req.ClientID)
+	if c == nil {
+		http.Error(w, "Client not found", http.StatusNotFound)
+		fmt.Println("Client not found")
+		return
 	}
 
 	if c.User.ID != req.UserID {
-		_ = sendCommandResponse(w, HubCommandResponse{}, http.StatusForbidden)
+		http.Error(w, "User not allowed", http.StatusForbidden)
+		fmt.Println("User not allowed")
+		return
 	}
 
 	msg := Message{
@@ -332,11 +259,9 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 		Payload:   req.Payload,
 	}
 
-	h.broadcast <- msg
+	h.wsManager.Broadcast() <- msg
 	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
 }
-
-/////////////////// REST API Handlers ///////////////////
 
 type ListClientsResp struct {
 	ClientID string `json:"client_id"`
@@ -352,11 +277,9 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	clients := make([]ListClientsResp, 0, len(h.clients))
-	for id, client := range h.clients {
-
+	allClients := h.wsManager.GetAllClients()
+	clients := make([]ListClientsResp, 0, len(allClients))
+	for id, client := range allClients {
 		cr := ListClientsResp{
 			ClientID: id,
 			Type:     client.Type,
@@ -369,6 +292,14 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(clients)
+}
+
+func (h *Hub) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("HandleUploadFile")
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 }
 
 func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
@@ -392,16 +323,13 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	_, ok := h.clients[clientID]
-	if !ok {
+	if h.wsManager.GetClient(clientID) == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
 		fmt.Println("Client not found")
 		return
 	}
 
-	h.broadcast <- msg
+	h.wsManager.Broadcast() <- msg
 	_ = sendCommandResponse(w, HubCommandResponse{Command: "UPLOAD_FILE", Status: "ok"}, http.StatusOK)
 }
 
@@ -418,21 +346,9 @@ func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	clientsForUser, found := h.clientsByUserID[userID]
-	if !found {
-		empty := make([]ListClientsResp, 0)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(empty)
-		return
-	}
+	clientsForUser := h.wsManager.GetClientsForUser(userID)
 	clients := make([]ListClientsResp, 0, len(clientsForUser))
 	for _, client := range clientsForUser {
-		if client.User.ID != userID {
-			continue
-		}
-
 		cr := ListClientsResp{
 			ClientID: client.ID,
 			Type:     client.Type,
@@ -461,78 +377,8 @@ func (h *Hub) HandleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// CORS for now
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-	// Set SSE headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// Make sure we can do streaming
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	// Create the event channel for this SSE connection
-	eventChan := make(chan Message, 256)
-	connectionID := fmt.Sprintf("sse-%d-%d", user.ID, time.Now().UnixNano())
-
-	// Register the connection
-	h.sseConnectionsMu.Lock()
-	if h.sseConnections[user.ID] == nil {
-		h.sseConnections[user.ID] = make(map[string]chan Message)
-	}
-	h.sseConnections[user.ID][connectionID] = eventChan
-	h.sseConnectionsMu.Unlock()
-
-	// Cleanup state on disconnect
-	defer func() {
-		h.sseConnectionsMu.Lock()
-		delete(h.sseConnections[user.ID], connectionID)
-		h.sseConnectionsMu.Unlock()
-		// Remove from sseConnections if the user has no more connections
-		if len(h.sseConnections[user.ID]) == 0 {
-			delete(h.sseConnections, user.ID)
-		}
-		close(eventChan)
-		log.Printf("SSE connection %s closed for user %d", connectionID, user.ID)
-	}()
-
-	// Send the initial connection acknowledgment
-	_, _ = fmt.Fprintf(w, "data: {\"event\":\"connected\",\"user_id\":%d}\n\n", user.ID)
-	flusher.Flush()
-
-	// Setup keep alive, then loop on select
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	ctx := r.Context() // detect if we are done
-	for {
-		select {
-		case <-ctx.Done():
-			return // disconnect
-
-		case msg := <-eventChan:
-			// Send the message
-			data, err := json.Marshal(msg)
-			if err != nil {
-				log.Printf("Error marshalling SSE message: %v", err)
-				continue
-			}
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-
-		case <-ticker.C:
-			// Keep alive!
-			_, _ = fmt.Fprintf(w, "data: {\"event\":\"keepalive\"}\n\n")
-			flusher.Flush()
-		}
-	}
+	// Delegate to SSE manager
+	h.sseManager.HandleSSE(w, r, user)
 }
 
 /////////////////// Utility functions/methods ///////////////////
@@ -652,4 +498,21 @@ func getClientConnectionAttr(r *http.Request, headerAttr string, attr string) st
 		return r.URL.Query().Get(attr)
 	}
 	return val
+}
+
+func (h *Hub) GetConnectedClientsForUser(userID int) []ListClientsResp {
+	clientsForUser := h.wsManager.GetClientsForUser(userID)
+	clients := make([]ListClientsResp, 0, len(clientsForUser))
+	for _, client := range clientsForUser {
+		cr := ListClientsResp{
+			ClientID: client.ID,
+			Type:     client.Type,
+			Hostname: client.Hostname,
+			UserID:   client.User.ID,
+			Projects: getProjectIds(client.Projects),
+		}
+		clients = append(clients, cr)
+	}
+
+	return clients
 }

@@ -18,7 +18,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "mqld",
+	Use:   "mchubd",
 	Short: "The Material Commons Query Language Daemon",
 	Long: `The Material Commons Query Language Daemon is a service that provides a
 query language for accessing and manipulating data in the Material Commons

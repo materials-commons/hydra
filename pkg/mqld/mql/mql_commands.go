@@ -3,10 +3,12 @@ package mql
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
 	"github.com/olekukonko/tablewriter"
 	"gorm.io/gorm"
 )
@@ -16,14 +18,16 @@ type MQLCommands struct {
 	User    *mcmodel.User
 	db      *gorm.DB
 	interp  *feather.Interp
+	hub     *wserv.Hub
 }
 
-func NewMQLCommands(project *mcmodel.Project, user *mcmodel.User, db *gorm.DB, interp *feather.Interp) *MQLCommands {
+func NewMQLCommands(project *mcmodel.Project, user *mcmodel.User, db *gorm.DB, interp *feather.Interp, hub *wserv.Hub) *MQLCommands {
 	mql := &MQLCommands{
 		Project: project,
 		User:    user,
 		db:      db,
 		interp:  interp,
+		hub:     hub,
 	}
 
 	mql.registerCommands()
@@ -40,6 +44,7 @@ type MyObj struct {
 func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("querySamples", mql.querySamplesCommand)
 	mql.interp.RegisterCommand("samplesTable", mql.samplesTableCommand)
+	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
 }
 
 func (mql *MQLCommands) Run(query string) string {
@@ -103,6 +108,37 @@ func (mql *MQLCommands) samplesTableCommand(i *feather.Interp, cmd *feather.Obj,
 	table.Render()
 	result := buf.String()
 	return feather.OK(result)
+}
+
+func (mql *MQLCommands) listConnectedClientsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	//clients := mql.hub.Clients()
+	//result := fmt.Sprintf("Connected clients: %d", len(clients))
+	//return feather.OK(result)
+	clients := mql.hub.GetConnectedClientsForUser(mql.User.ID)
+
+	connectedClients := make([]string, 0, len(clients))
+
+	for _, client := range clients {
+		var sb strings.Builder
+		sb.WriteString("{ ")
+		for i, projectID := range client.Projects {
+			if i > 0 {
+				sb.WriteString(fmt.Sprintf(" %d", projectID))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", projectID))
+			}
+		}
+		sb.WriteString(" }")
+		connectedClients = append(connectedClients, fmt.Sprintf("host %s type %s client_id %s project_ids %s", client.Hostname, client.Type, client.ClientID, sb.String()))
+	}
+	return feather.OK(connectedClients)
+}
+
+func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 4 {
+		return feather.Error(fmt.Errorf("upload-file project_id host host_path project_path"))
+	}
+	return feather.OK("uploadFileCommand")
 }
 
 func (mql *MQLCommands) toList(what *feather.Obj) ([]*feather.Obj, error) {

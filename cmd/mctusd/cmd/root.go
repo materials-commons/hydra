@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/apex/log"
+	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mctus2"
 	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
+	"github.com/materials-commons/hydra/pkg/mqld/mql"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
 	"github.com/tus/tusd/v2/pkg/filelocker"
@@ -87,27 +91,62 @@ var rootCmd = &cobra.Command{
 		hub := wserv.NewHub(db, mcfsDir)
 		go hub.Run()
 
-		http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-			hub.ServeWS(hub, w, r)
-		})
+		//http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		//	hub.ServeWS(w, r)
+		//})
+		projectStor := stor.NewGormProjectStor(db)
+		userStor := stor.NewGormUserStor(db)
+
+		proj, err := projectStor.GetProjectByID(428)
+		if err != nil {
+			log.Fatalf("Unable to load project: %s", err)
+		}
+
+		user, err := userStor.GetUserByEmail("gtarcea@umich.edu")
+		if err != nil {
+			log.Fatalf("Unable to load user: %s", err)
+		}
+
+		interp := feather.New()
+		mqlCmd := mql.NewMQLCommands(proj, user, db, interp, hub)
 
 		hubMux := http.NewServeMux()
+
+		hubMux.HandleFunc("/mql", func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				Query string `json:"query"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			res := mqlCmd.Run(req.Query)
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, res)
+		})
+
 		hubMux.HandleFunc("/send-command", hub.HandleSendCommand)
 		hubMux.HandleFunc("/list-clients", hub.HandleListClients)
 		hubMux.HandleFunc("/list-clients-for-user/{id}", hub.HandleListClientsForUser)
 		hubMux.HandleFunc("/submit-test-upload/{client_id}", hub.HandleSubmitTestUpload)
 		hubMux.HandleFunc("/sse", hub.HandleSSE)
+		hubMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			hub.ServeWS(w, r)
+		})
 
 		// Start the hub REST API server on port 8559
-		go func() {
-			fmt.Printf("Hub REST API listening on port 8559\n")
-			if err := http.ListenAndServe(":8559", hubMux); err != nil {
-				log.Fatalf("unable to start hub REST API server: %s", err)
-			}
-		}()
+		//go func() {
+		//	fmt.Printf("Hub REST API listening on port 8559\n")
+		//	if err := http.ListenAndServe(":8559", hubMux); err != nil {
+		//		log.Fatalf("unable to start hub REST API server: %s", err)
+		//	}
+		//}()
 
 		fmt.Printf("Listening on port 8558\n")
-		err = http.ListenAndServe(":8558", nil)
+		err = http.ListenAndServe(":8558", hubMux)
 		if err != nil {
 			log.Fatalf("unable to listen: %s", err)
 		}

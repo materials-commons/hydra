@@ -17,7 +17,7 @@
 
 cmd/mc-sshd/mc-sshd
 cmd/mql/mql
-cmd/mqld/mqld
+cmd/mchubd/mchubd
 cmd/mqlservd/mqlservd
 cmd/mcbridgefs/mcbridgefs
 cmd/mcbridgefsd/mcbridgefsd
