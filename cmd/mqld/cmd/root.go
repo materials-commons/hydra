@@ -4,7 +4,6 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/apex/log"
@@ -36,7 +35,7 @@ perform complex queries and operations on the data in the database.`,
 		if err := gotenv.Load(dotenvFilePath); err != nil {
 			log.Fatalf("Failed loading configuration file %s: %s", dotenvFilePath, err)
 		}
-		
+
 		db := mcdb.MustConnectToDB()
 		projectStor := stor.NewGormProjectStor(db)
 		userStor := stor.NewGormUserStor(db)
@@ -68,8 +67,8 @@ perform complex queries and operations on the data in the database.`,
 			}
 
 			res := mqlCmd.Run(req.Query)
-			fmt.Println("query results =", res)
-			return c.JSON(200, res)
+			//fmt.Println("query results =", res)
+			return c.String(200, res)
 		})
 
 		if err := e.Start("localhost:8561"); err != nil {
