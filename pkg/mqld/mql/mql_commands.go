@@ -3,6 +3,8 @@ package mql
 import (
 	"bytes"
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ type MQLCommands struct {
 	db      *gorm.DB
 	interp  *feather.Interp
 	hub     *wserv.Hub
+	w       http.ResponseWriter
 }
 
 func NewMQLCommands(project *mcmodel.Project, user *mcmodel.User, db *gorm.DB, interp *feather.Interp, hub *wserv.Hub) *MQLCommands {
@@ -42,12 +45,16 @@ type MyObj struct {
 }
 
 func (mql *MQLCommands) registerCommands() {
-	mql.interp.RegisterCommand("querySamples", mql.querySamplesCommand)
-	mql.interp.RegisterCommand("samplesTable", mql.samplesTableCommand)
-	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
+	mql.interp.RegisterCommand("mql::samples", mql.samplesCommand)
+	mql.interp.RegisterCommand("mql::samplesTable", mql.samplesTableCommand)
+	mql.interp.RegisterCommand("mql::list-connected-clients", mql.listConnectedClientsCommand)
+	mql.interp.RegisterCommand("mql::upload-file", mql.uploadFileCommand)
+	mql.interp.RegisterCommand("mql::upload-directory", mql.uploadDirectoryCommand)
+	mql.interp.RegisterCommand("puts", mql.putsCommand)
 }
 
-func (mql *MQLCommands) Run(query string) string {
+func (mql *MQLCommands) Run(query string, w http.ResponseWriter) string {
+	mql.w = w
 	result, err := mql.interp.Eval(query)
 	if err != nil {
 		return err.Error()
@@ -57,7 +64,7 @@ func (mql *MQLCommands) Run(query string) string {
 	return result.String()
 }
 
-func (mql *MQLCommands) querySamplesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+func (mql *MQLCommands) samplesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
 	var samples []mcmodel.Entity
 	err := mql.db.Where("project_id = ?", mql.Project.ID).
 		Where("category = ?", "experimental").
@@ -69,7 +76,7 @@ func (mql *MQLCommands) querySamplesCommand(i *feather.Interp, cmd *feather.Obj,
 
 	var items []string
 	for _, sample := range samples {
-		items = append(items, fmt.Sprintf("name %q id %d owner_id %d project_id %d category %s description %q summary %q created_at %q",
+		items = append(items, fmt.Sprintf("name: %q id: %d owner_id: %d project_id: %d category: %s description: %q summary: %q created_at: %q",
 			sample.Name, sample.ID, sample.OwnerID, sample.ProjectID, sample.Category, sample.Description, sample.Summary, sample.CreatedAt.Format(time.DateOnly)))
 	}
 
@@ -129,16 +136,72 @@ func (mql *MQLCommands) listConnectedClientsCommand(i *feather.Interp, cmd *feat
 			}
 		}
 		sb.WriteString(" }")
-		connectedClients = append(connectedClients, fmt.Sprintf("host %s type %s client_id %s project_ids %s", client.Hostname, client.Type, client.ClientID, sb.String()))
+		connectedClients = append(connectedClients, fmt.Sprintf("host: %s type: %s client_id: %s project_ids: %s", client.Hostname, client.Type, client.ClientID, sb.String()))
 	}
 	return feather.OK(connectedClients)
 }
 
-func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
-	if len(args) != 4 {
-		return feather.Error(fmt.Errorf("upload-file project_id host host_path project_path"))
+/*
+"directory_path": "/local/path/to/data",
+        "project_id": 1047,
+        "directory_id": 100,
+        "recursive": true,
+        "chunk_size": 1048576 // optional
+*/
+
+func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("upload-directory client_id directory_path recursive"))
 	}
-	return feather.OK("uploadFileCommand")
+	clientID := args[0].String()
+	directoryPath := args[1].String()
+	recursive := parseBool(args[2].String())
+
+	msg := wserv.Message{
+		Command:   "UPLOAD_DIRECTORY",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload: map[string]any{
+			"directory_path": directoryPath,
+			"project_id":     mql.Project.ID,
+			"recursive":      recursive,
+		},
+	}
+
+	mql.hub.WSManager.Broadcast() <- msg // TODO: Broadcast should take the message, rather than return the channel
+	return feather.OK("submitted")
+}
+
+func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("upload-file client_id host_path project_path"))
+	}
+
+	clientID := args[0].String()
+	hostPath := args[1].String()
+	projectPath := args[2].String()
+
+	msg := wserv.Message{
+		Command:   "UPLOAD_FILE",
+		ID:        "mql", // Should this be the ID of the initiating client (Web UI)?
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload: map[string]any{
+			"file_path":    hostPath,
+			"project_path": projectPath,
+			"project_id":   mql.Project.ID,
+		},
+	}
+
+	mql.hub.WSManager.Broadcast() <- msg
+
+	return feather.OK("submitted")
+}
+
+func (mql *MQLCommands) putsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	fmt.Fprintln(mql.w, args[0].String())
+	return feather.OK("")
 }
 
 func (mql *MQLCommands) toList(what *feather.Obj) ([]*feather.Obj, error) {
@@ -155,4 +218,16 @@ func (mql *MQLCommands) toDict(item *feather.Obj) (*feather.DictType, error) {
 		return nil, err
 	}
 	return r.Dict()
+}
+
+func parseBool(s string) bool {
+	s = strings.TrimSpace(s)
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		if strings.Compare(strings.ToLower(s), "true") != 0 {
+			return true
+		}
+		return false
+	}
+	return b
 }

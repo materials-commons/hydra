@@ -17,7 +17,7 @@ import (
 
 type Hub struct {
 	// Connection managers
-	wsManager  *WebSocketManager
+	WSManager  *WebSocketManager
 	sseManager *SSEManager
 	rrManager  *RequestResponseManager
 
@@ -61,7 +61,7 @@ type HubCommandResponse struct {
 func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 	return &Hub{
 		// Initialize connection managers
-		wsManager:  NewWebSocketManager(),
+		WSManager:  NewWebSocketManager(),
 		sseManager: NewSSEManager(),
 		rrManager:  NewRequestResponseManager(30 * time.Second), // 30s default timeout
 
@@ -79,17 +79,17 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.wsManager.register:
+		case client := <-h.WSManager.register:
 			fmt.Println("Registering client trying to get lock!")
-			h.wsManager.HandleRegister(client)
+			h.WSManager.HandleRegister(client)
 
 			// Notify SSE clients about the new registration
 			h.sseManager.BroadcastToUser(client.User.ID, Message{
 				Command: "register",
 			})
 
-		case client := <-h.wsManager.unregister:
-			h.wsManager.HandleUnregister(client)
+		case client := <-h.WSManager.unregister:
+			h.WSManager.HandleUnregister(client)
 
 			// Cancel any pending requests for this client
 			h.rrManager.CancelRequestsForClient(client.ID)
@@ -99,12 +99,12 @@ func (h *Hub) Run() {
 				Command: "unregister",
 			})
 
-		case message := <-h.wsManager.broadcast:
-			h.wsManager.HandleBroadcast(message)
+		case message := <-h.WSManager.broadcast:
+			h.WSManager.HandleBroadcast(message)
 
-		case userMessage := <-h.wsManager.userBroadcast:
+		case userMessage := <-h.WSManager.userBroadcast:
 			fmt.Println("User broadcast!")
-			h.wsManager.HandleUserBroadcast(userMessage)
+			h.WSManager.HandleUserBroadcast(userMessage)
 			h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
 		}
 	}
@@ -178,7 +178,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		Hub:          h,
 	}
 
-	client.Hub.wsManager.Register() <- client
+	client.Hub.WSManager.Register() <- client
 	fmt.Println("Client registered!")
 
 	// Send connection acknowledgment
@@ -201,7 +201,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 // broadcastToUserClients sends a message to all clients (WebSocket and SSE) for a specific user.
 func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message) {
 	// Send to WebSocket clients via the user broadcast channel
-	h.wsManager.UserBroadcast() <- UserMessage{
+	h.WSManager.UserBroadcast() <- UserMessage{
 		UserID:     userID,
 		ClientType: clientType,
 		Message:    msg,
@@ -238,7 +238,7 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ensure the client exists and is associated with the userID
-	c := h.wsManager.GetClient(req.ClientID)
+	c := h.WSManager.GetClient(req.ClientID)
 	if c == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
 		fmt.Println("Client not found")
@@ -259,7 +259,7 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 		Payload:   req.Payload,
 	}
 
-	h.wsManager.Broadcast() <- msg
+	h.WSManager.Broadcast() <- msg
 	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
 }
 
@@ -277,7 +277,7 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allClients := h.wsManager.GetAllClients()
+	allClients := h.WSManager.GetAllClients()
 	clients := make([]ListClientsResp, 0, len(allClients))
 	for id, client := range allClients {
 		cr := ListClientsResp{
@@ -323,13 +323,13 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if h.wsManager.GetClient(clientID) == nil {
+	if h.WSManager.GetClient(clientID) == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
 		fmt.Println("Client not found")
 		return
 	}
 
-	h.wsManager.Broadcast() <- msg
+	h.WSManager.Broadcast() <- msg
 	_ = sendCommandResponse(w, HubCommandResponse{Command: "UPLOAD_FILE", Status: "ok"}, http.StatusOK)
 }
 
@@ -346,7 +346,7 @@ func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientsForUser := h.wsManager.GetClientsForUser(userID)
+	clientsForUser := h.WSManager.GetClientsForUser(userID)
 	clients := make([]ListClientsResp, 0, len(clientsForUser))
 	for _, client := range clientsForUser {
 		cr := ListClientsResp{
@@ -501,7 +501,7 @@ func getClientConnectionAttr(r *http.Request, headerAttr string, attr string) st
 }
 
 func (h *Hub) GetConnectedClientsForUser(userID int) []ListClientsResp {
-	clientsForUser := h.wsManager.GetClientsForUser(userID)
+	clientsForUser := h.WSManager.GetClientsForUser(userID)
 	clients := make([]ListClientsResp, 0, len(clientsForUser))
 	for _, client := range clientsForUser {
 		cr := ListClientsResp{

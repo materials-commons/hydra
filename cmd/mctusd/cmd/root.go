@@ -97,7 +97,7 @@ var rootCmd = &cobra.Command{
 		projectStor := stor.NewGormProjectStor(db)
 		userStor := stor.NewGormUserStor(db)
 
-		proj, err := projectStor.GetProjectByID(428)
+		proj, err := projectStor.GetProjectByID(438)
 		if err != nil {
 			log.Fatalf("Unable to load project: %s", err)
 		}
@@ -122,7 +122,7 @@ var rootCmd = &cobra.Command{
 				return
 			}
 
-			res := mqlCmd.Run(req.Query)
+			res := mqlCmd.Run(req.Query, w)
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, res)
