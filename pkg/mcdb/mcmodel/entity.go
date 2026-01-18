@@ -15,8 +15,8 @@ type Entity struct {
 	Project      *Project      `json:"project" gorm:"foreignKey:ProjectID;references:ID"`
 	OwnerID      int           `json:"owner_id"`
 	Owner        *User         `json:"owner" gorm:"foreignKey:OwnerID;references:ID"`
-	DatasetID    int           `json:"dataset_id"`
-	CopiedID     int           `json:"copied_id"`
+	DatasetID    *int          `json:"dataset_id"`
+	CopiedID     *int          `json:"copied_id"`
 	Files        []File        `json:"files" gorm:"many2many:entity2file"`
 	EntityStates []EntityState `json:"entity_states"`
 	CreatedAt    time.Time     `json:"created_at"`
@@ -31,4 +31,6 @@ type EntityState struct {
 	OwnerID    int         `json:"owner_id"`
 	DatasetID  int         `json:"dataset_id"`
 	Attributes []Attribute `json:"attributes" gorm:"polymorphic:Attributable;polymorphicValue:App\\Models\\EntityState"`
+	CreatedAt  time.Time   `json:"created_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
 }

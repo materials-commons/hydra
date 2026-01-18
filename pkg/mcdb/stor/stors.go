@@ -96,6 +96,17 @@ type UserStor interface {
 	GetUserByAPIToken(apitoken string) (*mcmodel.User, error)
 }
 
+type EntityStor interface {
+	GetProjectEntityByID(projectID int, entityID int) (*mcmodel.Entity, error)
+	ListProjectEntitiesByCategory(projectID int, entityType string) ([]mcmodel.Entity, error)
+	CreateEntity(entity *mcmodel.Entity) (*mcmodel.Entity, error)
+}
+
+type ActivityStor interface {
+	GetProjectActivityByID(projectID int, activityID int) (*mcmodel.Activity, error)
+	CreateActivity(activity *mcmodel.Activity) (*mcmodel.Activity, error)
+}
+
 //type ClientTransferStor interface {
 //	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
 //	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, *mcmodel.TransferRequestFile, error)

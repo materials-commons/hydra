@@ -10,6 +10,7 @@ import (
 
 	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
 	"github.com/olekukonko/tablewriter"
 	"gorm.io/gorm"
@@ -48,9 +49,10 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("samples", mql.samplesCommand)
 	mql.interp.RegisterCommand("computations", mql.notImplementedYetCommand)
 	mql.interp.RegisterCommand("processes", mql.notImplementedYetCommand)
-	mql.interp.RegisterCommand("create-sample", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("create-sample", mql.createSampleCommand)
 	mql.interp.RegisterCommand("create-process", mql.notImplementedYetCommand)
 	mql.interp.RegisterCommand("create-computation", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("add-process-step", mql.notImplementedYetCommand)
 	mql.interp.RegisterCommand("samplesTable", mql.samplesTableCommand)
 	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
 	mql.interp.RegisterCommand("upload-file", mql.uploadFileCommand)
@@ -69,8 +71,67 @@ func (mql *MQLCommands) Run(query string, w http.ResponseWriter) string {
 	return result.String()
 }
 
+func (mql *MQLCommands) loadPrelude() {
+	mql.interp.Eval("")
+}
+
 func (mql *MQLCommands) notImplementedYetCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
 	return feather.Error("not implemented yet")
+}
+
+func (mql *MQLCommands) createSampleCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 1 {
+		return feather.Error(fmt.Errorf("create-sample dict"))
+	}
+
+	dict, err := mql.toDict(args[0])
+	if err != nil {
+		fmt.Println("1 err = ", err)
+		return feather.Error(err)
+	}
+
+	m := dict.Items
+
+	name, ok := m["name:"]
+	if !ok {
+		return feather.Error(fmt.Errorf("create-sample dict must contain 'name' string"))
+	}
+
+	if name.String() == "" {
+		return feather.Error(fmt.Errorf("create-sample dict 'name' cannot be empty"))
+	}
+
+	desc, ok := m["description:"]
+	if !ok {
+		desc = feather.NewStringObj("")
+	}
+
+	summary, ok := m["summary:"]
+	if !ok {
+		summary = feather.NewStringObj("")
+	}
+
+	entityStor := stor.NewGormEntityStor(mql.db) // TODO: Allocate this into MQLCommands
+
+	entity := &mcmodel.Entity{
+		Name:        name.String(),
+		Description: desc.String(),
+		Summary:     summary.String(),
+		Category:    "experimental",
+		ProjectID:   mql.Project.ID,
+		OwnerID:     mql.User.ID,
+	}
+
+	entity, err = entityStor.CreateEntity(entity)
+	if err != nil {
+		fmt.Println("2 err = ", err)
+		return feather.Error(err)
+	}
+
+	e := fmt.Sprintf("name: %q id: %d owner_id: %d project_id: %d category: %s description: %q summary: %q created_at: %q",
+		entity.Name, entity.ID, entity.OwnerID, entity.ProjectID, entity.Category, entity.Description, entity.Summary, entity.CreatedAt.Format(time.DateOnly))
+
+	return feather.OK(e)
 }
 
 func (mql *MQLCommands) samplesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
@@ -222,7 +283,9 @@ func (mql *MQLCommands) toList(what *feather.Obj) ([]*feather.Obj, error) {
 }
 
 func (mql *MQLCommands) toDict(item *feather.Obj) (*feather.DictType, error) {
-	r, err := mql.interp.Eval(fmt.Sprintf("dict create %s", item))
+	cmd := fmt.Sprintf("dict create %s", item)
+	fmt.Println("cmd = ", cmd)
+	r, err := mql.interp.Eval(cmd)
 	if err != nil {
 		return nil, err
 	}
