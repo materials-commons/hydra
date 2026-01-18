@@ -45,11 +45,16 @@ type MyObj struct {
 }
 
 func (mql *MQLCommands) registerCommands() {
-	mql.interp.RegisterCommand("mql::samples", mql.samplesCommand)
-	mql.interp.RegisterCommand("mql::samplesTable", mql.samplesTableCommand)
-	mql.interp.RegisterCommand("mql::list-connected-clients", mql.listConnectedClientsCommand)
-	mql.interp.RegisterCommand("mql::upload-file", mql.uploadFileCommand)
-	mql.interp.RegisterCommand("mql::upload-directory", mql.uploadDirectoryCommand)
+	mql.interp.RegisterCommand("samples", mql.samplesCommand)
+	mql.interp.RegisterCommand("computations", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("processes", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("create-sample", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("create-process", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("create-computation", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("samplesTable", mql.samplesTableCommand)
+	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
+	mql.interp.RegisterCommand("upload-file", mql.uploadFileCommand)
+	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
 	mql.interp.RegisterCommand("puts", mql.putsCommand)
 }
 
@@ -62,6 +67,10 @@ func (mql *MQLCommands) Run(query string, w http.ResponseWriter) string {
 
 	//fmt.Println("mql.interp.Eval = ", result)
 	return result.String()
+}
+
+func (mql *MQLCommands) notImplementedYetCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	return feather.Error("not implemented yet")
 }
 
 func (mql *MQLCommands) samplesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
