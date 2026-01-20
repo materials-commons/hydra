@@ -220,23 +220,25 @@ func (mql *MQLCommands) listConnectedClientsCommand(i *feather.Interp, cmd *feat
 */
 
 func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
-	if len(args) != 3 {
-		return feather.Error(fmt.Errorf("upload-directory client_id directory_path recursive"))
+	if len(args) > 4 || len(args) < 3 {
+		return feather.Error(fmt.Errorf("upload-directory client_id project_path recursive [directory_path]"))
 	}
+
 	clientID := args[0].String()
-	directoryPath := args[1].String()
-	recursive := parseBool(args[2].String())
+	payload := make(map[string]any)
+	payload["project_id"] = mql.Project.ID
+	payload["project_path"] = args[1].String()
+	payload["recursive"] = parseBool(args[2].String())
+	if len(args) == 4 {
+		payload["directory_path"] = args[3].String()
+	}
 
 	msg := wserv.Message{
 		Command:   "UPLOAD_DIRECTORY",
 		ID:        "mql",
 		Timestamp: time.Now(),
 		ClientID:  clientID,
-		Payload: map[string]any{
-			"directory_path": directoryPath,
-			"project_id":     mql.Project.ID,
-			"recursive":      recursive,
-		},
+		Payload:   payload,
 	}
 
 	mql.hub.WSManager.Broadcast() <- msg // TODO: Broadcast should take the message, rather than return the channel
@@ -244,24 +246,24 @@ func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.O
 }
 
 func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
-	if len(args) != 3 {
-		return feather.Error(fmt.Errorf("upload-file client_id host_path project_path"))
+	if len(args) > 3 || len(args) < 2 {
+		return feather.Error(fmt.Errorf("upload-file client_id project_path [host_path]"))
 	}
 
 	clientID := args[0].String()
-	hostPath := args[1].String()
-	projectPath := args[2].String()
+	payload := make(map[string]any)
+	payload["project_id"] = mql.Project.ID
+	payload["project_path"] = args[1].String()
+	if len(args) == 3 {
+		payload["file_path"] = args[2].String()
+	}
 
 	msg := wserv.Message{
 		Command:   "UPLOAD_FILE",
 		ID:        "mql", // Should this be the ID of the initiating client (Web UI)?
 		Timestamp: time.Now(),
 		ClientID:  clientID,
-		Payload: map[string]any{
-			"file_path":    hostPath,
-			"project_path": projectPath,
-			"project_id":   mql.Project.ID,
-		},
+		Payload:   payload,
 	}
 
 	mql.hub.WSManager.Broadcast() <- msg
@@ -296,7 +298,7 @@ func parseBool(s string) bool {
 	s = strings.TrimSpace(s)
 	b, err := strconv.ParseBool(s)
 	if err != nil {
-		if strings.Compare(strings.ToLower(s), "true") != 0 {
+		if strings.Compare(strings.ToLower(s), "yes") == 0 {
 			return true
 		}
 		return false
