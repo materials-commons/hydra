@@ -316,6 +316,11 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		return
 	}
 
+	if c.alreadyUploaded(projectID, filePath, checksum) {
+		c.sendTransferReject(transferID, "file already uploaded")
+		return
+	}
+
 	// Create the directory in the database if it doesn't exist
 	dirPath := filepath.Dir(projectFilePath)
 	dir, err := c.Hub.fileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
@@ -756,6 +761,7 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 }
 
 func (c *ClientConnection) sendTransferReject(transferID, reason string) {
+	fmt.Println("sendTransferReject:", transferID, reason)
 	c.Send <- Message{
 		Command:   MsgTransferReject,
 		ID:        transferID,
@@ -815,6 +821,92 @@ func (c *ClientConnection) handleHeartbeat(msg Message) error {
 	c.Send <- response
 
 	return nil
+}
+
+func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum string) bool {
+	// First check if there is a file matching checksum
+	dirPath := filepath.Dir(filePath)
+	fileName := filepath.Base(filePath)
+
+	fmt.Println("alreadyUploaded:", projectID, dirPath, fileName, checksum)
+
+	f, err := c.Hub.fileStor.FindMatchingFileByChecksum(checksum)
+	if err != nil {
+		// if we get an error then log it, and return false
+		log.Printf("error finding file by checksum: %v", err)
+		return false
+	}
+
+	if f == nil {
+		// No file found with matching checksum
+		fmt.Println("   1 false")
+		return false
+	}
+
+	// If we are here, then a file matching the checksum was found.
+
+	// 1. Check that the file actually exists on disk.
+	if !f.RealFileExists(c.Hub.fileStor.Root()) {
+		// File entry in database, but file doesn't exist on disk. So upload it.
+		fmt.Println("   2 false")
+		return false
+	}
+
+	// If the file exists on disk, then let's see if there is a matching file in the project at the same path
+	existingFile, err := c.Hub.fileStor.GetFileByPath(projectID, filePath)
+	if err == nil && existingFile != nil {
+		// Check if the checksum matches. If it does, then there is nothing to do.
+		if existingFile.Checksum == checksum {
+			// Yes, there is a file matching the checksum with the same name.
+			fmt.Println("   3 true")
+			return true
+		}
+	}
+
+	// If we are here then we found a file matching the checksum, that file is on disk, but we haven't
+	// found a matching file in the project at the same path. We don't need to upload the file, we just
+	// need to create a file entry in the database, point it at the existing file with the matching
+	// checksums, and return true (file already uploaded).
+
+	dir, err := c.Hub.fileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
+	if err != nil {
+		// error creating the directory... let's upload the file (what is the correct thing to do here?)
+		log.Printf("error creating directory: %v", err)
+		fmt.Println("   4 false")
+		return false
+	}
+
+	createdFile, err := c.Hub.fileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, f.MimeType)
+	if err != nil {
+		log.Printf("error creating file entry: %v", err)
+		fmt.Println("   5 false")
+		return false
+	}
+
+	updates := mcmodel.File{
+		Size:         f.Size,
+		UsesUUID:     f.UUIDForUses(),
+		UploadSource: "MCFT",
+	}
+	createdFile, err = c.Hub.fileStor.UpdateFile(createdFile, &updates)
+
+	if err != nil {
+		log.Printf("error updating file entry: %v", err)
+		fmt.Println("   6 false")
+		return false
+	}
+
+	if _, err := c.Hub.fileStor.SetFileAsCurrent(createdFile); err != nil {
+		log.Printf("failed setting file %d as current: %s", f.ID, err)
+		return false
+	}
+
+	if _, err := c.Hub.conversionStor.AddFileToConvert(createdFile); err != nil {
+		log.Printf("failed adding file %d to be converted: %s", f.ID, err)
+	}
+
+	fmt.Println("   7 true")
+	return true
 }
 
 // Calculate MD5 hash of a file
