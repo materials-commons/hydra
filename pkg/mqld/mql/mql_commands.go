@@ -227,10 +227,10 @@ func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.O
 	clientID := args[0].String()
 	payload := make(map[string]any)
 	payload["project_id"] = mql.Project.ID
-	payload["project_path"] = args[1].String()
+	payload["mc_project_path"] = args[1].String()
 	payload["recursive"] = parseBool(args[2].String())
 	if len(args) == 4 {
-		payload["directory_path"] = args[3].String()
+		payload["local_directory_path"] = args[3].String()
 	}
 
 	msg := wserv.Message{
