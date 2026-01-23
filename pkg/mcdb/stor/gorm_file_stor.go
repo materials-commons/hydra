@@ -418,7 +418,7 @@ func (s *GormFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, si
 		return false, err
 	}
 
-	// Check if file type is one we do a conversion on to make viewable on the web, and if it is
+	// Check if a file type is one we do a conversion on to make viewable on the web, and if it is
 	// then schedule a conversion to run.
 	if file.IsConvertible() {
 		// Queue up a conversion job
