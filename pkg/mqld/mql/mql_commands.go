@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
@@ -57,6 +58,9 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
 	mql.interp.RegisterCommand("upload-file", mql.uploadFileCommand)
 	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
+	mql.interp.RegisterCommand("ls", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("download-file", mql.downloadFileCommand)
+	mql.interp.RegisterCommand("download-directory", mql.downloadDirectoryCommand)
 	mql.interp.RegisterCommand("puts", mql.putsCommand)
 }
 
@@ -211,14 +215,6 @@ func (mql *MQLCommands) listConnectedClientsCommand(i *feather.Interp, cmd *feat
 	return feather.OK(connectedClients)
 }
 
-/*
-"directory_path": "/local/path/to/data",
-        "project_id": 1047,
-        "directory_id": 100,
-        "recursive": true,
-        "chunk_size": 1048576 // optional
-*/
-
 func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
 	if len(args) > 4 || len(args) < 3 {
 		return feather.Error(fmt.Errorf("upload-directory client_id project_path recursive [directory_path]"))
@@ -269,6 +265,88 @@ func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, a
 	mql.hub.WSManager.Broadcast() <- msg
 
 	return feather.OK("submitted")
+}
+
+func (mql *MQLCommands) downloadFileCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) > 3 || len(args) < 2 {
+		return feather.Error(fmt.Errorf("download-file client_id project_path [host_path]"))
+	}
+
+	clientID := args[0].String()
+	projectPath := args[1].String()
+	hostPath := ""
+	if len(args) == 3 {
+		hostPath = args[2].String()
+	}
+
+	f, err := mql.hub.FileStor.GetFileByPath(mql.Project.ID, projectPath)
+	if err != nil {
+		return feather.Error(err)
+	}
+
+	if err := mql.sendDownloadFile(f, clientID, projectPath, hostPath); err != nil {
+		log.Errorf("Error sending upload file: %v", err)
+		return feather.Error(err)
+	}
+
+	return feather.OK("submitted")
+}
+
+func (mql *MQLCommands) downloadDirectoryCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) > 3 || len(args) < 2 {
+		return feather.Error(fmt.Errorf("download-file client_id project_path [host_path]"))
+	}
+
+	clientID := args[0].String()
+	projectID := mql.Project.ID
+	projectPath := args[1].String()
+
+	hostPath := ""
+	if len(args) == 3 {
+		hostPath = args[2].String()
+	}
+
+	files, err := mql.hub.FileStor.ListDirectoryByPath(projectID, projectPath)
+	if err != nil {
+		return feather.Error(err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if err := mql.sendDownloadFile(&file, clientID, projectPath, hostPath); err != nil {
+			log.Errorf("Error sending download file: %v", err)
+		}
+	}
+
+	return feather.OK("submitted")
+}
+
+func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath, hostPath string) error {
+	fmt.Println("sendDownloadFile: ", f.Name, " f.ID =", f.ID)
+	payload := make(map[string]any)
+	payload["project_id"] = mql.Project.ID
+	if hostPath != "" {
+		payload["file_path"] = hostPath
+	} else {
+		payload["project_path"] = projectPath
+	}
+
+	payload["file_id"] = f.ID
+	payload["size"] = f.Size
+	payload["checksum"] = f.Checksum
+
+	msg := wserv.Message{
+		Command:   "DOWNLOAD_FILE",
+		ID:        "mql", // Should this be the ID of the initiating client (Web UI)?
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   payload,
+	}
+
+	mql.hub.WSManager.Broadcast() <- msg
+	return nil
 }
 
 func (mql *MQLCommands) putsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {

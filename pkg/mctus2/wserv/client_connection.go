@@ -304,14 +304,14 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	fileName := filepath.Base(projectFilePath)
 	// Each upload will get a separate transfer request file. Transfers are tracked in the remote_client_transfers
 	// table. Here we check to make sure that there isn't a transfer with this transfer_id.
-	_, err := c.Hub.remoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
+	_, err := c.Hub.RemoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
 	if err == nil {
 		c.sendTransferReject(transferID, "transfer already exists")
 		return
 	}
 
 	fmt.Println("handleTransferInit: projectID", projectID, " UserID", c.User.ID)
-	if !c.Hub.projectStor.UserCanAccessProject(c.User.ID, projectID) {
+	if !c.Hub.ProjectStor.UserCanAccessProject(c.User.ID, projectID) {
 		c.sendTransferReject(transferID, "no access to project")
 		return
 	}
@@ -323,14 +323,14 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	// Create the directory in the database if it doesn't exist
 	dirPath := filepath.Dir(projectFilePath)
-	dir, err := c.Hub.fileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
+	dir, err := c.Hub.FileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot create directory")
 		return
 	}
 
 	// Create the file in the database, associate it with the directory, and associate it with a remote client transfer.
-	f, err := c.Hub.fileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, mc.DetectMimeType(filePath))
+	f, err := c.Hub.FileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, mc.DetectMimeType(filePath))
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot create file")
 		return
@@ -350,7 +350,7 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		RemoteClientID:   c.RemoteClient.ID,
 	}
 
-	remoteClientTransfer, err = c.Hub.remoteClientTransferStor.CreateRemoteClientTransfer(remoteClientTransfer)
+	remoteClientTransfer, err = c.Hub.RemoteClientTransferStor.CreateRemoteClientTransfer(remoteClientTransfer)
 	if err != nil {
 		fmt.Printf("Error creating remote client transfer: %v\n", err)
 		c.sendTransferReject(transferID, "cannot create transfer")
@@ -358,8 +358,8 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	}
 
 	// Create the file we are writing to
-	file, err := f.CreateReturningHandleToUnderlyingFile(c.Hub.fileStor.Root())
-	fmt.Printf("Created file at path: %+s\n", f.ToUnderlyingFilePath(c.Hub.fileStor.Root()))
+	file, err := f.CreateReturningHandleToUnderlyingFile(c.Hub.FileStor.Root())
+	fmt.Printf("Created file at path: %+s\n", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot create file")
 		return
@@ -494,7 +494,7 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 	}
 
 	// Delete the transfer request from the database.
-	if err := c.Hub.remoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
+	if err := c.Hub.RemoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
 		log.Printf("Error deleting transfer %s: %v", transferID, err)
 	}
 
@@ -556,13 +556,13 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 
 	// TODO: Update to calculate the hash as we write chunks. Only do this if the hash state is out of date.
 
-	f, err := c.Hub.fileStor.GetFileByID(transfer.FileID)
+	f, err := c.Hub.FileStor.GetFileByID(transfer.FileID)
 	if err != nil {
 		return fmt.Errorf("file not found: %v", err)
 	}
 
 	fmt.Printf("Calculating hash for %s\n", transfer.FilePath)
-	hash, err := calculateMD5(f.ToUnderlyingFilePath(c.Hub.fileStor.Root()))
+	hash, err := calculateMD5(f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
 	if err != nil {
 		log.Printf("Warning: could not calculate hash: %v", err)
 	}
@@ -572,7 +572,7 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	}
 
 	// Update the file entry.
-	switched, err := c.Hub.fileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.conversionStor)
+	switched, err := c.Hub.FileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.ConversionStor)
 	fmt.Printf("Switched file %d: %v\n", f.ID, switched)
 
 	if err != nil {
@@ -580,8 +580,8 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	}
 
 	if switched {
-		if err := os.Remove(f.ToUnderlyingFilePath(c.Hub.fileStor.Root())); err != nil {
-			fmt.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.fileStor.Root()), err)
+		if err := os.Remove(f.ToUnderlyingFilePath(c.Hub.FileStor.Root())); err != nil {
+			fmt.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
 		}
 	}
 
@@ -621,7 +621,7 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 
 	// If we are here, then the transfer wasn't in the activeTransfers map. So lets retrieve it
 	// from the database and reset up the state.
-	remoteTransfer, err := c.Hub.remoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
+	remoteTransfer, err := c.Hub.RemoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
 	if err != nil {
 		c.sendTransferReject(transferID, "transfer not found")
 		return
@@ -641,14 +641,14 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 
 	// Verify file exists on disk
 	// TODO: We could just re-create the file and have the resume start from the beginning.
-	fileInfo, err := os.Stat(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()))
+	fileInfo, err := os.Stat(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "file not found on disk")
 		return
 	}
 
 	// Open the file for writing
-	file, err := os.OpenFile(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()), os.O_WRONLY, 0644)
+	file, err := os.OpenFile(remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root()), os.O_WRONLY, 0644)
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot open file")
 		return
@@ -735,14 +735,14 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 	transfer.File.Close()
 	transfer.mu.Unlock()
 	// Lets, remove the underlying filesystem file. We can safely ignore the error here.
-	_ = os.Remove(transfer.remoteClientTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.fileStor.Root()))
+	_ = os.Remove(transfer.remoteClientTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root()))
 
 	// Delete the RemoteClientTransfer, and the File from the database.
-	if err := c.Hub.remoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
+	if err := c.Hub.RemoteClientTransferStor.DeleteRemoteClientTransferByTransferID(transferID); err != nil {
 		log.Printf("Error deleting transfer %s: %v", transferID, err)
 	}
 
-	if err := c.Hub.fileStor.DeleteFileByID(transfer.remoteClientTransfer.File.ID); err != nil {
+	if err := c.Hub.FileStor.DeleteFileByID(transfer.remoteClientTransfer.File.ID); err != nil {
 		log.Printf("Error deleting file %d: %v", transfer.remoteClientTransfer.File.ID, err)
 	}
 
@@ -830,7 +830,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	fmt.Println("alreadyUploaded:", projectID, dirPath, fileName, checksum)
 
-	f, err := c.Hub.fileStor.FindMatchingFileByChecksum(checksum)
+	f, err := c.Hub.FileStor.FindMatchingFileByChecksum(checksum)
 	if err != nil {
 		// if we get an error then log it, and return false
 		log.Printf("error finding file by checksum: %v", err)
@@ -846,14 +846,14 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	// If we are here, then a file matching the checksum was found.
 
 	// 1. Check that the file actually exists on disk.
-	if !f.RealFileExists(c.Hub.fileStor.Root()) {
+	if !f.RealFileExists(c.Hub.FileStor.Root()) {
 		// File entry in database, but file doesn't exist on disk. So upload it.
 		fmt.Println("   2 false")
 		return false
 	}
 
 	// If the file exists on disk, then let's see if there is a matching file in the project at the same path
-	existingFile, err := c.Hub.fileStor.GetFileByPath(projectID, filePath)
+	existingFile, err := c.Hub.FileStor.GetFileByPath(projectID, filePath)
 	if err == nil && existingFile != nil {
 		// Check if the checksum matches. If it does, then there is nothing to do.
 		if existingFile.Checksum == checksum {
@@ -868,7 +868,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	// need to create a file entry in the database, point it at the existing file with the matching
 	// checksums, and return true (file already uploaded).
 
-	dir, err := c.Hub.fileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
+	dir, err := c.Hub.FileStor.GetOrCreateDirPath(projectID, c.User.ID, dirPath)
 	if err != nil {
 		// error creating the directory... let's upload the file (what is the correct thing to do here?)
 		log.Printf("error creating directory: %v", err)
@@ -876,7 +876,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		return false
 	}
 
-	createdFile, err := c.Hub.fileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, f.MimeType)
+	createdFile, err := c.Hub.FileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, f.MimeType)
 	if err != nil {
 		log.Printf("error creating file entry: %v", err)
 		fmt.Println("   5 false")
@@ -888,7 +888,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		UsesUUID:     f.UUIDForUses(),
 		UploadSource: "MCFT",
 	}
-	createdFile, err = c.Hub.fileStor.UpdateFile(createdFile, &updates)
+	createdFile, err = c.Hub.FileStor.UpdateFile(createdFile, &updates)
 
 	if err != nil {
 		log.Printf("error updating file entry: %v", err)
@@ -896,12 +896,12 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		return false
 	}
 
-	if _, err := c.Hub.fileStor.SetFileAsCurrent(createdFile); err != nil {
+	if _, err := c.Hub.FileStor.SetFileAsCurrent(createdFile); err != nil {
 		log.Printf("failed setting file %d as current: %s", f.ID, err)
 		return false
 	}
 
-	if _, err := c.Hub.conversionStor.AddFileToConvert(createdFile); err != nil {
+	if _, err := c.Hub.ConversionStor.AddFileToConvert(createdFile); err != nil {
 		log.Printf("failed adding file %d to be converted: %s", f.ID, err)
 	}
 

@@ -22,12 +22,12 @@ type Hub struct {
 	rrManager  *RequestResponseManager
 
 	// Database storage interfaces
-	userStor                 stor.UserStor
-	projectStor              stor.ProjectStor
-	fileStor                 stor.FileStor
-	remoteClientStor         stor.RemoteClientStor
-	remoteClientTransferStor stor.RemoteClientTransferStor
-	conversionStor           stor.ConversionStor
+	UserStor                 stor.UserStor
+	ProjectStor              stor.ProjectStor
+	FileStor                 stor.FileStor
+	RemoteClientStor         stor.RemoteClientStor
+	RemoteClientTransferStor stor.RemoteClientTransferStor
+	ConversionStor           stor.ConversionStor
 	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
 }
 
@@ -66,12 +66,12 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 		rrManager:  NewRequestResponseManager(30 * time.Second), // 30s default timeout
 
 		// Initialize storage interfaces
-		userStor:                 stor.NewGormUserStor(db),
-		projectStor:              stor.NewGormProjectStor(db),
-		remoteClientStor:         stor.NewGormRemoteClientStor(db),
-		fileStor:                 stor.NewGormFileStor(db, mcfsDir),
-		remoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
-		conversionStor:           stor.NewGormConversionStor(db),
+		UserStor:                 stor.NewGormUserStor(db),
+		ProjectStor:              stor.NewGormProjectStor(db),
+		RemoteClientStor:         stor.NewGormRemoteClientStor(db),
+		FileStor:                 stor.NewGormFileStor(db, mcfsDir),
+		RemoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
+		ConversionStor:           stor.NewGormConversionStor(db),
 		partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
 	}
 }
@@ -411,7 +411,7 @@ func (h *Hub) commaSeparatedProjectIDsToProjects(commaSeparatedIDs string) []*mc
 		if err != nil {
 			continue
 		}
-		project, err := h.projectStor.GetProjectByID(idAsInt)
+		project, err := h.ProjectStor.GetProjectByID(idAsInt)
 		if err != nil {
 			continue
 		}
@@ -427,7 +427,7 @@ func (h *Hub) validateAuthAndGetUser(r *http.Request) (*mcmodel.User, error) {
 		return nil, err
 	}
 
-	return h.userStor.GetUserByAPIToken(token)
+	return h.UserStor.GetUserByAPIToken(token)
 }
 
 func (h *Hub) getAuthToken(r *http.Request) (string, error) {
@@ -462,7 +462,7 @@ func (h *Hub) extractTokenFromAuthHeader(authHeader string) (string, error) {
 }
 
 func (h *Hub) getOrCreateRemoteClient(attrs *ConnectionAttributes, user *mcmodel.User) (*mcmodel.RemoteClient, error) {
-	remoteClient, err := h.remoteClientStor.GetRemoteClientByClientID(attrs.ClientID)
+	remoteClient, err := h.RemoteClientStor.GetRemoteClientByClientID(attrs.ClientID)
 	if err == nil {
 		// Found the remote client
 
@@ -480,7 +480,7 @@ func (h *Hub) getOrCreateRemoteClient(attrs *ConnectionAttributes, user *mcmodel
 		LastSeenAt: time.Now(),
 	}
 
-	return h.remoteClientStor.CreateRemoteClient(remoteClient)
+	return h.RemoteClientStor.CreateRemoteClient(remoteClient)
 }
 
 func getClientConnectionAttributes(r *http.Request) *ConnectionAttributes {
