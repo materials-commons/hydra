@@ -237,7 +237,7 @@ func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.O
 		Payload:   payload,
 	}
 
-	mql.hub.WSManager.Broadcast() <- msg // TODO: Broadcast should take the message, rather than return the channel
+	mql.hub.WSManager.Broadcast(msg)
 	return feather.OK("submitted")
 }
 
@@ -262,7 +262,7 @@ func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, a
 		Payload:   payload,
 	}
 
-	mql.hub.WSManager.Broadcast() <- msg
+	mql.hub.WSManager.Broadcast(msg)
 
 	return feather.OK("submitted")
 }
@@ -345,7 +345,7 @@ func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath,
 		Payload:   payload,
 	}
 
-	mql.hub.WSManager.Broadcast() <- msg
+	mql.hub.WSManager.Broadcast(msg)
 	return nil
 }
 

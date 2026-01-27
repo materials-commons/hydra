@@ -79,9 +79,9 @@ func NewRequestResponseManager(defaultTimeout time.Duration) *RequestResponseMan
 // CreateRequest creates a new pending request and returns the request ID.
 // The caller should send the command to the WebSocket client and then wait
 // on the ResponseChan for the response.
-func (rrm *RequestResponseManager) CreateRequest(clientID string, userID int, command string, timeout time.Duration) (*PendingRequest, error) {
+func (r *RequestResponseManager) CreateRequest(clientID string, userID int, command string, timeout time.Duration) (*PendingRequest, error) {
 	if timeout == 0 {
-		timeout = rrm.defaultTimeout
+		timeout = r.defaultTimeout
 	}
 
 	requestID := fmt.Sprintf("req-%s-%d", clientID, time.Now().UnixNano())
@@ -99,14 +99,14 @@ func (rrm *RequestResponseManager) CreateRequest(clientID string, userID int, co
 		cancel:       cancel,
 	}
 
-	rrm.mu.Lock()
-	rrm.pendingRequests[requestID] = req
+	r.mu.Lock()
+	r.pendingRequests[requestID] = req
 
-	if rrm.requestsByClient[clientID] == nil {
-		rrm.requestsByClient[clientID] = make(map[string]*PendingRequest)
+	if r.requestsByClient[clientID] == nil {
+		r.requestsByClient[clientID] = make(map[string]*PendingRequest)
 	}
-	rrm.requestsByClient[clientID][requestID] = req
-	rrm.mu.Unlock()
+	r.requestsByClient[clientID][requestID] = req
+	r.mu.Unlock()
 
 	log.Printf("Created pending request %s for client %s (command: %s, timeout: %v)",
 		requestID, clientID, command, timeout)
@@ -116,10 +116,10 @@ func (rrm *RequestResponseManager) CreateRequest(clientID string, userID int, co
 
 // SendResponse sends a response to a pending request.
 // Returns an error if the request doesn't exist or has timed out.
-func (rrm *RequestResponseManager) SendResponse(requestID string, msg Message) error {
-	rrm.mu.RLock()
-	req, exists := rrm.pendingRequests[requestID]
-	rrm.mu.RUnlock()
+func (r *RequestResponseManager) SendResponse(requestID string, msg Message) error {
+	r.mu.RLock()
+	req, exists := r.pendingRequests[requestID]
+	r.mu.RUnlock()
 
 	if !exists {
 		return errors.New("request not found")
@@ -136,8 +136,8 @@ func (rrm *RequestResponseManager) SendResponse(requestID string, msg Message) e
 
 // WaitForResponse waits for a response to a pending request.
 // Returns the response message or an error if the request times out.
-func (rrm *RequestResponseManager) WaitForResponse(req *PendingRequest) (Message, error) {
-	defer rrm.RemoveRequest(req.RequestID)
+func (r *RequestResponseManager) WaitForResponse(req *PendingRequest) (Message, error) {
+	defer r.RemoveRequest(req.RequestID)
 
 	select {
 	case <-req.ctx.Done():
@@ -148,21 +148,21 @@ func (rrm *RequestResponseManager) WaitForResponse(req *PendingRequest) (Message
 }
 
 // RemoveRequest removes a pending request from the manager.
-func (rrm *RequestResponseManager) RemoveRequest(requestID string) {
-	rrm.mu.Lock()
-	defer rrm.mu.Unlock()
+func (r *RequestResponseManager) RemoveRequest(requestID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if req, exists := rrm.pendingRequests[requestID]; exists {
+	if req, exists := r.pendingRequests[requestID]; exists {
 		// Cancel the context
 		req.cancel()
 
 		// Remove from maps
-		delete(rrm.pendingRequests, requestID)
+		delete(r.pendingRequests, requestID)
 
-		if clientReqs, ok := rrm.requestsByClient[req.ClientID]; ok {
+		if clientReqs, ok := r.requestsByClient[req.ClientID]; ok {
 			delete(clientReqs, requestID)
 			if len(clientReqs) == 0 {
-				delete(rrm.requestsByClient, req.ClientID)
+				delete(r.requestsByClient, req.ClientID)
 			}
 		}
 
@@ -171,11 +171,11 @@ func (rrm *RequestResponseManager) RemoveRequest(requestID string) {
 }
 
 // GetPendingRequestsForClient returns all pending requests for a specific client.
-func (rrm *RequestResponseManager) GetPendingRequestsForClient(clientID string) []*PendingRequest {
-	rrm.mu.RLock()
-	defer rrm.mu.RUnlock()
+func (r *RequestResponseManager) GetPendingRequestsForClient(clientID string) []*PendingRequest {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-	clientReqs := rrm.requestsByClient[clientID]
+	clientReqs := r.requestsByClient[clientID]
 	if clientReqs == nil {
 		return []*PendingRequest{}
 	}
@@ -189,11 +189,11 @@ func (rrm *RequestResponseManager) GetPendingRequestsForClient(clientID string) 
 
 // CancelRequestsForClient cancels all pending requests for a specific client.
 // This should be called when a client disconnects.
-func (rrm *RequestResponseManager) CancelRequestsForClient(clientID string) {
-	rrm.mu.Lock()
-	defer rrm.mu.Unlock()
+func (r *RequestResponseManager) CancelRequestsForClient(clientID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	clientReqs := rrm.requestsByClient[clientID]
+	clientReqs := r.requestsByClient[clientID]
 	if clientReqs == nil {
 		return
 	}
@@ -201,42 +201,42 @@ func (rrm *RequestResponseManager) CancelRequestsForClient(clientID string) {
 	for requestID, req := range clientReqs {
 		req.cancel()
 		close(req.ResponseChan)
-		delete(rrm.pendingRequests, requestID)
+		delete(r.pendingRequests, requestID)
 	}
 
-	delete(rrm.requestsByClient, clientID)
+	delete(r.requestsByClient, clientID)
 
 	log.Printf("Cancelled all pending requests for client %s", clientID)
 }
 
 // cleanupLoop runs periodically to clean up timed-out requests.
-func (rrm *RequestResponseManager) cleanupLoop() {
-	ticker := time.NewTicker(rrm.cleanupInterval)
+func (r *RequestResponseManager) cleanupLoop() {
+	ticker := time.NewTicker(r.cleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		rrm.cleanup()
+		r.cleanup()
 	}
 }
 
 // cleanup removes timed-out requests.
-func (rrm *RequestResponseManager) cleanup() {
-	rrm.mu.Lock()
-	defer rrm.mu.Unlock()
+func (r *RequestResponseManager) cleanup() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	now := time.Now()
-	for requestID, req := range rrm.pendingRequests {
+	for requestID, req := range r.pendingRequests {
 		if now.Sub(req.CreatedAt) > req.Timeout {
 			log.Printf("Cleaning up timed-out request %s", requestID)
 
 			req.cancel()
 
 			// Remove from maps
-			delete(rrm.pendingRequests, requestID)
-			if clientReqs, ok := rrm.requestsByClient[req.ClientID]; ok {
+			delete(r.pendingRequests, requestID)
+			if clientReqs, ok := r.requestsByClient[req.ClientID]; ok {
 				delete(clientReqs, requestID)
 				if len(clientReqs) == 0 {
-					delete(rrm.requestsByClient, req.ClientID)
+					delete(r.requestsByClient, req.ClientID)
 				}
 			}
 		}
@@ -244,12 +244,12 @@ func (rrm *RequestResponseManager) cleanup() {
 }
 
 // GetStats returns statistics about pending requests.
-func (rrm *RequestResponseManager) GetStats() map[string]interface{} {
-	rrm.mu.RLock()
-	defer rrm.mu.RUnlock()
+func (r *RequestResponseManager) GetStats() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	return map[string]interface{}{
-		"total_pending_requests": len(rrm.pendingRequests),
-		"clients_with_requests":  len(rrm.requestsByClient),
+		"total_pending_requests": len(r.pendingRequests),
+		"clients_with_requests":  len(r.requestsByClient),
 	}
 }

@@ -43,32 +43,32 @@ func NewWebSocketManager() *WebSocketManager {
 }
 
 // Register returns the channel used to register new client connections.
-func (wsm *WebSocketManager) Register() chan<- *ClientConnection {
-	return wsm.register
+func (w *WebSocketManager) Register(c *ClientConnection) {
+	w.register <- c
 }
 
 // Unregister returns the channel used to unregister client connections.
-func (wsm *WebSocketManager) Unregister() chan<- *ClientConnection {
-	return wsm.unregister
+func (w *WebSocketManager) Unregister(c *ClientConnection) {
+	w.unregister <- c
 }
 
 // Broadcast returns the channel used to send messages to specific clients.
-func (wsm *WebSocketManager) Broadcast() chan<- Message {
-	return wsm.broadcast
+func (w *WebSocketManager) Broadcast(m Message) {
+	w.broadcast <- m
 }
 
 // UserBroadcast returns the channel used to send messages to all clients for a user.
-func (wsm *WebSocketManager) UserBroadcast() chan<- UserMessage {
-	return wsm.userBroadcast
+func (w *WebSocketManager) UserBroadcast(m UserMessage) {
+	w.userBroadcast <- m
 }
 
 // HandleRegister processes a client registration request.
-func (wsm *WebSocketManager) HandleRegister(client *ClientConnection) {
-	wsm.mu.Lock()
-	defer wsm.mu.Unlock()
+func (w *WebSocketManager) HandleRegister(client *ClientConnection) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	wsm.clients[client.ID] = client
-	wsm.clientsByUserID[client.User.ID] = append(wsm.clientsByUserID[client.User.ID], client)
+	w.clients[client.ID] = client
+	w.clientsByUserID[client.User.ID] = append(w.clientsByUserID[client.User.ID], client)
 
 	log.Printf("ClientConnection registered: %s (type: %s), (host: %s), (userID: %d)",
 		client.ID, client.Type, client.Hostname, client.User.ID)
@@ -79,27 +79,27 @@ func (wsm *WebSocketManager) HandleRegister(client *ClientConnection) {
 }
 
 // HandleUnregister processes a client unregistration request.
-func (wsm *WebSocketManager) HandleUnregister(client *ClientConnection) {
-	wsm.mu.Lock()
-	defer wsm.mu.Unlock()
+func (w *WebSocketManager) HandleUnregister(client *ClientConnection) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	if _, ok := wsm.clients[client.ID]; ok {
-		delete(wsm.clients, client.ID)
+	if _, ok := w.clients[client.ID]; ok {
+		delete(w.clients, client.ID)
 		close(client.Send)
 
 		// Remove from clientsByUserID
-		if userClients, ok := wsm.clientsByUserID[client.User.ID]; ok {
+		if userClients, ok := w.clientsByUserID[client.User.ID]; ok {
 			for i, c := range userClients {
 				if c.ID == client.ID {
 					// Delete the entry at index i
-					wsm.clientsByUserID[client.User.ID] = append(userClients[:i], userClients[i+1:]...)
+					w.clientsByUserID[client.User.ID] = append(userClients[:i], userClients[i+1:]...)
 					break
 				}
 			}
 
 			// Clean up the map key if the user has no more clients
-			if len(wsm.clientsByUserID[client.User.ID]) == 0 {
-				delete(wsm.clientsByUserID, client.User.ID)
+			if len(w.clientsByUserID[client.User.ID]) == 0 {
+				delete(w.clientsByUserID, client.User.ID)
 			}
 		}
 	}
@@ -108,12 +108,12 @@ func (wsm *WebSocketManager) HandleUnregister(client *ClientConnection) {
 }
 
 // HandleBroadcast processes a broadcast message to a specific client.
-func (wsm *WebSocketManager) HandleBroadcast(message Message) {
-	wsm.mu.RLock()
-	defer wsm.mu.RUnlock()
+func (w *WebSocketManager) HandleBroadcast(message Message) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
 	targetID := message.ClientID
-	if client, ok := wsm.clients[targetID]; ok {
+	if client, ok := w.clients[targetID]; ok {
 		select {
 		case client.Send <- message:
 		default:
@@ -124,11 +124,11 @@ func (wsm *WebSocketManager) HandleBroadcast(message Message) {
 }
 
 // HandleUserBroadcast processes a broadcast message to all clients for a user.
-func (wsm *WebSocketManager) HandleUserBroadcast(userMsg UserMessage) {
-	wsm.mu.RLock()
-	defer wsm.mu.RUnlock()
+func (w *WebSocketManager) HandleUserBroadcast(userMsg UserMessage) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
-	userClients, ok := wsm.clientsByUserID[userMsg.UserID]
+	userClients, ok := w.clientsByUserID[userMsg.UserID]
 	if !ok {
 		return
 	}
@@ -147,8 +147,8 @@ func (wsm *WebSocketManager) HandleUserBroadcast(userMsg UserMessage) {
 
 // BroadcastToUser sends a message to all WebSocket clients for a specific user.
 // The clientType parameter can be used to filter by client type (empty string = all types).
-func (wsm *WebSocketManager) BroadcastToUser(userID int, clientType string, msg Message) {
-	wsm.userBroadcast <- UserMessage{
+func (w *WebSocketManager) BroadcastToUser(userID int, clientType string, msg Message) {
+	w.userBroadcast <- UserMessage{
 		UserID:     userID,
 		ClientType: clientType,
 		Message:    msg,
@@ -157,18 +157,18 @@ func (wsm *WebSocketManager) BroadcastToUser(userID int, clientType string, msg 
 
 // GetClient retrieves a client connection by ID.
 // Returns nil if the client doesn't exist.
-func (wsm *WebSocketManager) GetClient(clientID string) *ClientConnection {
-	wsm.mu.RLock()
-	defer wsm.mu.RUnlock()
-	return wsm.clients[clientID]
+func (w *WebSocketManager) GetClient(clientID string) *ClientConnection {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.clients[clientID]
 }
 
 // GetClientsForUser retrieves all client connections for a specific user.
-func (wsm *WebSocketManager) GetClientsForUser(userID int) []*ClientConnection {
-	wsm.mu.RLock()
-	defer wsm.mu.RUnlock()
+func (w *WebSocketManager) GetClientsForUser(userID int) []*ClientConnection {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
-	clients := wsm.clientsByUserID[userID]
+	clients := w.clientsByUserID[userID]
 	if clients == nil {
 		return []*ClientConnection{}
 	}
@@ -180,13 +180,13 @@ func (wsm *WebSocketManager) GetClientsForUser(userID int) []*ClientConnection {
 }
 
 // GetAllClients returns a copy of all connected clients.
-func (wsm *WebSocketManager) GetAllClients() map[string]*ClientConnection {
-	wsm.mu.RLock()
-	defer wsm.mu.RUnlock()
+func (w *WebSocketManager) GetAllClients() map[string]*ClientConnection {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
 	// Return a copy to avoid concurrent modification issues
-	result := make(map[string]*ClientConnection, len(wsm.clients))
-	for k, v := range wsm.clients {
+	result := make(map[string]*ClientConnection, len(w.clients))
+	for k, v := range w.clients {
 		result[k] = v
 	}
 	return result

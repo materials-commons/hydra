@@ -31,35 +31,35 @@ func NewSSEManager() *SSEManager {
 
 // RegisterConnection creates and registers a new SSE connection for a user.
 // Returns the connection ID and event channel.
-func (sm *SSEManager) RegisterConnection(userID int) (string, chan Message) {
+func (s *SSEManager) RegisterConnection(userID int) (string, chan Message) {
 	eventChan := make(chan Message, 256)
 	connectionID := fmt.Sprintf("sse-%d-%d", userID, time.Now().UnixNano())
 
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if sm.sseConnections[userID] == nil {
-		sm.sseConnections[userID] = make(map[string]chan Message)
+	if s.sseConnections[userID] == nil {
+		s.sseConnections[userID] = make(map[string]chan Message)
 	}
-	sm.sseConnections[userID][connectionID] = eventChan
+	s.sseConnections[userID][connectionID] = eventChan
 
 	return connectionID, eventChan
 }
 
 // UnregisterConnection removes an SSE connection for a user.
-func (sm *SSEManager) UnregisterConnection(userID int, connectionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (s *SSEManager) UnregisterConnection(userID int, connectionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if conns, ok := sm.sseConnections[userID]; ok {
+	if conns, ok := s.sseConnections[userID]; ok {
 		if ch, exists := conns[connectionID]; exists {
 			close(ch)
 			delete(conns, connectionID)
 		}
 
 		// Clean up user entry if no connections remain
-		if len(sm.sseConnections[userID]) == 0 {
-			delete(sm.sseConnections, userID)
+		if len(s.sseConnections[userID]) == 0 {
+			delete(s.sseConnections, userID)
 		}
 	}
 
@@ -67,11 +67,11 @@ func (sm *SSEManager) UnregisterConnection(userID int, connectionID string) {
 }
 
 // BroadcastToUser sends a message to all SSE connections for a specific user.
-func (sm *SSEManager) BroadcastToUser(userID int, msg Message) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+func (s *SSEManager) BroadcastToUser(userID int, msg Message) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	sseConns, ok := sm.sseConnections[userID]
+	sseConns, ok := s.sseConnections[userID]
 	if !ok {
 		return
 	}
@@ -88,7 +88,7 @@ func (sm *SSEManager) BroadcastToUser(userID int, msg Message) {
 
 // HandleSSE handles an incoming SSE connection request.
 // This method manages the entire lifecycle of an SSE connection.
-func (sm *SSEManager) HandleSSE(w http.ResponseWriter, r *http.Request, user *mcmodel.User) {
+func (s *SSEManager) HandleSSE(w http.ResponseWriter, r *http.Request, user *mcmodel.User) {
 	// CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -106,10 +106,10 @@ func (sm *SSEManager) HandleSSE(w http.ResponseWriter, r *http.Request, user *mc
 	}
 
 	// Register the connection
-	connectionID, eventChan := sm.RegisterConnection(user.ID)
+	connectionID, eventChan := s.RegisterConnection(user.ID)
 
 	// Cleanup on disconnect
-	defer sm.UnregisterConnection(user.ID, connectionID)
+	defer s.UnregisterConnection(user.ID, connectionID)
 
 	// Send the initial connection acknowledgment
 	_, _ = fmt.Fprintf(w, "data: {\"event\":\"connected\",\"user_id\":%d}\n\n", user.ID)
@@ -144,23 +144,23 @@ func (sm *SSEManager) HandleSSE(w http.ResponseWriter, r *http.Request, user *mc
 }
 
 // GetConnectionCount returns the number of active SSE connections for a user.
-func (sm *SSEManager) GetConnectionCount(userID int) int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+func (s *SSEManager) GetConnectionCount(userID int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	if conns, ok := sm.sseConnections[userID]; ok {
+	if conns, ok := s.sseConnections[userID]; ok {
 		return len(conns)
 	}
 	return 0
 }
 
 // GetAllConnectionCounts returns a map of user IDs to their connection counts.
-func (sm *SSEManager) GetAllConnectionCounts() map[int]int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+func (s *SSEManager) GetAllConnectionCounts() map[int]int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	result := make(map[int]int)
-	for userID, conns := range sm.sseConnections {
+	for userID, conns := range s.sseConnections {
 		result[userID] = len(conns)
 	}
 	return result

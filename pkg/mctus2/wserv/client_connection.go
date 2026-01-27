@@ -105,7 +105,7 @@ type ClientConnection struct {
 // readPump is the only method that reads from the websocket connection.
 func (c *ClientConnection) readPump() {
 	defer func() {
-		c.Hub.WSManager.Unregister() <- c
+		c.Hub.WSManager.Unregister(c)
 		_ = c.Conn.Close()
 	}()
 
@@ -182,11 +182,11 @@ func (c *ClientConnection) handleMessage(msg Message) {
 	switch msg.Command {
 	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
 		// Forward control messages to target client
-		c.Hub.WSManager.Broadcast() <- msg
+		c.Hub.WSManager.Broadcast(msg)
 
 	case MsgUploadProgress, MsgUploadComplete, MsgUploadFailed, MsgClientStatus:
 		// Forward status messages to target client
-		c.Hub.WSManager.Broadcast() <- msg
+		c.Hub.WSManager.Broadcast(msg)
 
 	case MsgListProjects:
 		c.handleListProjects(msg)

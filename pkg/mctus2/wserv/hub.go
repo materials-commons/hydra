@@ -178,7 +178,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		Hub:          h,
 	}
 
-	client.Hub.WSManager.Register() <- client
+	client.Hub.WSManager.Register(client)
 	fmt.Println("Client registered!")
 
 	// Send connection acknowledgment
@@ -201,11 +201,12 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 // broadcastToUserClients sends a message to all clients (WebSocket and SSE) for a specific user.
 func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message) {
 	// Send to WebSocket clients via the user broadcast channel
-	h.WSManager.UserBroadcast() <- UserMessage{
+	m := UserMessage{
 		UserID:     userID,
 		ClientType: clientType,
 		Message:    msg,
 	}
+	h.WSManager.UserBroadcast(m)
 }
 
 /////////////////// REST API Handlers ///////////////////
@@ -259,7 +260,7 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 		Payload:   req.Payload,
 	}
 
-	h.WSManager.Broadcast() <- msg
+	h.WSManager.Broadcast(msg)
 	_ = sendCommandResponse(w, HubCommandResponse{Command: req.Command, Status: "ok"}, http.StatusOK)
 }
 
@@ -329,7 +330,7 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.WSManager.Broadcast() <- msg
+	h.WSManager.Broadcast(msg)
 	_ = sendCommandResponse(w, HubCommandResponse{Command: "UPLOAD_FILE", Status: "ok"}, http.StatusOK)
 }
 
