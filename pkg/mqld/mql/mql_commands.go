@@ -58,7 +58,8 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("list-connected-clients", mql.listConnectedClientsCommand)
 	mql.interp.RegisterCommand("upload-file", mql.uploadFileCommand)
 	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
-	mql.interp.RegisterCommand("ls", mql.notImplementedYetCommand)
+	mql.interp.RegisterCommand("ls", mql.lsCommand)
+	mql.interp.RegisterCommand("ls-projects", mql.lsProjectsCommand)
 	mql.interp.RegisterCommand("download-file", mql.downloadFileCommand)
 	mql.interp.RegisterCommand("download-directory", mql.downloadDirectoryCommand)
 	mql.interp.RegisterCommand("puts", mql.putsCommand)
@@ -347,6 +348,59 @@ func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath,
 
 	mql.hub.WSManager.Broadcast(msg)
 	return nil
+}
+
+func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	return feather.Error(fmt.Errorf("ls not implemented yet"))
+}
+
+func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 1 {
+		return feather.Error(fmt.Errorf("ls-projects client_id"))
+	}
+
+	clientID := args[0].String()
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECTS", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv.Message{
+		Command:   "LIST_PROJECTS",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID},
+	}
+
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	fmt.Printf("got resp = %+v\n", resp)
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+
+	projects, ok := payload["projects"].([]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload['projects'] to []map[string]any: %v", err))
+	}
+
+	var items []string
+	for _, item := range projects {
+		p := item.(map[string]any)
+		id := int(p["project_id"].(float64))
+		name := p["directory"].(string)
+		hostPath := p["project_dir_path"].(string)
+		items = append(items, fmt.Sprintf("id: %d name: %q host_path: %q", id, name, hostPath))
+	}
+	return feather.OK(items)
 }
 
 func (mql *MQLCommands) putsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {

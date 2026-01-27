@@ -177,7 +177,7 @@ func (c *ClientConnection) writePump() {
 
 // handleMessage dispatches messages to the appropriate handler based on the message's Command field.'
 func (c *ClientConnection) handleMessage(msg Message) {
-	fmt.Println("clienConnection::handleMessage", msg.Command)
+	fmt.Println("clientConnection::handleMessage", msg.Command)
 
 	switch msg.Command {
 	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
@@ -794,13 +794,30 @@ type ProjectItem struct {
 }
 
 func (c *ClientConnection) handleListProjects(msg Message) {
-	//fmt.Printf("handleListProjects: %+v\n", msg.Payload)
-	projectsList := msg.Payload.([]interface{})
-	for _, projectItem := range projectsList {
-		projectItem := toProjectItem(projectItem.(map[string]interface{}))
-		_ = projectItem
-		//fmt.Printf("projectItem: %+v\n", projectItem)
+	payload, ok := msg.Payload.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid payload format in handleListProjects: %+v\n", msg.Payload)
+		return
 	}
+	requestID, ok := payload["request_id"].(string)
+	if !ok {
+		log.Printf("Invalid request ID format in handleListProjects: %+v\n", msg.Payload)
+		return
+	}
+	err := c.Hub.RequestResponse().SendResponse(requestID, msg)
+	if err != nil {
+		log.Printf("Error sending response to request %s: %v", requestID, err)
+		return
+	}
+
+	fmt.Println("handleListProjects success:", msg.Payload)
+	//fmt.Printf("handleListProjects: %+v\n", msg.Payload)
+	//projectsList := msg.Payload.([]interface{})
+	//for _, projectItem := range projectsList {
+	//	projectItem := toProjectItem(projectItem.(map[string]interface{}))
+	//	_ = projectItem
+	//	//fmt.Printf("projectItem: %+v\n", projectItem)
+	//}
 }
 
 func toProjectItem(project map[string]interface{}) ProjectItem {
