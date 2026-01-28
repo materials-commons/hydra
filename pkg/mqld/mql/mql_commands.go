@@ -10,6 +10,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/feather-lang/feather"
+	"github.com/materials-commons/hydra/pkg/decoder"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
@@ -350,8 +351,79 @@ func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath,
 	return nil
 }
 
+/*
+"name": entry.name,
+
+	"path": entry.as_posix(),
+	"type": "directory" if entry.is_dir() else "file",
+	"size": stat.st_size,
+	"mtime": stat.st_mtime,
+	"ctime": stat.st_ctime
+*/
+type lsResponse struct {
+	Name  string    `json:"name"`
+	Path  string    `json:"path"`
+	Type  string    `json:"type"`
+	Size  int64     `json:"size"`
+	Mtime time.Time `json:"mtime"`
+	Ctime time.Time `json:"ctime"`
+}
+
 func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
-	return feather.Error(fmt.Errorf("ls not implemented yet"))
+	if len(args) != 2 {
+		return feather.Error(fmt.Errorf("ls client_id directory_path"))
+	}
+	clientID := args[0].String()
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_FILES", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv.Message{
+		Command:   "LIST_DIRECTORY",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID, "directory_path": args[1].String()},
+	}
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	fmt.Printf("got resp = %+v\n", resp)
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+
+	files, ok := payload["files"].([]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to []any: %v", err))
+	}
+
+	var items []string
+	for _, item := range files {
+		i := item.(map[string]any)
+		fmt.Printf("i = %+v\n", i)
+		lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
+		if err != nil {
+			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
+		}
+		items = append(items, fmt.Sprintf("name: %q path: %q type: %q size: %d mtime: %s ctime: %s",
+			lsItem.Name, lsItem.Path, lsItem.Type, lsItem.Size,
+			lsItem.Mtime.Format(time.RFC3339), lsItem.Ctime.Format(time.RFC3339)))
+	}
+	return feather.OK(items)
+}
+
+type lsProjectItem struct {
+	ID            int    `json:"project_id"`
+	Name          string `json:"directory"`
+	DirectoryPath string `json:"project_dir_path"`
 }
 
 func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
@@ -395,10 +467,11 @@ func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, a
 	var items []string
 	for _, item := range projects {
 		p := item.(map[string]any)
-		id := int(p["project_id"].(float64))
-		name := p["directory"].(string)
-		hostPath := p["project_dir_path"].(string)
-		items = append(items, fmt.Sprintf("id: %d name: %q host_path: %q", id, name, hostPath))
+		pItem, err := decoder.DecodeMapStrict[lsProjectItem](p)
+		if err != nil {
+			return feather.Error(fmt.Errorf("failed to decode lsProjectItem: %v", err))
+		}
+		items = append(items, fmt.Sprintf("id: %d name: %q host_path: %q", pItem.ID, pItem.Name, pItem.DirectoryPath))
 	}
 	return feather.OK(items)
 }

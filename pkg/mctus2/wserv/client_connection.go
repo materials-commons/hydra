@@ -33,6 +33,7 @@ const (
 	MsgUploadFailed           = "UPLOAD_FAILED"
 	MsgClientStatus           = "CLIENT_STATUS"
 	MsgListProjects           = "LIST_PROJECTS"
+	MsgListDirectory          = "LIST_DIRECTORY"
 	MsgTransferInit           = "TRANSFER_INIT"
 	MsgTransferAccept         = "TRANSFER_ACCEPT"
 	MsgTransferReject         = "TRANSFER_REJECT"
@@ -190,6 +191,9 @@ func (c *ClientConnection) handleMessage(msg Message) {
 
 	case MsgListProjects:
 		c.handleListProjects(msg)
+
+	case MsgListDirectory:
+		c.handleListDirectory(msg)
 
 	case MsgHeartbeat:
 		// Respond to heartbeat
@@ -924,6 +928,23 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	fmt.Println("   7 true")
 	return true
+}
+
+func (c *ClientConnection) handleListDirectory(msg Message) {
+	payload, ok := msg.Payload.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid payload format in handleListDirectory: %+v\n", msg.Payload)
+		return
+	}
+	requestID, ok := payload["request_id"].(string)
+	if !ok {
+		log.Printf("Invalid request ID format in handleListDirectory: %+v\n", msg.Payload)
+		return
+	}
+	err := c.Hub.RequestResponse().SendResponse(requestID, msg)
+	if err != nil {
+		log.Printf("Error sending response to request %s: %v", requestID, err)
+	}
 }
 
 // Calculate MD5 hash of a file
