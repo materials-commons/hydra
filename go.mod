@@ -6,7 +6,7 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/charmbracelet/ssh v0.0.0-20240725163421-eb71b85b27aa
 	github.com/charmbracelet/wish v1.4.1
-	github.com/feather-lang/feather v0.0.0-20251227222940-8b153391b49e
+	github.com/feather-lang/feather v0.0.0-20260119183325-601d6c2067cd
 	github.com/gliderlabs/ssh v0.3.7
 	github.com/go-resty/resty/v2 v2.14.0
 	github.com/gorilla/websocket v1.5.3
@@ -24,7 +24,7 @@ require (
 	github.com/subosito/gotenv v1.6.0
 	github.com/tus/tusd/v2 v2.4.0
 	golang.org/x/crypto v0.25.0
-	golang.org/x/sys v0.22.0
+	golang.org/x/sys v0.39.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/driver/sqlite v1.5.6
 	gorm.io/gorm v1.25.11
