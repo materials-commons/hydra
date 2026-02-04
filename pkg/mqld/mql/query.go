@@ -10,6 +10,7 @@ import (
 	"github.com/apex/log"
 	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
+	"github.com/materials-commons/hydra/pkg/mqld/mql/fileindex"
 	"github.com/materials-commons/hydra/pkg/mql/mqldb"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/text/cases"
@@ -18,7 +19,8 @@ import (
 )
 
 type Query struct {
-	db *mqldb.DB
+	db        *mqldb.DB
+	fileIndex *fileindex.TextFileIndex
 }
 
 type ShowOptions struct {
@@ -40,6 +42,7 @@ func (q *Query) RegisterCommands(i *feather.Interp) error {
 		return err
 	}
 
+	// Structured data query commands
 	i.RegisterCommand("attr", q.attrCommand)
 	i.RegisterCommand("field", q.fieldCommand)
 	i.RegisterCommand("any-state", q.anyStateCommand)
@@ -51,6 +54,12 @@ func (q *Query) RegisterCommands(i *feather.Interp) error {
 	i.RegisterCommand("starts-with", q.startsWithCommand)
 	i.RegisterCommand("ends-with", q.endsWithCommand)
 	i.RegisterCommand("query", q.queryCommand)
+
+	// Simple file search commands (beginner level)
+	i.RegisterCommand("index-files", q.indexFilesCommand)
+	i.RegisterCommand("find-in-files", q.findInFilesCommand)
+	i.RegisterCommand("show", q.showCommand)
+	i.RegisterCommand("preview", q.previewCommand)
 
 	return nil
 }

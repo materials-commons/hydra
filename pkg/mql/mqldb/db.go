@@ -263,3 +263,8 @@ func (db *DB) wireupAttributesToProcessesAndSamples() {
 		}
 	}
 }
+
+// GetDB returns the underlying gorm.DB for direct queries
+func (db *DB) GetDB() *gorm.DB {
+	return db.db
+}
