@@ -107,22 +107,22 @@ func (mql *MQLCommands) createSampleCommand(i *feather.Interp, cmd *feather.Obj,
 		return feather.Error(fmt.Errorf("create-sample dict 'name' cannot be empty"))
 	}
 
-	desc, ok := m["description:"]
-	if !ok {
-		desc = feather.NewStringObj("")
+	desc := ""
+	if d, ok := m["description:"]; ok {
+		desc = d.String()
 	}
 
-	summary, ok := m["summary:"]
-	if !ok {
-		summary = feather.NewStringObj("")
+	summary := ""
+	if s, ok := m["summary:"]; ok {
+		summary = s.String()
 	}
 
 	entityStor := stor.NewGormEntityStor(mql.db) // TODO: Allocate this into MQLCommands
 
 	entity := &mcmodel.Entity{
 		Name:        name.String(),
-		Description: desc.String(),
-		Summary:     summary.String(),
+		Description: desc,
+		Summary:     summary,
 		Category:    "experimental",
 		ProjectID:   mql.Project.ID,
 		OwnerID:     mql.User.ID,
