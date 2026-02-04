@@ -73,7 +73,6 @@ func (mql *MQLCommands) Run(query string, w http.ResponseWriter) string {
 		return err.Error()
 	}
 
-	//fmt.Println("mql.interp.Eval = ", result)
 	return result.String()
 }
 
@@ -92,7 +91,6 @@ func (mql *MQLCommands) createSampleCommand(i *feather.Interp, cmd *feather.Obj,
 
 	dict, err := mql.toDict(args[0])
 	if err != nil {
-		fmt.Println("1 err = ", err)
 		return feather.Error(err)
 	}
 
@@ -130,7 +128,6 @@ func (mql *MQLCommands) createSampleCommand(i *feather.Interp, cmd *feather.Obj,
 
 	entity, err = entityStor.CreateEntity(entity)
 	if err != nil {
-		fmt.Println("2 err = ", err)
 		return feather.Error(err)
 	}
 
@@ -156,7 +153,7 @@ func (mql *MQLCommands) samplesCommand(i *feather.Interp, cmd *feather.Obj, args
 			sample.Name, sample.ID, sample.OwnerID, sample.ProjectID, sample.Category, sample.Description, sample.Summary, sample.CreatedAt.Format(time.DateOnly)))
 	}
 
-	return feather.OK(items)
+	return feather.OK(ToTclString(items))
 }
 
 func (mql *MQLCommands) samplesTableCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
@@ -214,7 +211,7 @@ func (mql *MQLCommands) listConnectedClientsCommand(i *feather.Interp, cmd *feat
 		sb.WriteString(" }")
 		connectedClients = append(connectedClients, fmt.Sprintf("host: %s type: %s client_id: %s project_ids: %s", client.Hostname, client.Type, client.ClientID, sb.String()))
 	}
-	return feather.OK(connectedClients)
+	return feather.OK(ToTclString(connectedClients))
 }
 
 func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
@@ -326,7 +323,7 @@ func (mql *MQLCommands) downloadDirectoryCommand(i *feather.Interp, cmd *feather
 }
 
 func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath, hostPath string) error {
-	fmt.Println("sendDownloadFile: ", f.Name, " f.ID =", f.ID)
+	//fmt.Println("sendDownloadFile: ", f.Name, " f.ID =", f.ID)
 	payload := make(map[string]any)
 	payload["project_id"] = mql.Project.ID
 	if hostPath != "" {
@@ -394,7 +391,6 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
 	}
 
-	fmt.Printf("got resp = %+v\n", resp)
 	payload, ok := resp.Payload.(map[string]any)
 	if !ok {
 		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
@@ -408,7 +404,6 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 	var items []string
 	for _, item := range files {
 		i := item.(map[string]any)
-		fmt.Printf("i = %+v\n", i)
 		lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
 		if err != nil {
 			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
@@ -417,7 +412,7 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 			lsItem.Name, lsItem.Path, lsItem.Type, lsItem.Size,
 			lsItem.Mtime.Format(time.RFC3339), lsItem.Ctime.Format(time.RFC3339)))
 	}
-	return feather.OK(items)
+	return feather.OK(ToTclString(items))
 }
 
 type lsProjectItem struct {
@@ -453,7 +448,6 @@ func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, a
 		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
 	}
 
-	fmt.Printf("got resp = %+v\n", resp)
 	payload, ok := resp.Payload.(map[string]any)
 	if !ok {
 		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
@@ -473,7 +467,7 @@ func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, a
 		}
 		items = append(items, fmt.Sprintf("id: %d name: %q host_path: %q", pItem.ID, pItem.Name, pItem.DirectoryPath))
 	}
-	return feather.OK(items)
+	return feather.OK(ToTclString(items))
 }
 
 func (mql *MQLCommands) putsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
@@ -491,7 +485,6 @@ func (mql *MQLCommands) toList(what *feather.Obj) ([]*feather.Obj, error) {
 
 func (mql *MQLCommands) toDict(item *feather.Obj) (*feather.DictType, error) {
 	cmd := fmt.Sprintf("dict create %s", item)
-	fmt.Println("cmd = ", cmd)
 	r, err := mql.interp.Eval(cmd)
 	if err != nil {
 		return nil, err

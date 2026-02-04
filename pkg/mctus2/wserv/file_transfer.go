@@ -11,6 +11,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 )
 
+// FileTransfer represents a file transfer in progress.
 type FileTransfer struct {
 	TransferID           string
 	File                 *os.File
@@ -34,6 +35,7 @@ type FileTransfer struct {
 	mu sync.Mutex
 }
 
+// writeChunk writes a chunk of data to the file.
 func (tf *FileTransfer) writeChunk(seq int, chunk []byte) error {
 	tf.mu.Lock()
 	defer tf.mu.Unlock()
@@ -58,6 +60,7 @@ func (tf *FileTransfer) writeChunk(seq int, chunk []byte) error {
 	return nil
 }
 
+// updateProgressIfNeeded updates the progress in the DB if needed.
 func (tf *FileTransfer) updateProgressIfNeeded(stor stor.GormPartialTransferFileStor) {
 	tf.mu.Lock()
 	defer tf.mu.Unlock()

@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Hub serves as a central management point for communications, coordination and connection state.
 type Hub struct {
 	// Connection managers
 	WSManager  *WebSocketManager
@@ -76,11 +77,11 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 	}
 }
 
+// Run starts the hub's main loop, handling incoming connections and messages.
 func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.WSManager.register:
-			fmt.Println("Registering client trying to get lock!")
 			h.WSManager.HandleRegister(client)
 
 			// Notify SSE clients about the new registration
@@ -103,7 +104,6 @@ func (h *Hub) Run() {
 			h.WSManager.HandleBroadcast(message)
 
 		case userMessage := <-h.WSManager.userBroadcast:
-			fmt.Println("User broadcast!")
 			h.WSManager.HandleUserBroadcast(userMessage)
 			h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
 		}
@@ -124,14 +124,11 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// ServeWS handles incoming WebSocket connections and manages the connection lifecycle.
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
-	// Extract bearer token from the Authorization header
-	fmt.Println("Connection!")
-
 	// Validate token and get client info
 	user, err := h.validateAuthAndGetUser(r)
 	if err != nil {
-		fmt.Println("Invalid or expired token")
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -140,36 +137,30 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case clientConnectionAttrs.ClientID == "":
-		fmt.Println("Missing MC-Client-ID header")
 		http.Error(w, "Missing MC-Client-ID header or client_id param", http.StatusBadRequest)
 		return
 
 	case clientConnectionAttrs.Hostname == "":
-		fmt.Println("Missing MC-Client-Hostname header")
 		http.Error(w, "Missing MC-Client-Hostname header or hostname param", http.StatusBadRequest)
 		return
 
 	case clientConnectionAttrs.Type == "":
-		fmt.Println("Missing MC-Connection-Type header or connection_type param")
 		http.Error(w, "Missing MC-Connection-Type header", http.StatusBadRequest)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println("Upgrade error")
 		log.Printf("Upgrade error: %v", err)
 		return
 	}
 
 	remoteClient, err := h.getOrCreateRemoteClient(clientConnectionAttrs, user)
 	if err != nil {
-		fmt.Println("Error getting or creating remote client")
 		log.Printf("Error getting or creating remote client: %v", err)
 		return
 	}
 
-	fmt.Println("Creating client!")
 	client := &ClientConnection{
 		ID:           clientConnectionAttrs.ClientID,
 		Hostname:     clientConnectionAttrs.Hostname,
@@ -183,7 +174,6 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client.Hub.WSManager.Register(client)
-	fmt.Println("Client registered!")
 
 	// Send connection acknowledgment
 	connectMsg := Message{
@@ -195,11 +185,8 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	client.Send <- connectMsg
 
-	fmt.Println("Client connectMsg sent!")
-
 	go client.writePump()
 	go client.readPump()
-	fmt.Println("Client readPump and writePump started!")
 }
 
 // broadcastToUserClients sends a message to all clients (WebSocket and SSE) for a specific user.
@@ -246,13 +233,11 @@ func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 	c := h.WSManager.GetClient(req.ClientID)
 	if c == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
-		fmt.Println("Client not found")
 		return
 	}
 
 	if c.User.ID != req.UserID {
 		http.Error(w, "User not allowed", http.StatusForbidden)
-		fmt.Println("User not allowed")
 		return
 	}
 
@@ -300,7 +285,6 @@ func (h *Hub) HandleListClients(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("HandleUploadFile")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -308,14 +292,12 @@ func (h *Hub) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("HandleSubmitTestUpload")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	clientID := r.PathValue("client_id")
-	fmt.Printf("  clientID: %s\n", clientID)
 	msg := Message{
 		Command:   "UPLOAD_FILE",
 		ID:        "ui", // Should this be the ID of the initiating client (Web UI)?
@@ -330,7 +312,6 @@ func (h *Hub) HandleSubmitTestUpload(w http.ResponseWriter, r *http.Request) {
 
 	if h.WSManager.GetClient(clientID) == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
-		fmt.Println("Client not found")
 		return
 	}
 
@@ -369,7 +350,6 @@ func (h *Hub) HandleListClientsForUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) HandleSSE(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("HandleSSE")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -453,13 +433,11 @@ func (h *Hub) getAuthToken(r *http.Request) (string, error) {
 func (h *Hub) extractTokenFromAuthHeader(authHeader string) (string, error) {
 	parts := strings.SplitN(authHeader, " ", 2)
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		fmt.Println("Invalid Authorization header format")
 		return "", fmt.Errorf("invalid authorization header format")
 	}
 
 	token := parts[1]
 	if token == "" {
-		fmt.Println("Bearer token is empty")
 		return "", fmt.Errorf("bearer token is empty")
 	}
 

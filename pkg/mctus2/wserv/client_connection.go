@@ -178,8 +178,6 @@ func (c *ClientConnection) writePump() {
 
 // handleMessage dispatches messages to the appropriate handler based on the message's Command field.'
 func (c *ClientConnection) handleMessage(msg Message) {
-	fmt.Println("clientConnection::handleMessage", msg.Command)
-
 	switch msg.Command {
 	case MsgUploadStart, MsgUploadPause, MsgUploadResume, MsgUploadCancel, MsgGetStatus:
 		// Forward control messages to target client
@@ -285,11 +283,12 @@ func (c *ClientConnection) sendChunkError(transferID string, sequence int, reaso
 func (c *ClientConnection) handleTransferInit(msg Message) {
 	// TODO: This message should be a type and we have a function that deserializes and validates it.
 	payload := msg.Payload.(map[string]interface{})
-	fmt.Printf("handleTransferInit: %+v\n", payload)
 
 	// The client sends details on the file to transfer, such as the name, size, and expected hash. It also
 	// send the project and directory path to upload the file to. The client can optionally send the chunk
 	// size. If it doesn't send a chunk size, then the server can set it or use the default (5mb).
+
+	// TODO: This code is fragile and relies on the client sending the correct parameters.
 	transferID, _ := payload["transfer_id"].(string)
 	projectFilePath := payload["project_path"].(string)
 	filePath, _ := payload["file_path"].(string)
@@ -314,12 +313,13 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		return
 	}
 
-	fmt.Println("handleTransferInit: projectID", projectID, " UserID", c.User.ID)
+	// Check access to the project
 	if !c.Hub.ProjectStor.UserCanAccessProject(c.User.ID, projectID) {
 		c.sendTransferReject(transferID, "no access to project")
 		return
 	}
 
+	// Short circuit - If the file has already been uploaded, reject the transfer
 	if c.alreadyUploaded(projectID, filePath, checksum) {
 		c.sendTransferReject(transferID, "file already uploaded")
 		return
@@ -356,14 +356,12 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	remoteClientTransfer, err = c.Hub.RemoteClientTransferStor.CreateRemoteClientTransfer(remoteClientTransfer)
 	if err != nil {
-		fmt.Printf("Error creating remote client transfer: %v\n", err)
 		c.sendTransferReject(transferID, "cannot create transfer")
 		return
 	}
 
 	// Create the file we are writing to
 	file, err := f.CreateReturningHandleToUnderlyingFile(c.Hub.FileStor.Root())
-	fmt.Printf("Created file at path: %+s\n", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
 	if err != nil {
 		c.sendTransferReject(transferID, "cannot create file")
 		return
@@ -565,7 +563,6 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 		return fmt.Errorf("file not found: %v", err)
 	}
 
-	fmt.Printf("Calculating hash for %s\n", transfer.FilePath)
 	hash, err := calculateMD5(f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
 	if err != nil {
 		log.Printf("Warning: could not calculate hash: %v", err)
@@ -577,7 +574,6 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 
 	// Update the file entry.
 	switched, err := c.Hub.FileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.ConversionStor)
-	fmt.Printf("Switched file %d: %v\n", f.ID, switched)
 
 	if err != nil {
 		return fmt.Errorf("file update error: %v", err)
@@ -585,7 +581,7 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 
 	if switched {
 		if err := os.Remove(f.ToUnderlyingFilePath(c.Hub.FileStor.Root())); err != nil {
-			fmt.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
+			log.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
 		}
 	}
 
@@ -765,7 +761,6 @@ func (c *ClientConnection) handleTransferCancel(msg Message) {
 }
 
 func (c *ClientConnection) sendTransferReject(transferID, reason string) {
-	fmt.Println("sendTransferReject:", transferID, reason)
 	c.Send <- Message{
 		Command:   MsgTransferReject,
 		ID:        transferID,
@@ -844,12 +839,13 @@ func (c *ClientConnection) handleHeartbeat(msg Message) error {
 	return nil
 }
 
+// alreadyUploaded checks if there is a file already matching the checksum. If there is
+// then it will point the file to the existing file taking into account that this
+// exact file may already exist in the project.
 func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum string) bool {
 	// First check if there is a file matching checksum
 	dirPath := filepath.Dir(filePath)
 	fileName := filepath.Base(filePath)
-
-	fmt.Println("alreadyUploaded:", projectID, dirPath, fileName, checksum)
 
 	f, err := c.Hub.FileStor.FindMatchingFileByChecksum(checksum)
 	if err != nil {
@@ -860,7 +856,6 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	if f == nil {
 		// No file found with matching checksum
-		fmt.Println("   1 false")
 		return false
 	}
 
@@ -869,7 +864,6 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	// 1. Check that the file actually exists on disk.
 	if !f.RealFileExists(c.Hub.FileStor.Root()) {
 		// File entry in database, but file doesn't exist on disk. So upload it.
-		fmt.Println("   2 false")
 		return false
 	}
 
@@ -879,7 +873,6 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		// Check if the checksum matches. If it does, then there is nothing to do.
 		if existingFile.Checksum == checksum {
 			// Yes, there is a file matching the checksum with the same name.
-			fmt.Println("   3 true")
 			return true
 		}
 	}
@@ -893,14 +886,12 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	if err != nil {
 		// error creating the directory... let's upload the file (what is the correct thing to do here?)
 		log.Printf("error creating directory: %v", err)
-		fmt.Println("   4 false")
 		return false
 	}
 
 	createdFile, err := c.Hub.FileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, f.MimeType)
 	if err != nil {
 		log.Printf("error creating file entry: %v", err)
-		fmt.Println("   5 false")
 		return false
 	}
 
@@ -913,7 +904,6 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	if err != nil {
 		log.Printf("error updating file entry: %v", err)
-		fmt.Println("   6 false")
 		return false
 	}
 
@@ -926,21 +916,25 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		log.Printf("failed adding file %d to be converted: %s", f.ID, err)
 	}
 
-	fmt.Println("   7 true")
 	return true
 }
 
+// handleListDirectory handles the list directory command where a client sends the list for a directory.
 func (c *ClientConnection) handleListDirectory(msg Message) {
 	payload, ok := msg.Payload.(map[string]interface{})
 	if !ok {
 		log.Printf("Invalid payload format in handleListDirectory: %+v\n", msg.Payload)
 		return
 	}
+
+	// A directory listing needs a request_id so we know who to send the response to
 	requestID, ok := payload["request_id"].(string)
 	if !ok {
 		log.Printf("Invalid request ID format in handleListDirectory: %+v\n", msg.Payload)
 		return
 	}
+
+	// Send the response to the waiting client
 	err := c.Hub.RequestResponse().SendResponse(requestID, msg)
 	if err != nil {
 		log.Printf("Error sending response to request %s: %v", requestID, err)

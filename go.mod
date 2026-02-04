@@ -6,7 +6,7 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/charmbracelet/ssh v0.0.0-20240725163421-eb71b85b27aa
 	github.com/charmbracelet/wish v1.4.1
-	github.com/feather-lang/feather v0.0.0-20260119183325-601d6c2067cd
+	github.com/feather-lang/feather v0.0.0-20260119183325-601d6c2067cd // v0.0.0-20251227222940-8b153391b49e //v0.0.0-20260119183325-601d6c2067cd
 	github.com/gliderlabs/ssh v0.3.7
 	github.com/go-resty/resty/v2 v2.14.0
 	github.com/gorilla/websocket v1.5.3
