@@ -25,7 +25,7 @@ servers:
 	(cd ./cmd/mqlservd; go build)
 	(cd ./cmd/mcdavd; go build)
 	(cd ./cmd/mcfsd; go build)
-	(cd ./cmd/mctusd; go build)
+	(cd ./cmd/mchubd; go build)
 
 deploy: deploy-cli deploy-server
 
@@ -42,13 +42,13 @@ deploy-server: ssh-hostkey server
 	sudo chmod a+rx /usr/local/bin/mchydrad
 	sudo cp operations/supervisord.d/mchydrad.conf /etc/supervisor/conf.d
 
-deploy-servers: deploy-mcbridgefsd deploy-mcftservd deploy-mcsshd deploy-mqlservd deploy-mcdavd deploy-mcfsd deploy-mctusd
+deploy-servers: deploy-mcbridgefsd deploy-mcftservd deploy-mcsshd deploy-mqlservd deploy-mcdavd deploy-mcfsd deploy-mchubd
 
 stop-servers:
-	-sudo supervisorctl stop 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*' 'mctusd:*'
+	-sudo supervisorctl stop 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*' 'mchubd:*'
 
 start-servers:
-	-sudo supervisorctl start 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*' 'mctusd:*'
+	-sudo supervisorctl start 'mcbridgefsd:*' 'mcdavd:*' 'mcfsd:*' 'mcftservd:*' 'mcsshd:*' 'mqlservd:*' 'mchubd:*'
 
 mcbridgefsd:
 	(cd ./cmd/mcbridgefsd; go build)
@@ -111,7 +111,6 @@ deploy-mcdavd: mcdavd
 	- sudo cp cmd/mcdavd/mcdavd /usr/local/bin
 	- sudo chmod a+rx /usr/local/bin/mcdavd
 
-
 deploy-mctusd: mctusd
 	- sudo cp operations/supervisord.d/mctusd.conf /etc/supervisor/conf.d
 	- sudo cp cmd/mctusd/mctusd /usr/local/bin
@@ -121,3 +120,8 @@ deploy-mcfsd: mcfsd
 	- sudo cp operations/supervisord.d/mcfsd.conf /etc/supervisor/conf.d
 	- sudo cp cmd/mcfsd/mcfsd /usr/local/bin
 	- sudo chmod a+rx /usr/local/bin/mcfsd
+
+deploy-mchubd: mchubd
+	- sudo cp operations/supervisord.d/mchubd.conf /etc/supervisor/conf.d
+	- sudo cp cmd/mchubd/mchubd /usr/local/bin
+	- sudo chmod a+rx /usr/local/bin/mchubd
