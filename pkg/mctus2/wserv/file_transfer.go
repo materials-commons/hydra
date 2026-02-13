@@ -21,7 +21,8 @@ type FileTransfer struct {
 	OwnerID              int
 	remoteClientTransfer *mcmodel.RemoteClientTransfer
 	FileName             string
-	FilePath             string
+	RemoteFilePath       string
+	ProjectFilePath      string
 	ExpectedSize         int64
 	BytesWritten         int64
 	ChunkSize            int

@@ -381,7 +381,8 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		DirectoryID:          dir.ID,
 		FileID:               f.ID,
 		FileName:             fileName,
-		FilePath:             filePath,
+		RemoteFilePath:       filePath,
+		ProjectFilePath:      f.ToUnderlyingFilePath(c.Hub.FileStor.Root()),
 		File:                 file,
 		ExpectedSize:         fileSize,
 		BytesWritten:         0,
@@ -546,7 +547,7 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	transfer.File.Close()
 
 	// Verify file size
-	fileInfo, err := os.Stat(transfer.FilePath)
+	fileInfo, err := os.Stat(transfer.ProjectFilePath)
 	if err != nil {
 		return fmt.Errorf("stat error: %v", err)
 	}
@@ -664,7 +665,8 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 		ProjectID:            remoteTransfer.ProjectID,
 		DirectoryID:          remoteTransfer.File.DirectoryID,
 		FileName:             filepath.Base(remoteTransfer.RemotePath),
-		FilePath:             remoteTransfer.RemotePath,
+		RemoteFilePath:       remoteTransfer.RemotePath,
+		ProjectFilePath:      remoteTransfer.File.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root()),
 		remoteClientTransfer: remoteTransfer,
 		File:                 file,
 		ExpectedSize:         int64(remoteTransfer.ExpectedSize),
