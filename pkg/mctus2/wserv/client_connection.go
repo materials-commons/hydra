@@ -320,7 +320,7 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	}
 
 	// Short circuit - If the file has already been uploaded, reject the transfer
-	if c.alreadyUploaded(projectID, filePath, checksum) {
+	if c.alreadyUploaded(projectID, projectFilePath, checksum) {
 		c.sendTransferReject(transferID, "file already uploaded")
 		return
 	}
