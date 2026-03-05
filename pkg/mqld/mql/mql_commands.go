@@ -13,7 +13,7 @@ import (
 	"github.com/materials-commons/hydra/pkg/decoder"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
-	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
+	wserv2 "github.com/materials-commons/hydra/pkg/mchubd/wserv"
 	"github.com/olekukonko/tablewriter"
 	"gorm.io/gorm"
 )
@@ -23,11 +23,11 @@ type MQLCommands struct {
 	User    *mcmodel.User
 	db      *gorm.DB
 	interp  *feather.Interp
-	hub     *wserv.Hub
+	hub     *wserv2.Hub
 	w       http.ResponseWriter
 }
 
-func NewMQLCommands(project *mcmodel.Project, user *mcmodel.User, db *gorm.DB, interp *feather.Interp, hub *wserv.Hub) *MQLCommands {
+func NewMQLCommands(project *mcmodel.Project, user *mcmodel.User, db *gorm.DB, interp *feather.Interp, hub *wserv2.Hub) *MQLCommands {
 	mql := &MQLCommands{
 		Project: project,
 		User:    user,
@@ -228,7 +228,7 @@ func (mql *MQLCommands) uploadDirectoryCommand(i *feather.Interp, cmd *feather.O
 		payload["local_directory_path"] = args[3].String()
 	}
 
-	msg := wserv.Message{
+	msg := wserv2.Message{
 		Command:   "UPLOAD_DIRECTORY",
 		ID:        "mql",
 		Timestamp: time.Now(),
@@ -253,7 +253,7 @@ func (mql *MQLCommands) uploadFileCommand(i *feather.Interp, cmd *feather.Obj, a
 		payload["file_path"] = args[2].String()
 	}
 
-	msg := wserv.Message{
+	msg := wserv2.Message{
 		Command:   "UPLOAD_FILE",
 		ID:        "mql", // Should this be the ID of the initiating client (Web UI)?
 		Timestamp: time.Now(),
@@ -336,7 +336,7 @@ func (mql *MQLCommands) sendDownloadFile(f *mcmodel.File, clientID, projectPath,
 	payload["size"] = f.Size
 	payload["checksum"] = f.Checksum
 
-	msg := wserv.Message{
+	msg := wserv2.Message{
 		Command:   "DOWNLOAD_FILE",
 		ID:        "mql", // Should this be the ID of the initiating client (Web UI)?
 		Timestamp: time.Now(),
@@ -377,7 +377,7 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 		return feather.Error(fmt.Errorf("failed to create request: %v", err))
 	}
 
-	msg := wserv.Message{
+	msg := wserv2.Message{
 		Command:   "LIST_DIRECTORY",
 		ID:        "mql",
 		Timestamp: time.Now(),
@@ -433,7 +433,7 @@ func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, a
 		return feather.Error(fmt.Errorf("failed to create request: %v", err))
 	}
 
-	msg := wserv.Message{
+	msg := wserv2.Message{
 		Command:   "LIST_PROJECTS",
 		ID:        "mql",
 		Timestamp: time.Now(),

@@ -13,7 +13,7 @@ import (
 	"github.com/feather-lang/feather"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
-	"github.com/materials-commons/hydra/pkg/mctus2/wserv"
+	"github.com/materials-commons/hydra/pkg/mchubd/wserv"
 	"github.com/materials-commons/hydra/pkg/mqld/mql"
 	"github.com/spf13/cobra"
 	"github.com/subosito/gotenv"
