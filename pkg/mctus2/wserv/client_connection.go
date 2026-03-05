@@ -581,8 +581,32 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	}
 
 	if switched {
-		if err := os.Remove(f.ToUnderlyingFilePath(c.Hub.FileStor.Root())); err != nil {
-			log.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
+		if f.RealFileExists(c.Hub.FileStor.Root()) {
+			// Real file exists, so we don't need to keep the uploaded file.
+			if err := os.Remove(f.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root())); err != nil {
+				log.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
+			}
+		} else {
+			// Real file doesn't exist so move the uploaded file to the correct UUID path.
+			uploadedFilePath := f.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root())
+			// Get the path that the file should be moved to.
+			newPath := f.ToUnderlyingFilePath(c.Hub.FileStor.Root())
+
+			// Make sure the destination path exists.
+			_ = f.MkdirUnderlyingPath(c.Hub.FileStor.Root())
+
+			// Move the file.
+			if err := os.Rename(uploadedFilePath, newPath); err != nil {
+				log.Printf("Failed to move file %s to %s: %s", uploadedFilePath, newPath, err)
+			}
+
+			// Need to set the file health to fixed
+			fixedFile, err := c.Hub.FileStor.GetFileByUUID(f.UsesUUID)
+			if err != nil {
+				return fmt.Errorf("file not found: %v", err)
+			}
+
+			_, _ = c.Hub.FileStor.SetFileHealthFixed(fixedFile, "wserv", "upload")
 		}
 	}
 

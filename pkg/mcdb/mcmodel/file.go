@@ -43,6 +43,10 @@ func (f File) MkdirUnderlyingPath(mcfsDir string) error {
 	return os.MkdirAll(f.ToUnderlyingDirPath(mcfsDir), 0755)
 }
 
+func (f File) MkdirUnderlyingPathForUUID(mcfsDir string) error {
+	return os.MkdirAll(f.ToUnderlyingDirPathForUUID(mcfsDir), 0755)
+}
+
 func (f File) CreateUnderlyingFile(mcfsDir string) error {
 	handle, err := f.CreateReturningHandleToUnderlyingFile(mcfsDir)
 	if err != nil {
@@ -112,6 +116,11 @@ func (f File) ToUnderlyingFilePathForUUID(mcdir string) string {
 
 func (f File) ToUnderlyingDirPath(mcdir string) string {
 	uuidParts := strings.Split(f.UUIDForPath(), "-")
+	return filepath.Join(mcdir, uuidParts[1][0:2], uuidParts[1][2:4])
+}
+
+func (f File) ToUnderlyingDirPathForUUID(mcdir string) string {
+	uuidParts := strings.Split(f.UUID, "-")
 	return filepath.Join(mcdir, uuidParts[1][0:2], uuidParts[1][2:4])
 }
 
