@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Materials Commons WebSocket Upload Example</title>
+
+  <!-- Uppy CSS -->
+  <link href="https://releases.transloadit.com/uppy/v3.3.1/uppy.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    .config-section {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .config-section label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    .config-section input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .upload-section {
+      margin-top: 30px;
+    }
+
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      background: #e8f4f8;
+      border-left: 4px solid #1e88e5;
+      border-radius: 4px;
+    }
+
+    .error {
+      background: #fdecea;
+      border-left-color: #e53935;
+    }
+
+    .success {
+      background: #e8f5e9;
+      border-left-color: #43a047;
+    }
+  </style>
+</head>
+<body>
+  <h1>Materials Commons WebSocket Upload</h1>
+
+  <div class="config-section">
+    <h2>Configuration</h2>
+    <label for="serverUrl">WebSocket Server URL:</label>
+    <input type="text" id="serverUrl" value="ws://localhost:1352/ws" placeholder="ws://localhost:1352/ws">
+
+    <label for="projectId">Project ID:</label>
+    <input type="number" id="projectId" value="1" placeholder="1">
+
+    <label for="projectPath">Project Path (destination):</label>
+    <input type="text" id="projectPath" value="/" placeholder="/uploads/test.txt">
+
+    <label for="chunkSize">Chunk Size (bytes):</label>
+    <input type="number" id="chunkSize" value="5242880" placeholder="5242880">
+  </div>
+
+  <div class="upload-section">
+    <h2>Upload Files</h2>
+    <div id="uppy"></div>
+  </div>
+
+  <div id="status" style="display: none;"></div>
+
+  <!-- Uppy JS -->
+  <script src="https://releases.transloadit.com/uppy/v3.3.1/uppy.min.js"></script>
+
+  <!-- cuid for generating IDs -->
+  <script src="https://cdn.jsdelivr.net/npm/cuid@2.1.8/dist/browser-cuid.min.js"></script>
+
+  <!-- CryptoJS for MD5 checksums (fallback if Web Crypto API doesn't support MD5) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+  <!-- Our WebSocket Upload Plugin -->
+  <script src="uppy-websocket-upload.js"></script>
+
+  <script>
+    // Initialize Uppy
+    const uppy = new Uppy.Core({
+      debug: true,
+      autoProceed: false,
+      restrictions: {
+        maxNumberOfFiles: 10
+      }
+    })
+
+    // Add Dashboard UI
+    uppy.use(Uppy.Dashboard, {
+      inline: true,
+      target: '#uppy',
+      height: 350,
+      showProgressDetails: true,
+      note: 'Upload files to Materials Commons via WebSocket'
+    })
+
+    // Get configuration from form
+    function getConfig() {
+      return {
+        serverUrl: document.getElementById('serverUrl').value,
+        projectId: parseInt(document.getElementById('projectId').value),
+        projectPath: document.getElementById('projectPath').value,
+        chunkSize: parseInt(document.getElementById('chunkSize').value)
+      }
+    }
+
+    // Add our WebSocket upload plugin
+    function initializePlugin() {
+      const config = getConfig()
+
+      // Remove existing plugin if any
+      if (uppy.getPlugin('MaterialsCommonsWebSocketUpload')) {
+        uppy.removePlugin(uppy.getPlugin('MaterialsCommonsWebSocketUpload'))
+      }
+
+      // Add the plugin
+      uppy.use(MaterialsCommonsWebSocketUpload, {
+        serverUrl: config.serverUrl,
+        chunkSize: config.chunkSize
+      })
+
+      showStatus('Plugin initialized with server: ' + config.serverUrl, 'success')
+    }
+
+    // Show status messages
+    function showStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('status')
+      statusDiv.textContent = message
+      statusDiv.style.display = 'block'
+      statusDiv.className = type === 'error' ? 'error' : type === 'success' ? 'success' : ''
+
+      console.log('[Status]', type, message)
+    }
+
+    // Event handlers
+    uppy.on('file-added', (file) => {
+      const config = getConfig()
+
+      // Set file metadata needed for upload
+      uppy.setFileMeta(file.id, {
+        projectId: config.projectId,
+        projectPath: config.projectPath || '/' + file.name,
+        filePath: file.name
+      })
+
+      showStatus(`File added: ${file.name} (${formatBytes(file.size)})`)
+    })
+
+    uppy.on('upload-started', (file) => {
+      showStatus(`Starting upload: ${file.name}`)
+    })
+
+    uppy.on('upload-progress', (file, progress) => {
+      const percent = Math.round((progress.bytesUploaded / progress.bytesTotal) * 100)
+      showStatus(`Uploading ${file.name}: ${percent}% (${formatBytes(progress.bytesUploaded)} / ${formatBytes(progress.bytesTotal)})`)
+    })
+
+    uppy.on('upload-success', (file, response) => {
+      showStatus(`Upload successful: ${file.name}`, 'success')
+      console.log('Upload response:', response)
+    })
+
+    uppy.on('upload-error', (file, error) => {
+      showStatus(`Upload failed: ${file.name} - ${error.message}`, 'error')
+      console.error('Upload error:', error)
+    })
+
+    uppy.on('complete', (result) => {
+      if (result.failed.length === 0) {
+        showStatus(`All uploads completed successfully! (${result.successful.length} files)`, 'success')
+      } else {
+        showStatus(`Uploads completed with ${result.failed.length} failures`, 'error')
+      }
+      console.log('Upload complete:', result)
+    })
+
+    // Utility function to format bytes
+    function formatBytes(bytes, decimals = 2) {
+      if (bytes === 0) return '0 Bytes'
+
+      const k = 1024
+      const dm = decimals < 0 ? 0 : decimals
+      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      initializePlugin()
+
+      // Reinitialize plugin when config changes
+      document.querySelectorAll('.config-section input').forEach(input => {
+        input.addEventListener('change', () => {
+          initializePlugin()
+        })
+      })
+    })
+  </script>
+</body>
+</html>
