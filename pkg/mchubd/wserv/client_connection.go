@@ -582,7 +582,7 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 
 	if switched {
 		if f.RealFileExists(c.Hub.FileStor.Root()) {
-			// Real file exists, so we don't need to keep the uploaded file.
+			// The real file exists, so we don't need to keep the uploaded file.
 			if err := os.Remove(f.ToUnderlyingFilePathForUUID(c.Hub.FileStor.Root())); err != nil {
 				log.Printf("Failed to remove file %s: %s", f.ToUnderlyingFilePath(c.Hub.FileStor.Root()), err)
 			}
