@@ -566,21 +566,20 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 		return fmt.Errorf("file not found: %v", err)
 	}
 
-	// Compute the checksum for the uploaded file. There are two paths for this
-	// computation. If transfer.HashInvalid is true, we need to calculate the hash
-	// by reading the entire file and computing it the hash. This is the slow path.
-	//
-	// The second path is the fast path and will be the common case. In this case
-	// we've been building up the hash as we write chunks. To calculate the hash,
-	// we don't need to read the file we just wrote. Instead, we can just call the
-	// the Hasher.Sum() to give us the hash.
+	// Compute the checksum for the uploaded file. There are two paths for this.
 	var checksum string
 	if transfer.HashInvalid {
+		// First path: If transfer.HashInvalid is true, we need to calculate the hash
+		// by reading the entire file and computing it the hash. This is the slow path.
 		checksum, err = calculateMD5(f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
 		if err != nil {
 			log.Printf("Warning: could not calculate hash: %v", err)
 		}
 	} else {
+		// The second path is the fast path and will be the common case. This is the
+		// fast path. In this case we've been building up the hash as we write chunks.
+		// To calculate the hash, we don't need to read the file we just wrote.
+		// Instead, we can just call the Hasher.Sum() to give us the hash.
 		checksum = fmt.Sprintf("%x", transfer.Hasher.Sum(nil))
 	}
 
