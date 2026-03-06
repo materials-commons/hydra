@@ -388,6 +388,8 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		BytesWritten:         0,
 		ChunkSize:            chunkSize,
 		remoteClientTransfer: remoteClientTransfer,
+		Hasher:               md5.New(),
+		HashInvalid:          false,
 		NextChunkSeq:         0,
 		LastActivity:         time.Now(),
 		lastDBUpdate:         time.Now(),
@@ -564,13 +566,26 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 		return fmt.Errorf("file not found: %v", err)
 	}
 
-	hash, err := calculateMD5(f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
-	if err != nil {
-		log.Printf("Warning: could not calculate hash: %v", err)
+	// Compute the checksum for the uploaded file. There are two paths for this
+	// computation. If transfer.HashInvalid is true, we need to calculate the hash
+	// by reading the entire file and computing it the hash. This is the slow path.
+	//
+	// The second path is the fast path and will be the common case. In this case
+	// we've been building up the hash as we write chunks. To calculate the hash,
+	// we don't need to read the file we just wrote. Instead, we can just call the
+	// the Hasher.Sum() to give us the hash.
+	var checksum string
+	if transfer.HashInvalid {
+		checksum, err = calculateMD5(f.ToUnderlyingFilePath(c.Hub.FileStor.Root()))
+		if err != nil {
+			log.Printf("Warning: could not calculate hash: %v", err)
+		}
+	} else {
+		checksum = fmt.Sprintf("%x", transfer.Hasher.Sum(nil))
 	}
 
-	if hash != transfer.remoteClientTransfer.ExpectedChecksum {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, hash)
+	if checksum != transfer.remoteClientTransfer.ExpectedChecksum {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, checksum)
 	}
 
 	// Update the file entry.
@@ -683,6 +698,9 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 	actualSize := fileInfo.Size()
 	nextChunkSeq := int(actualSize / int64(remoteTransfer.ChunkSize))
 
+	// TODO: Consider building the hash of the file here, so that we don't have to
+	// re-read the entire file at transfer complete to verify the hash.
+
 	// Create the in-memory transfer state
 	transfer := &FileTransfer{
 		TransferID:           transferID,
@@ -696,6 +714,7 @@ func (c *ClientConnection) handleTransferResume(msg Message) {
 		ExpectedSize:         int64(remoteTransfer.ExpectedSize),
 		BytesWritten:         actualSize,
 		ChunkSize:            remoteTransfer.ChunkSize,
+		HashInvalid:          true,
 		NextChunkSeq:         nextChunkSeq,
 		LastActivity:         time.Now(),
 		lastDBUpdate:         time.Now(),

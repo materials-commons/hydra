@@ -2,6 +2,7 @@ package wserv
 
 import (
 	"fmt"
+	"hash"
 	"log"
 	"os"
 	"sync"
@@ -28,6 +29,11 @@ type FileTransfer struct {
 	ChunkSize            int
 	NextChunkSeq         int
 	LastActivity         time.Time
+	Hasher               hash.Hash // Track the hash of the file. Updated as blocks are written.
+
+	// Set to true if the hash is invalid. This happens when the writes
+	// are interrupted and have to resume without the hash state
+	HashInvalid bool
 
 	// For periodic DB updates
 	chunksSinceUpdate int
@@ -46,11 +52,16 @@ func (tf *FileTransfer) writeChunk(seq int, chunk []byte) error {
 		return fmt.Errorf("expected chunk %d, got %d", tf.NextChunkSeq, seq)
 	}
 
-	// Write at correct offset
+	// Write at the correct offset
 	offset := int64(seq) * int64(tf.ChunkSize)
 	n, err := tf.File.WriteAt(chunk, offset)
 	if err != nil {
 		return fmt.Errorf("write error: %v", err)
+	}
+
+	// Update the hash if the chunk is valid
+	if !tf.HashInvalid {
+		tf.Hasher.Write(chunk)
 	}
 
 	tf.BytesWritten += int64(n)
@@ -68,7 +79,7 @@ func (tf *FileTransfer) updateProgressIfNeeded(stor stor.GormPartialTransferFile
 
 	// Update DB every 100 chunks or 30 seconds
 	shouldUpdate := tf.chunksSinceUpdate >= 100 ||
-		time.Since(tf.lastDBUpdate) > 30*time.Second
+			time.Since(tf.lastDBUpdate) > 30*time.Second
 
 	if shouldUpdate {
 		if err := stor.UpdateFileSize(tf.TransferID, tf.BytesWritten); err != nil {
