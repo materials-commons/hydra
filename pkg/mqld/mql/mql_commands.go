@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -401,18 +403,72 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 		return feather.Error(fmt.Errorf("failed to cast payload to []any: %v", err))
 	}
 
-	var items []string
-	for _, item := range files {
-		i := item.(map[string]any)
+	buf := new(bytes.Buffer)
+	table := tablewriter.NewWriter(buf)
+	buf.WriteString("\n")
+	defer table.Close()
+	table.Header([]string{"Path", "Type", "Size", "Mtime", "Ctime"})
+
+	var filesFromClient [][]string
+	for _, f := range files {
+		i := f.(map[string]any)
 		lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
 		if err != nil {
 			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
 		}
-		items = append(items, fmt.Sprintf("name: %q path: %q type: %q size: %d mtime: %s ctime: %s",
-			lsItem.Name, lsItem.Path, lsItem.Type, lsItem.Size,
-			lsItem.Mtime.Format(time.RFC3339), lsItem.Ctime.Format(time.RFC3339)))
+		fpath := filepath.Base(lsItem.Path)
+		if lsItem.Type == "directory" {
+			fpath += "/"
+		}
+		entry := []string{
+			fpath, lsItem.Type, humanSize(lsItem.Size),
+			lsItem.Mtime.Format("Jan _2 15:04"), lsItem.Ctime.Format("Jan _2 15:04"),
+		}
+		filesFromClient = append(filesFromClient, entry)
 	}
-	return feather.OK(ToTclString(items))
+
+	sort.Slice(filesFromClient, func(i, j int) bool {
+		return filesFromClient[i][0] < filesFromClient[j][0]
+	})
+
+	table.Bulk(filesFromClient)
+	table.Render()
+	result := buf.String()
+	return feather.OK(result)
+	//_ = result
+	// return feather.OK(result)
+
+	//var items []string
+	//for _, item := range files {
+	//	i := item.(map[string]any)
+	//	lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
+	//	if err != nil {
+	//		return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
+	//	}
+	//	items = append(items, fmt.Sprintf("name: %q path: %q type: %q size: %d mtime: %s ctime: %s",
+	//		lsItem.Name, lsItem.Path, lsItem.Type, lsItem.Size,
+	//		lsItem.Mtime.Format(time.RFC3339), lsItem.Ctime.Format(time.RFC3339)))
+	//}
+	//return feather.OK(ToTclString(items))
+}
+
+func humanSize(size int64) string {
+	const unit = 1000
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	value := float64(size) / float64(div)
+	if value == float64(int64(value)) {
+		return fmt.Sprintf("%.0f %cB", value, "KMGTPE"[exp])
+	}
+	return fmt.Sprintf("%.1f %cB", value, "KMGTPE"[exp])
 }
 
 type lsProjectItem struct {
