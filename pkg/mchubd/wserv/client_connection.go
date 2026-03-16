@@ -133,7 +133,7 @@ func (c *ClientConnection) readPump() {
 				continue
 			}
 			msg.Timestamp = time.Now()
-			log.Printf("Received message: command=%s from=%s", msg.Command, c.ID)
+			//log.Printf("Received message: command=%s from=%s", msg.Command, c.ID)
 			c.handleMessage(msg)
 
 		case websocket.BinaryMessage:
