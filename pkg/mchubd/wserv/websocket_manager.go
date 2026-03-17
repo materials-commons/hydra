@@ -1,6 +1,7 @@
 package wserv
 
 import (
+	"fmt"
 	"log"
 	"sync"
 )
@@ -12,7 +13,7 @@ type WebSocketManager struct {
 	clients map[string]*ClientConnection
 
 	// clientsByUserID groups clients by user ID for efficient user-based broadcasting
-	clientsByUserID map[int][]*ClientConnection
+	clientsByUserID map[int]map[string]*ClientConnection
 
 	// register is used to add new client connections
 	register chan *ClientConnection
@@ -34,7 +35,7 @@ type WebSocketManager struct {
 func NewWebSocketManager() *WebSocketManager {
 	return &WebSocketManager{
 		clients:         make(map[string]*ClientConnection),
-		clientsByUserID: make(map[int][]*ClientConnection),
+		clientsByUserID: make(map[int]map[string]*ClientConnection),
 		register:        make(chan *ClientConnection),
 		unregister:      make(chan *ClientConnection),
 		broadcast:       make(chan Message),
@@ -68,7 +69,11 @@ func (w *WebSocketManager) HandleRegister(client *ClientConnection) {
 	defer w.mu.Unlock()
 
 	w.clients[client.ID] = client
-	w.clientsByUserID[client.User.ID] = append(w.clientsByUserID[client.User.ID], client)
+	if _, ok := w.clientsByUserID[client.User.ID]; !ok {
+		w.clientsByUserID[client.User.ID] = make(map[string]*ClientConnection)
+
+	}
+	w.clientsByUserID[client.User.ID][client.ID] = client
 
 	log.Printf("ClientConnection registered: %s (type: %s), (host: %s), (userID: %d)",
 		client.ID, client.Type, client.Hostname, client.User.ID)
@@ -89,13 +94,7 @@ func (w *WebSocketManager) HandleUnregister(client *ClientConnection) {
 
 		// Remove from clientsByUserID
 		if userClients, ok := w.clientsByUserID[client.User.ID]; ok {
-			for i, c := range userClients {
-				if c.ID == client.ID {
-					// Delete the entry at index i
-					w.clientsByUserID[client.User.ID] = append(userClients[:i], userClients[i+1:]...)
-					break
-				}
-			}
+			delete(userClients, client.ID)
 
 			// Clean up the map key if the user has no more clients
 			if len(w.clientsByUserID[client.User.ID]) == 0 {
@@ -170,13 +169,19 @@ func (w *WebSocketManager) GetClientsForUser(userID int) []*ClientConnection {
 
 	clients := w.clientsByUserID[userID]
 	if clients == nil {
+		fmt.Printf("Warning: user %d has no connected clients\n", userID)
 		return []*ClientConnection{}
 	}
 
 	// Return a copy to avoid concurrent modification issues
-	result := make([]*ClientConnection, len(clients))
-	copy(result, clients)
-	return result
+	var results []*ClientConnection
+	for _, client := range clients {
+		if client.Projects == nil {
+			log.Printf("Warning: user %d has no connected clients\n", userID)
+		}
+		results = append(results, client)
+	}
+	return results
 }
 
 // GetAllClients returns a copy of all connected clients.

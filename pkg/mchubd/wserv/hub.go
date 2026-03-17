@@ -487,6 +487,10 @@ func (h *Hub) GetConnectedClientsForUser(userID int) []ListClientsResp {
 	clientsForUser := h.WSManager.GetClientsForUser(userID)
 	clients := make([]ListClientsResp, 0, len(clientsForUser))
 	for _, client := range clientsForUser {
+		if client == nil {
+			continue
+		}
+
 		cr := ListClientsResp{
 			ClientID: client.ID,
 			Type:     client.Type,
