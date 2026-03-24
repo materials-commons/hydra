@@ -26,14 +26,13 @@ const (
 	MsgGetStatus    = "GET_STATUS"
 	MsgHeartbeat    = "HEARTBEAT"
 
-	MsgClientConnected        = "CLIENT_CONNECTED"
-	MsgClientDisconnected     = "CLIENT_DISCONNECTED"
-	MsgUploadProgress         = "UPLOAD_PROGRESS"
-	MsgUploadComplete         = "UPLOAD_COMPLETE"
-	MsgUploadFailed           = "UPLOAD_FAILED"
-	MsgClientStatus           = "CLIENT_STATUS"
-	MsgListProjects           = "LIST_PROJECTS"
-	MsgListDirectory          = "LIST_DIRECTORY"
+	MsgClientConnected    = "CLIENT_CONNECTED"
+	MsgClientDisconnected = "CLIENT_DISCONNECTED"
+	MsgUploadProgress     = "UPLOAD_PROGRESS"
+	MsgUploadComplete     = "UPLOAD_COMPLETE"
+	MsgUploadFailed       = "UPLOAD_FAILED"
+	MsgClientStatus       = "CLIENT_STATUS"
+
 	MsgTransferInit           = "TRANSFER_INIT"
 	MsgTransferAccept         = "TRANSFER_ACCEPT"
 	MsgTransferReject         = "TRANSFER_REJECT"
@@ -43,6 +42,10 @@ const (
 	MsgTransferResume         = "TRANSFER_RESUME"
 	MsgTransferResumeResponse = "TRANSFER_RESUME_RESPONSE"
 	MsgTransferCancel         = "TRANSFER_CANCEL"
+
+	MsgListProjects         = "LIST_PROJECTS"
+	MsgListDirectory        = "LIST_DIRECTORY"
+	MsgListProjectDirectory = "LIST_PROJECT_DIRECTORY"
 )
 
 type Message struct {
@@ -187,11 +190,8 @@ func (c *ClientConnection) handleMessage(msg Message) {
 		// Forward status messages to target client
 		c.Hub.WSManager.Broadcast(msg)
 
-	case MsgListProjects:
-		c.handleListProjects(msg)
-
-	case MsgListDirectory:
-		c.handleListDirectory(msg)
+	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory:
+		c.handleCommandResponse(msg)
 
 	case MsgHeartbeat:
 		// Respond to heartbeat
@@ -220,6 +220,8 @@ func (c *ClientConnection) handleMessage(msg Message) {
 
 	case MsgClientDisconnected:
 		log.Printf("ClientConnection %s disconnected", msg.ClientID)
+	default:
+		log.Printf("Unknown command: %s", msg.Command)
 	}
 }
 
@@ -854,13 +856,6 @@ func (c *ClientConnection) handleListProjects(msg Message) {
 	}
 
 	fmt.Println("handleListProjects success:", msg.Payload)
-	//fmt.Printf("handleListProjects: %+v\n", msg.Payload)
-	//projectsList := msg.Payload.([]interface{})
-	//for _, projectItem := range projectsList {
-	//	projectItem := toProjectItem(projectItem.(map[string]interface{}))
-	//	_ = projectItem
-	//	//fmt.Printf("projectItem: %+v\n", projectItem)
-	//}
 }
 
 func toProjectItem(project map[string]interface{}) ProjectItem {
@@ -961,6 +956,27 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	}
 
 	return true
+}
+
+func (c *ClientConnection) handleCommandResponse(msg Message) {
+	payload, ok := msg.Payload.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid payload format in handleCommandResponse: %+v\n", msg.Payload)
+		return
+	}
+
+	// A directory listing needs a request_id so we know who to send the response to
+	requestID, ok := payload["request_id"].(string)
+	if !ok {
+		log.Printf("Invalid request ID format in handleCommandResponse: %+v\n", msg.Payload)
+		return
+	}
+
+	// Send the response to the waiting client
+	err := c.Hub.RequestResponse().SendResponse(requestID, msg)
+	if err != nil {
+		log.Printf("Error sending response to request %s: %v", requestID, err)
+	}
 }
 
 // handleListDirectory handles the list directory command where a client sends the list for a directory.
