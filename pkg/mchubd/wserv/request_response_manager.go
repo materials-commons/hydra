@@ -155,6 +155,7 @@ func (r *RequestResponseManager) RemoveRequest(requestID string) {
 	if req, exists := r.pendingRequests[requestID]; exists {
 		// Cancel the context
 		req.cancel()
+		close(req.ResponseChan)
 
 		// Remove from maps
 		delete(r.pendingRequests, requestID)
@@ -230,6 +231,7 @@ func (r *RequestResponseManager) cleanup() {
 			log.Printf("Cleaning up timed-out request %s", requestID)
 
 			req.cancel()
+			close(req.ResponseChan)
 
 			// Remove from maps
 			delete(r.pendingRequests, requestID)
