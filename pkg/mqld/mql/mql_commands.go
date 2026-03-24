@@ -62,7 +62,8 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("upload-file", mql.uploadFileCommand)
 	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
 	mql.interp.RegisterCommand("ls", mql.lsCommand)
-	mql.interp.RegisterCommand("ls-projects", mql.lsProjectsCommand)
+	mql.interp.RegisterCommand("ls-proj", mql.lsProjCommand)
+	mql.interp.RegisterCommand("list-projects", mql.listProjectsCommand)
 	mql.interp.RegisterCommand("download-file", mql.downloadFileCommand)
 	mql.interp.RegisterCommand("download-directory", mql.downloadDirectoryCommand)
 	mql.interp.RegisterCommand("puts", mql.putsCommand)
@@ -452,6 +453,75 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 	//return feather.OK(ToTclString(items))
 }
 
+func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("ls-project client_id project_id directory_path"))
+	}
+	clientID := args[0].String()
+	projectID, err := args[1].Int()
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
+	}
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv2.Message{
+		Command:   "LIST_PROJECT_DIRECTORY",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "project_path": args[2].String()},
+	}
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+
+	files, ok := payload["files"].([]any)
+	buf := new(bytes.Buffer)
+	table := tablewriter.NewWriter(buf)
+	buf.WriteString("\n")
+	defer table.Close()
+	table.Header([]string{"Path", "Type", "Size", "Mtime", "Ctime"})
+
+	var filesFromClient [][]string
+	for _, f := range files {
+		i := f.(map[string]any)
+		lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
+		if err != nil {
+			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
+		}
+		fpath := filepath.Base(lsItem.Path)
+		if lsItem.Type == "directory" {
+			fpath += "/"
+		}
+		entry := []string{
+			fpath, lsItem.Type, humanSize(lsItem.Size),
+			lsItem.Mtime.Format("Jan _2 15:04"), lsItem.Ctime.Format("Jan _2 15:04"),
+		}
+		filesFromClient = append(filesFromClient, entry)
+	}
+
+	sort.Slice(filesFromClient, func(i, j int) bool {
+		return filesFromClient[i][0] < filesFromClient[j][0]
+	})
+
+	table.Bulk(filesFromClient)
+	table.Render()
+	result := buf.String()
+	return feather.OK(result)
+}
+
 func humanSize(size int64) string {
 	const unit = 1000
 	if size < unit {
@@ -471,13 +541,13 @@ func humanSize(size int64) string {
 	return fmt.Sprintf("%.1f %cB", value, "KMGTPE"[exp])
 }
 
-type lsProjectItem struct {
+type listProjectItem struct {
 	ID            int    `json:"project_id"`
 	Name          string `json:"directory"`
 	DirectoryPath string `json:"project_dir_path"`
 }
 
-func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+func (mql *MQLCommands) listProjectsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
 	if len(args) != 1 {
 		return feather.Error(fmt.Errorf("ls-projects client_id"))
 	}
@@ -517,7 +587,7 @@ func (mql *MQLCommands) lsProjectsCommand(i *feather.Interp, cmd *feather.Obj, a
 	var items []string
 	for _, item := range projects {
 		p := item.(map[string]any)
-		pItem, err := decoder.DecodeMapStrict[lsProjectItem](p)
+		pItem, err := decoder.DecodeMapStrict[listProjectItem](p)
 		if err != nil {
 			return feather.Error(fmt.Errorf("failed to decode lsProjectItem: %v", err))
 		}
