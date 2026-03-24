@@ -91,6 +91,7 @@ func (w *WebSocketManager) HandleUnregister(client *ClientConnection) {
 	if _, ok := w.clients[client.ID]; ok {
 		delete(w.clients, client.ID)
 		close(client.Send)
+		_ = client.Conn.Close()
 
 		// Remove from clientsByUserID
 		if userClients, ok := w.clientsByUserID[client.User.ID]; ok {
