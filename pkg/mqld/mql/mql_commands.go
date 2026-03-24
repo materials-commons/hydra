@@ -374,7 +374,7 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 	}
 	clientID := args[0].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_FILES", 20*time.Second)
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_DIRECTORY", 20*time.Second)
 	if err != nil {
 		return feather.Error(fmt.Errorf("failed to create request: %v", err))
 	}
