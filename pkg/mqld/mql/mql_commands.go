@@ -453,6 +453,17 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 	//return feather.OK(ToTclString(items))
 }
 
+type lsProjResponse struct {
+	Name   string    `json:"name"`
+	Path   string    `json:"path"`
+	Type   string    `json:"type"`
+	Size   int64     `json:"size"`
+	Mtime  time.Time `json:"mtime"`
+	Ctime  time.Time `json:"ctime"`
+	Status string    `json:"status"`
+	Reason string    `json:"reason"`
+}
+
 func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
 	if len(args) != 3 {
 		return feather.Error(fmt.Errorf("ls-project client_id project_id directory_path"))
@@ -492,12 +503,12 @@ func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args 
 	table := tablewriter.NewWriter(buf)
 	buf.WriteString("\n")
 	defer table.Close()
-	table.Header([]string{"Path", "Type", "Size", "Mtime", "Ctime"})
+	table.Header([]string{"Path", "Type", "Size", "Mtime", "Ctime", "Status", "Reason"})
 
 	var filesFromClient [][]string
 	for _, f := range files {
 		i := f.(map[string]any)
-		lsItem, err := decoder.DecodeMapStrict[lsResponse](i)
+		lsItem, err := decoder.DecodeMapStrict[lsProjResponse](i)
 		if err != nil {
 			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
 		}
@@ -508,6 +519,7 @@ func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args 
 		entry := []string{
 			fpath, lsItem.Type, humanSize(lsItem.Size),
 			lsItem.Mtime.Format("Jan _2 15:04"), lsItem.Ctime.Format("Jan _2 15:04"),
+			lsItem.Status, lsItem.Reason,
 		}
 		filesFromClient = append(filesFromClient, entry)
 	}
