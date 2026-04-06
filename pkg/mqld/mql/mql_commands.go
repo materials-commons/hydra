@@ -63,6 +63,8 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
 	mql.interp.RegisterCommand("ls", mql.lsCommand)
 	mql.interp.RegisterCommand("ls-proj", mql.lsProjCommand)
+	mql.interp.RegisterCommand("search-files", mql.searchFilesCommand)
+	mql.interp.RegisterCommand("find-files", mql.findFilesCommand)
 	mql.interp.RegisterCommand("list-projects", mql.listProjectsCommand)
 	mql.interp.RegisterCommand("download-file", mql.downloadFileCommand)
 	mql.interp.RegisterCommand("download-directory", mql.downloadDirectoryCommand)
@@ -529,6 +531,114 @@ func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args 
 	})
 
 	table.Bulk(filesFromClient)
+	table.Render()
+	result := buf.String()
+	return feather.OK(result)
+}
+
+func (mql *MQLCommands) searchFilesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("search-files client_id project_id query"))
+	}
+	clientID := args[0].String()
+	projectID, err := args[1].Int()
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
+	}
+	query := args[2].String()
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "SEARCH_FILES", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv2.Message{
+		Command:   "SEARCH_FILES",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "query": query},
+	}
+
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+
+	matches, ok := payload["matches"].([]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload matches to []any: %v", err))
+	}
+	buf := new(bytes.Buffer)
+	table := tablewriter.NewWriter(buf)
+	buf.WriteString("\n")
+	defer table.Close()
+	table.Header([]string{"Match"})
+	for _, match := range matches {
+		m := match.(string)
+		table.Append([]string{m})
+	}
+	table.Render()
+	result := buf.String()
+	return feather.OK(result)
+}
+
+func (mql *MQLCommands) findFilesCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("find-files client_id project_id query"))
+	}
+	clientID := args[0].String()
+	projectID, err := args[1].Int()
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
+	}
+	query := args[2].String()
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "FIND_FILES", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv2.Message{
+		Command:   "FIND_FILES",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "query": query},
+	}
+
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+	
+	matches, ok := payload["matches"].([]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload matches to []any: %v", err))
+	}
+	buf := new(bytes.Buffer)
+	table := tablewriter.NewWriter(buf)
+	buf.WriteString("\n")
+	defer table.Close()
+	table.Header([]string{"Match"})
+	for _, match := range matches {
+		m := match.(string)
+		table.Append([]string{m})
+	}
 	table.Render()
 	result := buf.String()
 	return feather.OK(result)

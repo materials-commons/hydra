@@ -46,6 +46,9 @@ const (
 	MsgListProjects         = "LIST_PROJECTS"
 	MsgListDirectory        = "LIST_DIRECTORY"
 	MsgListProjectDirectory = "LIST_PROJECT_DIRECTORY"
+
+	MsgFindFiles   = "FIND_FILES"
+	MsgSearchFiles = "SEARCH_FILES"
 )
 
 type Message struct {
@@ -190,7 +193,7 @@ func (c *ClientConnection) handleMessage(msg Message) {
 		// Forward status messages to target client
 		c.Hub.WSManager.Broadcast(msg)
 
-	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory:
+	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory, MsgSearchFiles, MsgFindFiles:
 		c.handleCommandResponse(msg)
 
 	case MsgHeartbeat:
