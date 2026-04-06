@@ -47,8 +47,10 @@ const (
 	MsgListDirectory        = "LIST_DIRECTORY"
 	MsgListProjectDirectory = "LIST_PROJECT_DIRECTORY"
 
-	MsgFindFiles   = "FIND_FILES"
-	MsgSearchFiles = "SEARCH_FILES"
+	MsgFindFiles         = "FIND_FILES"
+	MsgSearchFiles       = "SEARCH_FILES"
+	MsgFindFilesAtPath   = "FIND_FILES_AT_PATH"
+	MsgSearchFilesAtPath = "SEARCH_FILES_AT_PATH"
 )
 
 type Message struct {
@@ -193,7 +195,16 @@ func (c *ClientConnection) handleMessage(msg Message) {
 		// Forward status messages to target client
 		c.Hub.WSManager.Broadcast(msg)
 
-	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory, MsgSearchFiles, MsgFindFiles:
+	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory:
+		// Handle List Commands
+		c.handleCommandResponse(msg)
+
+	case MsgSearchFiles, MsgSearchFilesAtPath:
+		// Handle Search Commands
+		c.handleCommandResponse(msg)
+
+	case MsgFindFiles, MsgFindFilesAtPath:
+		// Handle Find Commands
 		c.handleCommandResponse(msg)
 
 	case MsgHeartbeat:
