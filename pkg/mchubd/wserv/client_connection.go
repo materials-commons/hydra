@@ -43,9 +43,10 @@ const (
 	MsgTransferResumeResponse = "TRANSFER_RESUME_RESPONSE"
 	MsgTransferCancel         = "TRANSFER_CANCEL"
 
-	MsgListProjects         = "LIST_PROJECTS"
-	MsgListDirectory        = "LIST_DIRECTORY"
-	MsgListProjectDirectory = "LIST_PROJECT_DIRECTORY"
+	MsgListProjects                = "LIST_PROJECTS"
+	MsgListDirectory               = "LIST_DIRECTORY"
+	MsgListProjectDirectory        = "LIST_PROJECT_DIRECTORY"
+	MsgListProjectDirectoryActions = "LIST_PROJECT_DIRECTORY_ACTIONS"
 
 	MsgFindFiles         = "FIND_FILES"
 	MsgSearchFiles       = "SEARCH_FILES"
@@ -195,7 +196,7 @@ func (c *ClientConnection) handleMessage(msg Message) {
 		// Forward status messages to target client
 		c.Hub.WSManager.Broadcast(msg)
 
-	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory:
+	case MsgListProjects, MsgListDirectory, MsgListProjectDirectory, MsgListProjectDirectoryActions:
 		// Handle List Commands
 		c.handleCommandResponse(msg)
 

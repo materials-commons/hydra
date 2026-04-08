@@ -63,6 +63,7 @@ func (mql *MQLCommands) registerCommands() {
 	mql.interp.RegisterCommand("upload-directory", mql.uploadDirectoryCommand)
 	mql.interp.RegisterCommand("ls", mql.lsCommand)
 	mql.interp.RegisterCommand("ls-proj", mql.lsProjCommand)
+	mql.interp.RegisterCommand("ls-proj-actions", mql.lsProjActionsCommand)
 	mql.interp.RegisterCommand("search-files", mql.searchFilesInProjCommand)
 	mql.interp.RegisterCommand("search-files-at-path", mql.searchFilesAtPathCommand)
 	mql.interp.RegisterCommand("find-files", mql.findFilesInProjCommand)
@@ -524,6 +525,79 @@ func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args 
 			fpath, lsItem.Type, humanSize(lsItem.Size),
 			lsItem.Mtime.Format("Jan _2 15:04"), lsItem.Ctime.Format("Jan _2 15:04"),
 			lsItem.Status, lsItem.Reason,
+		}
+		filesFromClient = append(filesFromClient, entry)
+	}
+
+	sort.Slice(filesFromClient, func(i, j int) bool {
+		return filesFromClient[i][0] < filesFromClient[j][0]
+	})
+
+	table.Bulk(filesFromClient)
+	table.Render()
+	result := buf.String()
+	return feather.OK(result)
+}
+
+type lsActionResponse struct {
+	Name        string `json:"name"`
+	LocalRemote string `json:"local_remote"`
+	Action      string `json:"action"`
+	Reason      string `json:"reason"`
+	LType       string `json:"l_type"`
+	RType       string `json:"r_type"`
+}
+
+func (mql *MQLCommands) lsProjActionsCommand(i *feather.Interp, cmd *feather.Obj, args []*feather.Obj) feather.Result {
+	if len(args) != 3 {
+		return feather.Error(fmt.Errorf("ls-project-actions client_id project_id directory_path"))
+	}
+	clientID := args[0].String()
+	projectID, err := args[1].Int()
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
+	}
+
+	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY_ACTIONS", 20*time.Second)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+	}
+
+	msg := wserv2.Message{
+		Command:   "LIST_PROJECT_DIRECTORY_ACTIONS",
+		ID:        "mql",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "project_path": args[2].String()},
+	}
+	mql.hub.WSManager.Broadcast(msg)
+
+	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+	}
+
+	payload, ok := resp.Payload.(map[string]any)
+	if !ok {
+		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
+	}
+
+	files, ok := payload["files"].([]any)
+	buf := new(bytes.Buffer)
+	table := tablewriter.NewWriter(buf)
+	buf.WriteString("\n")
+	defer table.Close()
+	table.Header([]string{"Name", "L_Type", "R_Type", "Local/Remote", "Action", "Reason"})
+
+	var filesFromClient [][]string
+	for _, f := range files {
+		i := f.(map[string]any)
+		lsItem, err := decoder.DecodeMapStrict[lsActionResponse](i)
+		if err != nil {
+			return feather.Error(fmt.Errorf("failed to decode lsResponse: %v", err))
+		}
+		entry := []string{
+			lsItem.Name, lsItem.LType, lsItem.RType, lsItem.LocalRemote, lsItem.Action, lsItem.Reason,
 		}
 		filesFromClient = append(filesFromClient, entry)
 	}
