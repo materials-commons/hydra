@@ -213,8 +213,6 @@ func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fmt.Println("HandleListClientProjectDir")
-
 	projectPath := r.FormValue("project_path")
 	if projectPath == "" {
 		http.Error(w, "Missing project_path", http.StatusBadRequest)
@@ -278,8 +276,6 @@ func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	fmt.Println("HandleListClientProjectDir: resp=", resp)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp.Payload)
