@@ -200,6 +200,31 @@ func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message)
 	h.WSManager.UserBroadcast(m)
 }
 
+func (h *Hub) SendCommandToClient(clientID string, userID int, command string, payload map[string]any) (*Message, error) {
+	req, err := h.RequestResponse().CreateRequest(clientID, userID, command, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	payload["request_id"] = req.RequestID
+	msg := Message{
+		Command:   command,
+		ID:        "not-needed",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload:   payload,
+	}
+
+	h.WSManager.Broadcast(msg)
+
+	resp, err := h.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
 /////////////////// REST API Handlers ///////////////////
 
 // ****** NOTE ******
@@ -252,26 +277,13 @@ func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Client not found", http.StatusNotFound)
 	}
 
-	req, err := h.RequestResponse().CreateRequest(clientID, userIDAsInt, "LIST_PROJECT_DIRECTORY_ACTIONS", 20*time.Second)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	payload := map[string]any{
+		"project_path": projectPath,
+		"project_id":   projectIDAsInt,
 	}
 
-	msg := Message{
-		Command:   "LIST_PROJECT_DIRECTORY_ACTIONS",
-		ID:        "ui",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload: map[string]any{
-			"request_id":   req.RequestID,
-			"project_path": projectPath,
-			"project_id":   projectIDAsInt,
-		},
-	}
+	resp, err := h.SendCommandToClient(clientID, userIDAsInt, "LIST_PROJECT_DIRECTORY_ACTIONS", payload)
 
-	h.WSManager.Broadcast(msg)
-	resp, err := h.RequestResponse().WaitForResponse(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

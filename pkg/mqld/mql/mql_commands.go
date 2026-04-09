@@ -380,23 +380,9 @@ func (mql *MQLCommands) lsCommand(i *feather.Interp, cmd *feather.Obj, args []*f
 	}
 	clientID := args[0].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_DIRECTORY", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "LIST_DIRECTORY", map[string]any{"directory_path": args[1].String()})
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "LIST_DIRECTORY",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "directory_path": args[1].String()},
-	}
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
@@ -479,23 +465,9 @@ func (mql *MQLCommands) lsProjCommand(i *feather.Interp, cmd *feather.Obj, args 
 		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
 	}
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY", map[string]any{"project_id": projectID, "project_path": args[2].String()})
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "LIST_PROJECT_DIRECTORY",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "project_path": args[2].String()},
-	}
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
@@ -558,31 +530,18 @@ func (mql *MQLCommands) lsProjActionsCommand(i *feather.Interp, cmd *feather.Obj
 		return feather.Error(fmt.Errorf("failed to parse project_id: %v", err))
 	}
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY_ACTIONS", 20*time.Second)
+	payload := map[string]any{"project_id": projectID, "project_path": args[2].String()}
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "LIST_PROJECT_DIRECTORY_ACTIONS", payload)
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command to client: %v", err))
 	}
 
-	msg := wserv2.Message{
-		Command:   "LIST_PROJECT_DIRECTORY_ACTIONS",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "project_path": args[2].String()},
-	}
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
-	}
-
-	payload, ok := resp.Payload.(map[string]any)
+	p, ok := resp.Payload.(map[string]any)
 	if !ok {
 		return feather.Error(fmt.Errorf("failed to cast payload to map[string]any: %v", err))
 	}
 
-	files, ok := payload["files"].([]any)
+	files, ok := p["files"].([]any)
 	buf := new(bytes.Buffer)
 	table := tablewriter.NewWriter(buf)
 	buf.WriteString("\n")
@@ -623,25 +582,7 @@ func (mql *MQLCommands) searchFilesInProjCommand(i *feather.Interp, cmd *feather
 	}
 	query := args[2].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "SEARCH_FILES", 20*time.Second)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "SEARCH_FILES",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "query": query},
-	}
-
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
-	}
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "SEARCH_FILES", map[string]any{"project_id": projectID, "query": query})
 
 	payload, ok := resp.Payload.(map[string]any)
 	if !ok {
@@ -674,24 +615,9 @@ func (mql *MQLCommands) searchFilesAtPathCommand(i *feather.Interp, cmd *feather
 	query := args[1].String()
 	path := args[2].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "SEARCH_FILES_AT_PATH", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "SEARCH_FILES_AT_PATH", map[string]any{"query": query, "path": path})
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "SEARCH_FILES_AT_PATH",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "query": query, "path": path},
-	}
-
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
@@ -728,24 +654,9 @@ func (mql *MQLCommands) findFilesInProjCommand(i *feather.Interp, cmd *feather.O
 	}
 	query := args[2].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "FIND_FILES", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "FIND_FILES", map[string]any{"project_id": projectID, "query": query})
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "FIND_FILES",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "project_id": projectID, "query": query},
-	}
-
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
@@ -779,24 +690,9 @@ func (mql *MQLCommands) findFilesAtPathCommand(i *feather.Interp, cmd *feather.O
 	query := args[1].String()
 	path := args[2].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "FIND_FILES_AT_PATH", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "FIND_FILES_AT_PATH", map[string]any{"query": query, "path": path})
 	if err != nil {
-		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "FIND_FILES_AT_PATH",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID, "query": query, "path": path},
-	}
-
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
+		return feather.Error(fmt.Errorf("failed to send command: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
@@ -854,24 +750,9 @@ func (mql *MQLCommands) listProjectsCommand(i *feather.Interp, cmd *feather.Obj,
 
 	clientID := args[0].String()
 
-	req, err := mql.hub.RequestResponse().CreateRequest(clientID, mql.User.ID, "LIST_PROJECTS", 20*time.Second)
+	resp, err := mql.hub.SendCommandToClient(clientID, mql.User.ID, "LIST_PROJECTS", map[string]any{})
 	if err != nil {
 		return feather.Error(fmt.Errorf("failed to create request: %v", err))
-	}
-
-	msg := wserv2.Message{
-		Command:   "LIST_PROJECTS",
-		ID:        "mql",
-		Timestamp: time.Now(),
-		ClientID:  clientID,
-		Payload:   map[string]any{"request_id": req.RequestID},
-	}
-
-	mql.hub.WSManager.Broadcast(msg)
-
-	resp, err := mql.hub.RequestResponse().WaitForResponse(req)
-	if err != nil {
-		return feather.Error(fmt.Errorf("failed to wait for response: %v", err))
 	}
 
 	payload, ok := resp.Payload.(map[string]any)
