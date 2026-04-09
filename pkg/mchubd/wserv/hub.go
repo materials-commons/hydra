@@ -207,6 +207,84 @@ func (h *Hub) broadcastToUserClients(userID int, clientType string, msg Message)
 // authenticated, so these endpoints don't need to do any authentication. However, we do check that the
 // userID is associated with the clientID that comes across in the request.
 
+func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	fmt.Println("HandleListClientProjectDir")
+
+	projectPath := r.FormValue("project_path")
+	if projectPath == "" {
+		http.Error(w, "Missing project_path", http.StatusBadRequest)
+		return
+	}
+
+	projectID := r.PathValue("project_id")
+	if projectID == "" {
+		http.Error(w, "Missing project_id", http.StatusBadRequest)
+		return
+	}
+
+	projectIDAsInt, err := strconv.Atoi(projectID)
+	if err != nil {
+	}
+
+	clientID := r.PathValue("client_id")
+	if clientID == "" {
+		http.Error(w, "Missing client_id", http.StatusBadRequest)
+		return
+	}
+
+	userID := r.FormValue("user_id")
+	if userID == "" {
+		http.Error(w, "Missing user_id", http.StatusBadRequest)
+		return
+	}
+
+	userIDAsInt, err := strconv.Atoi(userID)
+	if err != nil {
+		http.Error(w, "Invalid user_id", http.StatusBadRequest)
+		return
+	}
+
+	client := h.WSManager.GetClient(clientID)
+	if client == nil {
+		http.Error(w, "Client not found", http.StatusNotFound)
+	}
+
+	req, err := h.RequestResponse().CreateRequest(clientID, userIDAsInt, "LIST_PROJECT_DIRECTORY_ACTIONS", 20*time.Second)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	msg := Message{
+		Command:   "LIST_PROJECT_DIRECTORY_ACTIONS",
+		ID:        "ui",
+		Timestamp: time.Now(),
+		ClientID:  clientID,
+		Payload: map[string]any{
+			"request_id":   req.RequestID,
+			"project_path": projectPath,
+			"project_id":   projectIDAsInt,
+		},
+	}
+
+	h.WSManager.Broadcast(msg)
+	resp, err := h.RequestResponse().WaitForResponse(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("HandleListClientProjectDir: resp=", resp)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp.Payload)
+}
+
 func (h *Hub) HandleSendCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

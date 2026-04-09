@@ -82,6 +82,7 @@ to control these services and provide scripting capabilities in the web interfac
 		hubMux.HandleFunc("/send-command", hub.HandleSendCommand)
 		hubMux.HandleFunc("/list-clients", hub.HandleListClients)
 		hubMux.HandleFunc("/list-clients-for-user/{id}", hub.HandleListClientsForUser)
+		hubMux.HandleFunc("/list-client-project-dir/{client_id}/{project_id}", hub.HandleListClientProjectDir)
 		hubMux.HandleFunc("/submit-test-upload/{client_id}", hub.HandleSubmitTestUpload)
 		hubMux.HandleFunc("/sse", hub.HandleSSE)
 		hubMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
