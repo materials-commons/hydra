@@ -104,8 +104,15 @@ func (h *Hub) Run() {
 			h.WSManager.HandleBroadcast(message)
 
 		case userMessage := <-h.WSManager.userBroadcast:
-			h.WSManager.HandleUserBroadcast(userMessage)
-			h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
+			switch userMessage.ClientType {
+			case "sse", "ui":
+				h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
+			case "ws", "client":
+				h.WSManager.HandleUserBroadcast(userMessage)
+			default:
+				h.WSManager.HandleUserBroadcast(userMessage)
+				h.sseManager.BroadcastToUser(userMessage.UserID, userMessage.Message)
+			}
 		}
 	}
 }
