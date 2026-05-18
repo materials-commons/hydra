@@ -509,7 +509,8 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 	c.transferMu.Unlock()
 
 	// Finalize the file
-	if err := c.finalizeTransfer(transfer); err != nil {
+	f, err := c.finalizeTransfer(transfer)
+	if err != nil {
 		log.Printf("Error finalizing transfer %s: %v", transferID, err)
 		c.sendTransferError(transferID, err.Error())
 		return
@@ -527,10 +528,15 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 		Timestamp: time.Now(),
 		ClientID:  c.ID,
 		Payload: map[string]interface{}{
-			"transfer_id":   transferID,
-			"status":        "complete",
-			"bytes_written": transfer.BytesWritten,
-			"file_name":     transfer.FileName,
+			"transfer_id":        transferID,
+			"status":             "complete",
+			"bytes_written":      transfer.BytesWritten,
+			"file_name":          transfer.FileName,
+			"file_id":            f.ID,
+			"file_checksum":      f.Checksum,
+			"file_created_at_ns": f.CreatedAt.UTC().UnixNano(),
+			"file_updated_at_ns": f.UpdatedAt.UTC().UnixNano(),
+			"file_size":          f.Size,
 		},
 	}
 
@@ -554,13 +560,13 @@ func (c *ClientConnection) handleTransferComplete(msg Message) {
 
 // finalizeTransfer finalizes the given transfer by writing the final chunk to disk and updating the database record. It's
 // called by handleTransferComplete after the transfer is complete.
-func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
+func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) (*mcmodel.File, error) {
 	transfer.mu.Lock()
 	defer transfer.mu.Unlock()
 
 	// Flush and close the file
 	if err := transfer.File.Sync(); err != nil {
-		return fmt.Errorf("sync error: %v", err)
+		return nil, fmt.Errorf("sync error: %v", err)
 	}
 
 	transfer.File.Close()
@@ -568,11 +574,11 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	// Verify file size
 	fileInfo, err := os.Stat(transfer.ProjectFilePath)
 	if err != nil {
-		return fmt.Errorf("stat error: %v", err)
+		return nil, fmt.Errorf("stat error: %v", err)
 	}
 
 	if fileInfo.Size() != transfer.ExpectedSize {
-		return fmt.Errorf("size mismatch: expected %d, got %d",
+		return nil, fmt.Errorf("size mismatch: expected %d, got %d",
 			transfer.ExpectedSize, fileInfo.Size())
 	}
 
@@ -580,7 +586,7 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 
 	f, err := c.Hub.FileStor.GetFileByID(transfer.FileID)
 	if err != nil {
-		return fmt.Errorf("file not found: %v", err)
+		return nil, fmt.Errorf("file not found: %v", err)
 	}
 
 	// Compute the checksum for the uploaded file. There are two paths for this.
@@ -601,14 +607,14 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 	}
 
 	if checksum != transfer.remoteClientTransfer.ExpectedChecksum {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, checksum)
+		return nil, fmt.Errorf("checksum mismatch: expected %s, got %s", transfer.remoteClientTransfer.ExpectedChecksum, checksum)
 	}
 
 	// Update the file entry.
 	switched, err := c.Hub.FileStor.DoneWritingToFile(f, transfer.remoteClientTransfer.ExpectedChecksum, transfer.ExpectedSize, c.Hub.ConversionStor)
 
 	if err != nil {
-		return fmt.Errorf("file update error: %v", err)
+		return nil, fmt.Errorf("file update error: %v", err)
 	}
 
 	if switched {
@@ -634,14 +640,14 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) error {
 			// Need to set the file health to fixed
 			fixedFile, err := c.Hub.FileStor.GetFileByUUID(f.UsesUUID)
 			if err != nil {
-				return fmt.Errorf("file not found: %v", err)
+				return nil, fmt.Errorf("file not found: %v", err)
 			}
 
 			_, _ = c.Hub.FileStor.SetFileHealthFixed(fixedFile, "wserv", "upload")
 		}
 	}
 
-	return nil
+	return f, nil
 }
 
 func (c *ClientConnection) sendTransferError(transferID, reason string) {
