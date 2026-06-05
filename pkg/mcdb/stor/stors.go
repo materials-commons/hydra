@@ -30,6 +30,7 @@ type FileStor interface {
 	SetFileHealthMissing(file *mcmodel.File, determinedBy string, source string) (*mcmodel.File, error)
 	SetFileHealthFixed(file *mcmodel.File, fixedBy string, source string) (*mcmodel.File, error)
 	FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error)
+	FindMatchingFileByChecksumAndPath(projectID int, filePath string, checksum string) (*mcmodel.File, error)
 	DeleteFileByID(ID int) error
 	Root() string
 }

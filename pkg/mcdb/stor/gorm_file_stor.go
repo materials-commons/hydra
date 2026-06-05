@@ -525,6 +525,29 @@ func (s *GormFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, so
 	return file, err
 }
 
+func (s *GormFileStor) FindMatchingFileByChecksumAndPath(projectID int, filePath string, checksum string) (*mcmodel.File, error) {
+	dirPath := filepath.Dir(filePath)
+	dir, err := s.GetDirByPath(projectID, dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var file mcmodel.File
+	fileName := filepath.Base(filePath)
+	err = s.db.Where("checksum = ?", checksum).
+		Where("directory_id = ?", dir.ID).
+		Where("name = ?", fileName).
+		Where("deleted_at IS NULL").
+		Where("dataset_id IS NULL").
+		First(&file).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &file, nil
+}
+
 func (s *GormFileStor) FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error) {
 	var file mcmodel.File
 	err := s.db.Where("checksum = ?", checksum).
