@@ -33,15 +33,16 @@ const (
 	MsgUploadFailed       = "UPLOAD_FAILED"
 	MsgClientStatus       = "CLIENT_STATUS"
 
-	MsgTransferInit           = "TRANSFER_INIT"
-	MsgTransferAccept         = "TRANSFER_ACCEPT"
-	MsgTransferReject         = "TRANSFER_REJECT"
-	MsgChunkAck               = "CHUNK_ACK"
-	MsgTransferComplete       = "TRANSFER_COMPLETE"
-	MsgTransferFinalize       = "TRANSFER_FINALIZE"
-	MsgTransferResume         = "TRANSFER_RESUME"
-	MsgTransferResumeResponse = "TRANSFER_RESUME_RESPONSE"
-	MsgTransferCancel         = "TRANSFER_CANCEL"
+	MsgTransferInit            = "TRANSFER_INIT"
+	MsgTransferAccept          = "TRANSFER_ACCEPT"
+	MsgTransferReject          = "TRANSFER_REJECT"
+	MsgChunkAck                = "CHUNK_ACK"
+	MsgTransferComplete        = "TRANSFER_COMPLETE"
+	MsgTransferFinalize        = "TRANSFER_FINALIZE"
+	MsgTransferResume          = "TRANSFER_RESUME"
+	MsgTransferResumeResponse  = "TRANSFER_RESUME_RESPONSE"
+	MsgTransferCancel          = "TRANSFER_CANCEL"
+	MsgTransferAlreadyUploaded = "TRANSFER_ALREADY_UPLOADED"
 
 	MsgListProjects                = "LIST_PROJECTS"
 	MsgListDirectory               = "LIST_DIRECTORY"
@@ -337,8 +338,9 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	}
 
 	// Short circuit - If the file has already been uploaded, reject the transfer
-	if c.alreadyUploaded(projectID, projectFilePath, checksum) {
-		c.sendTransferReject(transferID, "file already uploaded")
+	if alreadyUploaded, f := c.alreadyUploaded(projectID, projectFilePath, checksum); alreadyUploaded {
+		//c.sendTransferReject(transferID, "file already uploaded")
+		c.sendTransferAlreadyUploaded(transferID, f)
 		return
 	}
 
@@ -433,6 +435,26 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	}
 
 	log.Printf("Transfer initialized: %s (%s, %.2f MB)", transferID, fileName, fileSize/1024/1024)
+}
+
+func (c *ClientConnection) sendTransferAlreadyUploaded(transferID string, f *mcmodel.File) {
+	c.Send <- Message{
+		Command:   MsgTransferAlreadyUploaded,
+		ID:        transferID,
+		Timestamp: time.Now(),
+		ClientID:  c.ID,
+		Payload: map[string]interface{}{
+			"reason":             "already uploaded",
+			"transfer_id":        transferID,
+			"file_id":            f.ID,
+			"file_name":          f.Name,
+			"file_size":          f.Size,
+			"file_checksum":      f.Checksum,
+			"status":             "complete",
+			"file_created_at_ns": f.CreatedAt.UTC().UnixNano(),
+			"file_updated_at_ns": f.UpdatedAt.UTC().UnixNano(),
+		},
+	}
 }
 
 func (c *ClientConnection) handleFileChunk(msg []byte) {
@@ -875,8 +897,6 @@ func (c *ClientConnection) handleListProjects(msg Message) {
 		log.Printf("Error sending response to request %s: %v", requestID, err)
 		return
 	}
-
-	fmt.Println("handleListProjects success:", msg.Payload)
 }
 
 func toProjectItem(project map[string]interface{}) ProjectItem {
@@ -902,7 +922,7 @@ func (c *ClientConnection) handleHeartbeat(msg Message) error {
 // alreadyUploaded checks if there is a file already matching the checksum. If there is
 // then it will point the file to the existing file taking into account that this
 // exact file may already exist in the project.
-func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum string) bool {
+func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum string) (bool, *mcmodel.File) {
 	// First check if there is a file matching checksum
 	dirPath := filepath.Dir(filePath)
 	fileName := filepath.Base(filePath)
@@ -911,12 +931,12 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	if err != nil {
 		// if we get an error then log it, and return false
 		log.Printf("error finding file by checksum: %v", err)
-		return false
+		return false, nil
 	}
 
 	if f == nil {
 		// No file found with matching checksum
-		return false
+		return false, nil
 	}
 
 	// If we are here, then a file matching the checksum was found.
@@ -924,7 +944,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	// 1. Check that the file actually exists on disk.
 	if !f.RealFileExists(c.Hub.FileStor.Root()) {
 		// File entry in database, but file doesn't exist on disk. So upload it.
-		return false
+		return false, nil
 	}
 
 	// If the file exists on disk, then let's see if there is a matching file in the project at the same path
@@ -933,7 +953,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 		// Check if the checksum matches. If it does, then there is nothing to do.
 		if existingFile.Checksum == checksum {
 			// Yes, there is a file matching the checksum with the same name.
-			return true
+			return true, existingFile
 		}
 	}
 
@@ -946,13 +966,13 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	if err != nil {
 		// error creating the directory... let's upload the file (what is the correct thing to do here?)
 		log.Printf("error creating directory: %v", err)
-		return false
+		return false, nil
 	}
 
 	createdFile, err := c.Hub.FileStor.CreateFile(fileName, projectID, dir.ID, c.User.ID, f.MimeType)
 	if err != nil {
 		log.Printf("error creating file entry: %v", err)
-		return false
+		return false, nil
 	}
 
 	updates := mcmodel.File{
@@ -964,19 +984,19 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	if err != nil {
 		log.Printf("error updating file entry: %v", err)
-		return false
+		return false, nil
 	}
 
 	if _, err := c.Hub.FileStor.SetFileAsCurrent(createdFile); err != nil {
 		log.Printf("failed setting file %d as current: %s", f.ID, err)
-		return false
+		return false, nil
 	}
 
 	if _, err := c.Hub.ConversionStor.AddFileToConvert(createdFile); err != nil {
 		log.Printf("failed adding file %d to be converted: %s", f.ID, err)
 	}
 
-	return true
+	return true, createdFile
 }
 
 func (c *ClientConnection) handleCommandResponse(msg Message) {
