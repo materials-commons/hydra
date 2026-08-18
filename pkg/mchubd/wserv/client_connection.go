@@ -604,8 +604,6 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) (*mcmodel.Fi
 			transfer.ExpectedSize, fileInfo.Size())
 	}
 
-	// TODO: Update to calculate the hash as we write chunks. Only do this if the hash state is out of date.
-
 	f, err := c.Hub.FileStor.GetFileByID(transfer.FileID)
 	if err != nil {
 		return nil, fmt.Errorf("file not found: %v", err)
