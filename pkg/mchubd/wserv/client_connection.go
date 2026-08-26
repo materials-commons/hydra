@@ -339,8 +339,15 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	// Short circuit - If the file has already been uploaded, reject the transfer
 	if alreadyUploaded, f := c.alreadyUploaded(projectID, projectFilePath, checksum); alreadyUploaded {
-		//c.sendTransferReject(transferID, "file already uploaded")
-		c.sendTransferAlreadyUploaded(transferID, f)
+		// To preserve backwards compatibility with the python version of the cli, we only send a transfer reject if the
+		// client type is "cli". The go version will have the type "gocli". This is a work-around until we can deprecate
+		// the old cli websocket-based uploads.
+		switch {
+		case c.Type == "cli":
+			c.sendTransferReject(transferID, "file already uploaded")
+		default:
+			c.sendTransferAlreadyUploaded(transferID, f)
+		}
 		return
 	}
 
