@@ -283,7 +283,7 @@ func (s *GormFileStor) ListDirectoryByPath(projectID int, path string) ([]mcmode
 	var files []mcmodel.File
 
 	err = s.db.Where("directory_id = ?", dir.ID).
-		Where("project_id", projectID).
+		Where("project_id = ?", projectID).
 		Where("deleted_at IS NULL").
 		Where("dataset_id IS NULL").
 		Where("current = true").
@@ -418,11 +418,14 @@ func (s *GormFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, si
 		return false, err
 	}
 
-	// Always queue up a conversion job. This is safe to do even if the file is already converted or doesn't
-	// need conversion. This will also update the search index for the file and all previous versions.
-	if _, err = conversionStore.AddFileToConvert(file); err != nil {
-		log.Errorf("failed adding file %d to be converted: %s", file.ID, err)
-		return fileSwitched, err
+	// Check if a file type is one we do a conversion on to make viewable on the web, and if it is
+	// then schedule a conversion to run.
+	if file.IsConvertible() {
+		// Queue up a conversion job
+		if _, err = conversionStore.AddFileToConvert(file); err != nil {
+			log.Errorf("failed adding file %d to be converted: %s", file.ID, err)
+			return fileSwitched, err
+		}
 	}
 
 	return fileSwitched, nil
@@ -563,4 +566,21 @@ func (s *GormFileStor) DeleteFileByID(ID int) error {
 	return WithTxRetry(s.db, func(tx *gorm.DB) error {
 		return tx.Delete(&mcmodel.File{}, ID).Error
 	})
+}
+
+func (s *GormFileStor) ListFileVersionsForName(projectID int, directoryID int, name string) ([]mcmodel.File, error) {
+	var files []mcmodel.File
+
+	err := s.db.Preload("directory").
+		Where("directory_id = ?", directoryID).
+		Where("project_id = ?", projectID).
+		Where("deleted_at IS NULL").
+		Where("dataset_id IS NULL").
+		Where("name = ?", name).
+		Find(&files).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
 }

@@ -32,6 +32,7 @@ type FileStor interface {
 	FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error)
 	FindMatchingFileByChecksumAndPath(projectID int, filePath string, checksum string) (*mcmodel.File, error)
 	DeleteFileByID(ID int) error
+	ListFileVersionsForName(projectID int, directoryID int, name string) ([]mcmodel.File, error)
 	Root() string
 }
 

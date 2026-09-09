@@ -11,6 +11,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/feather-lang/feather"
+	"github.com/materials-commons/hydra/pkg/fts"
 	"github.com/materials-commons/hydra/pkg/mcdb"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"github.com/materials-commons/hydra/pkg/mchubd/wserv"
@@ -55,7 +56,8 @@ to control these services and provide scripting capabilities in the web interfac
 			log.Fatalf("Unable to load user: %s", err)
 		}
 
-		hub := wserv.NewHub(db, mcfsDir)
+		searchClient := newSearchClient()
+		hub := wserv.NewHub(db, mcfsDir, searchClient)
 		go hub.Run()
 
 		interp := feather.New()
@@ -96,6 +98,17 @@ to control these services and provide scripting capabilities in the web interfac
 		}
 
 	},
+}
+
+func newSearchClient() fts.Client {
+	meilisearchURL := os.Getenv("MEILISEARCH_URL")
+	meilisearchKey := os.Getenv("MEILISEARCH_KEY")
+
+	if meilisearchURL == "" {
+		log.Fatalf("MEILISEARCH_URL must be set")
+	}
+
+	return fts.NewMeilisearchClient(meilisearchURL, meilisearchKey)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

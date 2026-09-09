@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/materials-commons/hydra/pkg/fts"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"github.com/materials-commons/hydra/pkg/mcdb/stor"
 	"gorm.io/gorm"
@@ -30,6 +31,9 @@ type Hub struct {
 	RemoteClientTransferStor stor.RemoteClientTransferStor
 	ConversionStor           stor.ConversionStor
 	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
+
+	// FTS Client
+	ftsClient fts.Client
 }
 
 type UserMessage struct {
@@ -59,7 +63,7 @@ type HubCommandResponse struct {
 	Status   string `json:"status"`
 }
 
-func NewHub(db *gorm.DB, mcfsDir string) *Hub {
+func NewHub(db *gorm.DB, mcfsDir string, ftsClient fts.Client) *Hub {
 	return &Hub{
 		// Initialize connection managers
 		WSManager:  NewWebSocketManager(),
@@ -74,6 +78,9 @@ func NewHub(db *gorm.DB, mcfsDir string) *Hub {
 		RemoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
 		ConversionStor:           stor.NewGormConversionStor(db),
 		partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
+
+		// FTS Client
+		ftsClient: ftsClient,
 	}
 }
 
