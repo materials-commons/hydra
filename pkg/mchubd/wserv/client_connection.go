@@ -927,8 +927,8 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 
 	f, err := c.Hub.FileStor.FindMatchingFileByChecksum(checksum)
 	if err != nil {
-		// if we get an error then log it, and return false
-		log.Printf("error finding file by checksum: %v", err)
+		// if we get an error, then log it and return false
+		log.Printf("error finding file by checksum (%s): %v", checksum, err)
 		return false, nil
 	}
 
