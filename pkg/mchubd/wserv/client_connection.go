@@ -339,8 +339,15 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 
 	// Short circuit - If the file has already been uploaded, reject the transfer
 	if alreadyUploaded, f := c.alreadyUploaded(projectID, projectFilePath, checksum); alreadyUploaded {
-		//c.sendTransferReject(transferID, "file already uploaded")
-		c.sendTransferAlreadyUploaded(transferID, f)
+		// To preserve backwards compatibility with the python version of the cli, we only send a transfer reject if the
+		// client type is "cli". The go version will have the type "gocli". This is a work-around until we can deprecate
+		// the old cli websocket-based uploads.
+		switch {
+		case c.Type == "cli":
+			c.sendTransferReject(transferID, "file already uploaded")
+		default:
+			c.sendTransferAlreadyUploaded(transferID, f)
+		}
 		return
 	}
 
@@ -666,6 +673,12 @@ func (c *ClientConnection) finalizeTransfer(transfer *FileTransfer) (*mcmodel.Fi
 			_, _ = c.Hub.FileStor.SetFileHealthFixed(fixedFile, "wserv", "upload")
 		}
 	}
+
+	// Update the FTS for the file and all its versions. At this point the original version
+	// and the previous versions have all had their current flag correctly set.
+	// TBD: The PHP code isn't correctly handling the Path, we will update the path
+	// here, but this needs to be fixed in the webapp.
+	c.updateFTSForFileAndVersions(f)
 
 	return f, nil
 }
@@ -1037,6 +1050,37 @@ func (c *ClientConnection) handleListDirectory(msg Message) {
 	err := c.Hub.RequestResponse().SendResponse(requestID, msg)
 	if err != nil {
 		log.Printf("Error sending response to request %s: %v", requestID, err)
+	}
+}
+
+// updateFTSForFileAndVersions updates the full-text search index for a file and all its versions.
+func (c *ClientConnection) updateFTSForFileAndVersions(f *mcmodel.File) {
+	ftsClient := c.Hub.ftsClient
+	fileIndex, err := ftsClient.GetIndex("files")
+	if err != nil {
+		log.Printf("Error getting file index from FTS client: %v", err)
+		return
+	}
+
+	// Get other versions of the file. This is a match on the name in the project/directory. This will include the current
+	// file and all matching names with the current attribute set to false.
+	files, err := c.Hub.FileStor.ListFileVersionsForName(f.ProjectID, f.DirectoryID, f.Name)
+	if err != nil {
+		log.Printf("Error listing file versions projectID = %d, directoryID = %d, name = '%s': %v", f.ProjectID, f.DirectoryID, f.Name, err)
+		return
+	}
+
+	// Now that we have a list of 1 or more files, we need to transform each file entry into a FTS document. An FTS
+	// document is a map of string keys to any values that represent the file's metadata for full-text search indexing.
+	// This matches the fields used on the laravel model side.
+	var ftsDocuments []map[string]any
+	for _, file := range files {
+		ftsDocuments = append(ftsDocuments, file.ToFTSDocument())
+	}
+
+	// Now index the FTS documents in the file index.
+	if err := fileIndex.IndexDocuments(ftsDocuments); err != nil {
+		log.Printf("Error indexing files in FTS client: %v", err)
 	}
 }
 
