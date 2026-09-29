@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -294,38 +295,90 @@ func (c *ClientConnection) sendChunkError(transferID string, sequence int, reaso
 	}
 }
 
+type TransferInitPayload struct {
+	TransferID  string `json:"transfer_id"`
+	ProjectPath string `json:"project_path"`
+	FilePath    string `json:"file_path"`
+	FileSize    int64  `json:"file_size"`
+	ChunkSize   int    `json:"chunk_size"`
+	ProjectID   int    `json:"project_id"`
+	Checksum    string `json:"checksum"`
+}
+
+func decodeTransferInitPayload(payload any) (TransferInitPayload, error) {
+	var transferInit TransferInitPayload
+
+	if payload == nil {
+		return transferInit, fmt.Errorf("payload is required")
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return transferInit, fmt.Errorf("invalid payload: %w", err)
+	}
+
+	if err := json.Unmarshal(payloadBytes, &transferInit); err != nil {
+		return transferInit, fmt.Errorf("invalid payload: %w", err)
+	}
+
+	transferInit.TransferID = strings.TrimSpace(transferInit.TransferID)
+	transferInit.ProjectPath = strings.TrimSpace(transferInit.ProjectPath)
+	transferInit.FilePath = strings.TrimSpace(transferInit.FilePath)
+	transferInit.Checksum = strings.TrimSpace(transferInit.Checksum)
+
+	switch {
+	case transferInit.TransferID == "":
+		return transferInit, fmt.Errorf("transfer_id is required")
+	case transferInit.ProjectPath == "":
+		return transferInit, fmt.Errorf("project_path is required")
+	case transferInit.FilePath == "":
+		return transferInit, fmt.Errorf("file_path is required")
+	case transferInit.FileSize <= 0:
+		return transferInit, fmt.Errorf("file_size must be greater than zero")
+	case transferInit.ChunkSize <= 0:
+		return transferInit, fmt.Errorf("chunk_size must be greater than zero")
+	case transferInit.ProjectID <= 0:
+		return transferInit, fmt.Errorf("project_id must be greater than zero")
+	case transferInit.Checksum == "":
+		return transferInit, fmt.Errorf("checksum is required")
+	}
+
+	return transferInit, nil
+}
+
+func transferIDFromPayload(payload any) string {
+	payloadMap, ok := payload.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	transferID, _ := payloadMap["transfer_id"].(string)
+	return strings.TrimSpace(transferID)
+}
+
 // handleTransferInit handles the initialization of an upload transfer. It creates
 // the transfer request and the ID associated with it, along with the mcmodel.File
 // and mcmodel.TransferRequestFile association. It will send back to the client
 // the transfer_id associated with this transfer.
 func (c *ClientConnection) handleTransferInit(msg Message) {
-	// TODO: This message should be a type and we have a function that deserializes and validates it.
-	payload := msg.Payload.(map[string]interface{})
-
-	// The client sends details on the file to transfer, such as the name, size, and expected hash. It also
-	// send the project and directory path to upload the file to. The client can optionally send the chunk
-	// size. If it doesn't send a chunk size, then the server can set it or use the default (5mb).
-
-	// TODO: This code is fragile and relies on the client sending the correct parameters.
-	transferID, _ := payload["transfer_id"].(string)
-	projectFilePath := payload["project_path"].(string)
-	filePath, _ := payload["file_path"].(string)
-	// JSON numbers are float64 that we cast to an int
-	fileSize := int64(payload["file_size"].(float64))
-	chunkSize := int(payload["chunk_size"].(float64))
-	projectID := int(payload["project_id"].(float64))
-	checksum := payload["checksum"].(string)
-
-	// Validate
-	if transferID == "" || filePath == "" || fileSize <= 0 {
-		c.sendTransferReject(transferID, "invalid parameters")
+	transferInit, err := decodeTransferInitPayload(msg.Payload)
+	if err != nil {
+		c.sendTransferReject(transferIDFromPayload(msg.Payload), "invalid parameters")
 		return
 	}
+
+	transferID := transferInit.TransferID
+	projectFilePath := transferInit.ProjectPath
+	filePath := transferInit.FilePath
+	fileSize := transferInit.FileSize
+	chunkSize := transferInit.ChunkSize
+	projectID := transferInit.ProjectID
+	checksum := transferInit.Checksum
 
 	fileName := filepath.Base(projectFilePath)
 	// Each upload will get a separate transfer request file. Transfers are tracked in the remote_client_transfers
 	// table. Here we check to make sure that there isn't a transfer with this transfer_id.
-	_, err := c.Hub.RemoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
+	_, err = c.Hub.RemoteClientTransferStor.GetRemoteClientTransferByTransferID(transferID)
 	if err == nil {
 		c.sendTransferReject(transferID, "transfer already exists")
 		return
@@ -428,6 +481,8 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 	c.activeTransfers[transferID] = transfer
 	c.transferMu.Unlock()
 
+	expectedChunks := int((fileSize + int64(chunkSize) - 1) / int64(chunkSize))
+
 	// Send acceptance
 	c.Send <- Message{
 		Command:   MsgTransferAccept,
@@ -436,12 +491,12 @@ func (c *ClientConnection) handleTransferInit(msg Message) {
 		ClientID:  c.ID,
 		Payload: map[string]interface{}{
 			"transfer_id":     transferID,
-			"chunk_size":      int(chunkSize),
-			"expected_chunks": int(fileSize) / int(chunkSize),
+			"chunk_size":      chunkSize,
+			"expected_chunks": expectedChunks,
 		},
 	}
 
-	log.Printf("Transfer initialized: %s (%s, %.2f MB)", transferID, fileName, fileSize/1024/1024)
+	//log.Printf("Transfer initialized: %s (%s, %.2f MB)", transferID, fileName, fileSize/1024/1024)
 }
 
 func (c *ClientConnection) sendTransferAlreadyUploaded(transferID string, f *mcmodel.File) {
@@ -941,7 +996,7 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	f, err := c.Hub.FileStor.FindMatchingFileByChecksum(checksum)
 	if err != nil {
 		// if we get an error, then log it and return false
-		log.Printf("error finding file by checksum (%s): %v", checksum, err)
+		//log.Printf("error finding file by checksum (%s): %v", checksum, err)
 		return false, nil
 	}
 
@@ -989,6 +1044,8 @@ func (c *ClientConnection) alreadyUploaded(projectID int, filePath, checksum str
 	updates := mcmodel.File{
 		Size:         f.Size,
 		UsesUUID:     f.UUIDForUses(),
+		UsesID:       f.IDForUses(),
+		Checksum:     checksum,
 		UploadSource: "MCFT",
 	}
 	createdFile, err = c.Hub.FileStor.UpdateFile(createdFile, &updates)
