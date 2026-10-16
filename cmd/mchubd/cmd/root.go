@@ -4,10 +4,12 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 
 	"github.com/apex/log"
 	"github.com/feather-lang/feather"
@@ -31,6 +33,9 @@ to control these services and provide scripting capabilities in the web interfac
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+
 		dotenvFilePath := os.Getenv("MC_DOTENV_PATH")
 		if dotenvFilePath == "" {
 			log.Fatalf("MC_DOTENV_PATH not set or blank")
@@ -58,7 +63,7 @@ to control these services and provide scripting capabilities in the web interfac
 
 		searchClient := newSearchClient()
 		hub := wserv.NewHub(db, mcfsDir, searchClient)
-		go hub.Run()
+		go hub.Run(ctx)
 
 		interp := feather.New()
 		mqlCmd := mql.NewMQLCommands(proj, user, db, interp, hub)

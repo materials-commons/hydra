@@ -1,6 +1,7 @@
 package wserv
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,40 @@ import (
 	"gorm.io/gorm"
 )
 
+// WebSocketUpgrader is an interface that defines the Upgrade method. This is here, so we can easily swap
+// out the underlying websocket implementation and create fakes for testing purposes.
+type WebSocketUpgrader interface {
+	Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (Connection, error)
+}
+
+// Adapter to make a gorilla websocket upgrader implement the WebSocketUpgrader interface
+type gorillaWebSocketUpgrader struct {
+	upgrader websocket.Upgrader
+}
+
+// Upgrade is the call to adapt a gorilla websocket upgrader to the WebSocketUpgrader interface
+func (u *gorillaWebSocketUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (Connection, error) {
+	return u.upgrader.Upgrade(w, r, responseHeader)
+}
+
+// Compile time check to ensure that gorillaWebSocketUpgrader implements WebSocketUpgrader
+var _ WebSocketUpgrader = (*gorillaWebSocketUpgrader)(nil)
+
+// newDefaultWebSocketUpgrader creates a new default WebSocketUpgrader using the gorilla websocket implementation
+func newDefaultWebSocketUpgrader() WebSocketUpgrader {
+	return &gorillaWebSocketUpgrader{
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				// We authenticate via bearer token. This being the
+				// case, the origin check is not critical for security.
+				return true
+			},
+		},
+	}
+}
+
 // Hub serves as a central management point for communications, coordination and connection state.
 type Hub struct {
 	// Connection managers
@@ -30,7 +65,8 @@ type Hub struct {
 	RemoteClientStor         stor.RemoteClientStor
 	RemoteClientTransferStor stor.RemoteClientTransferStor
 	ConversionStor           stor.ConversionStor
-	partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
+	WSUpgrader               WebSocketUpgrader
+	// partialTransferFileStor  *stor.GormPartialTransferFileStor // TODO: Make this an interface
 
 	// FTS Client
 	ftsClient fts.Client
@@ -63,6 +99,39 @@ type HubCommandResponse struct {
 	Status   string `json:"status"`
 }
 
+type HubDependencies struct {
+	WSManager  *WebSocketManager
+	SSEManager *SSEManager
+	RRManager  *RequestResponseManager
+
+	UserStor                 stor.UserStor
+	ProjectStor              stor.ProjectStor
+	FileStor                 stor.FileStor
+	RemoteClientStor         stor.RemoteClientStor
+	RemoteClientTransferStor stor.RemoteClientTransferStor
+	ConversionStor           stor.ConversionStor
+
+	WSUpgrader WebSocketUpgrader
+
+	FTSClient fts.Client
+}
+
+func NewHubWithDependencies(deps HubDependencies) *Hub {
+	return &Hub{
+		WSManager:                deps.WSManager,
+		sseManager:               deps.SSEManager,
+		rrManager:                deps.RRManager,
+		UserStor:                 deps.UserStor,
+		ProjectStor:              deps.ProjectStor,
+		FileStor:                 deps.FileStor,
+		RemoteClientStor:         deps.RemoteClientStor,
+		RemoteClientTransferStor: deps.RemoteClientTransferStor,
+		ConversionStor:           deps.ConversionStor,
+		ftsClient:                deps.FTSClient,
+		WSUpgrader:               deps.WSUpgrader,
+	}
+}
+
 func NewHub(db *gorm.DB, mcfsDir string, ftsClient fts.Client) *Hub {
 	return &Hub{
 		// Initialize connection managers
@@ -77,7 +146,9 @@ func NewHub(db *gorm.DB, mcfsDir string, ftsClient fts.Client) *Hub {
 		FileStor:                 stor.NewGormFileStor(db, mcfsDir),
 		RemoteClientTransferStor: stor.NewGormRemoteClientTransferStor(db),
 		ConversionStor:           stor.NewGormConversionStor(db),
-		partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
+		//partialTransferFileStor:  stor.NewGormPartialTransferFileStor(db),
+
+		WSUpgrader: newDefaultWebSocketUpgrader(),
 
 		// FTS Client
 		ftsClient: ftsClient,
@@ -85,9 +156,12 @@ func NewHub(db *gorm.DB, mcfsDir string, ftsClient fts.Client) *Hub {
 }
 
 // Run starts the hub's main loop, handling incoming connections and messages.
-func (h *Hub) Run() {
+func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
+
 		case client := <-h.WSManager.register:
 			h.WSManager.HandleRegister(client)
 
@@ -128,16 +202,6 @@ func (h *Hub) RequestResponse() *RequestResponseManager {
 	return h.rrManager
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// We authenticate via bearer token. This being the
-		// case, the origin check is not critical for security.
-		return true
-	},
-}
-
 // ServeWS handles incoming WebSocket connections and manages the connection lifecycle.
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// Validate token and get client info
@@ -163,7 +227,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.WSUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Upgrade error: %v", err)
 		return
@@ -220,13 +284,18 @@ func (h *Hub) SendCommandToClient(clientID string, userID int, command string, p
 		return nil, err
 	}
 
-	payload["request_id"] = req.RequestID
+	msgPayload := make(map[string]any, len(payload)+1)
+	for k, v := range payload {
+		msgPayload[k] = v
+	}
+	msgPayload["request_id"] = req.RequestID
+
 	msg := Message{
 		Command:   command,
 		ID:        "not-needed",
 		Timestamp: time.Now(),
 		ClientID:  clientID,
-		Payload:   payload,
+		Payload:   msgPayload,
 	}
 
 	h.WSManager.Broadcast(msg)
@@ -266,6 +335,8 @@ func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request)
 
 	projectIDAsInt, err := strconv.Atoi(projectID)
 	if err != nil {
+		http.Error(w, "Invalid project_id", http.StatusBadRequest)
+		return
 	}
 
 	clientID := r.PathValue("client_id")
@@ -289,6 +360,12 @@ func (h *Hub) HandleListClientProjectDir(w http.ResponseWriter, r *http.Request)
 	client := h.WSManager.GetClient(clientID)
 	if client == nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
+		return
+	}
+
+	if client.User.ID != userIDAsInt {
+		http.Error(w, "User not allowed", http.StatusForbidden)
+		return
 	}
 
 	payload := map[string]any{
