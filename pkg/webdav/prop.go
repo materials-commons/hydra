@@ -180,12 +180,15 @@ func props(ctx context.Context, fs FileSystem, ls LockSystem, fi os.FileInfo, na
 	isDir := fi.IsDir()
 
 	var deadProps map[xml.Name]Property
-	//if dph, ok := f.(DeadPropsHolder); ok {
-	//	deadProps, err = dph.DeadProps()
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//}
+	if f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0); err == nil {
+		defer f.Close()
+		if dph, ok := f.(DeadPropsHolder); ok {
+			deadProps, err = dph.DeadProps()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	pstatOK := Propstat{Status: http.StatusOK}
 	pstatNotFound := Propstat{Status: http.StatusNotFound}

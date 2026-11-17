@@ -183,3 +183,32 @@ func (m *MockFileStor) PointAtExistingIfExists(file *mcmodel.File) (bool, error)
 func (m *MockFileStor) DoneWritingToFile(file *mcmodel.File, checksum string, size int64, conversionStore ConversionStor) (bool, error) {
 	return false, nil
 }
+
+func (m *MockFileStor) GetMatchingFileInDirectory(directoryID int, checksum string, name string) (*mcmodel.File, error) {
+	return nil, nil
+}
+
+func (m *MockFileStor) SetFileHealthMissing(file *mcmodel.File, determinedBy string, source string) (*mcmodel.File, error) {
+	return file, nil
+}
+
+func (m *MockFileStor) SetFileHealthFixed(file *mcmodel.File, fixedBy string, source string) (*mcmodel.File, error) {
+	return file, nil
+}
+
+func (m *MockFileStor) FindMatchingFileByChecksum(checksum string) (*mcmodel.File, error) {
+	return nil, nil
+}
+
+func (m *MockFileStor) FindMatchingFileByChecksumAndPath(projectID int, filePath string, checksum string) (*mcmodel.File, error) {
+	return nil, nil
+}
+
+func (m *MockFileStor) DeleteFileByID(ID int) error {
+	delete(m.files, ID)
+	return nil
+}
+
+func (m *MockFileStor) ListFileVersionsForName(projectID int, directoryID int, name string) ([]mcmodel.File, error) {
+	return []mcmodel.File{}, nil
+}

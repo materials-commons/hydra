@@ -180,7 +180,6 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	//fmt.Printf("parseExpression p.curToken.Type = %d/%s\n", p.curToken.Type, p.curToken.Literal)
 	prefixFn := p.prefixParseFns[p.curToken.Type]
 	if prefixFn == nil {
-		fmt.Printf("No function found for %d/%s\n", p.curToken.Type, p.curToken.Literal)
 		p.appendError("no prefix parse function for %s found", token.TokenToStr(p.curToken.Type))
 		return nil
 	}
@@ -201,23 +200,17 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 }
 
 func (p *Parser) parseSampleAttrFunc() ast.Expression {
-	attribute, operator, value := p.parseAttribute()
-	return &ast.SampleAttributeIdentifier{Token: p.curToken, Attribute: attribute, Operator: operator, Value: value}
+	tok := p.curToken
+	p.nextToken()
+	attribute := p.curToken.Literal
+	return &ast.SampleAttributeIdentifier{Token: tok, Attribute: attribute, Value: attribute}
 }
 
 func (p *Parser) parseProcessAttrFunc() ast.Expression {
-	attribute, operator, value := p.parseAttribute()
-	return &ast.ProcessAttributeIdentifier{Token: p.curToken, Attribute: attribute, Operator: operator, Value: value}
-}
-
-func (p *Parser) parseAttribute() (string, string, string) {
+	tok := p.curToken
 	p.nextToken()
 	attribute := p.curToken.Literal
-	p.nextToken()
-	operator := p.curToken.Literal
-	p.nextToken()
-	value := p.curToken.Literal
-	return attribute, operator, value
+	return &ast.ProcessAttributeIdentifier{Token: tok, Attribute: attribute, Value: attribute}
 }
 
 func (p *Parser) appendError(msg string, args ...interface{}) {

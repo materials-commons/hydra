@@ -88,6 +88,41 @@ func convertAstInfixExpression(ie *ast.InfixExpression) Statement {
 		statement.Left = convertAstExpression(ie.Left)
 		statement.Right = convertAstExpression(ie.Right)
 		return statement
+	case "=", "<", "<=", ">", ">=", "<>":
+		m := MatchStatement{
+			Operation: ie.Operator,
+		}
+		switch left := ie.Left.(type) {
+		case *ast.SampleAttributeIdentifier:
+			if left.Attribute == "name" {
+				m.FieldType = SampleFieldType
+			} else {
+				m.FieldType = SampleAttributeFieldType
+			}
+			m.FieldName = left.Attribute
+		case *ast.ProcessAttributeIdentifier:
+			if left.Attribute == "name" {
+				m.FieldType = ProcessFieldType
+			} else {
+				m.FieldType = ProcessAttributeFieldType
+			}
+			m.FieldName = left.Attribute
+		}
+		switch right := ie.Right.(type) {
+		case *ast.IntegerLiteral:
+			m.Value = right.Value
+		case *ast.FloatLiteral:
+			m.Value = right.Value
+		case *ast.StringLiteral:
+			m.Value = right.Value
+		case *ast.BooleanLiteral:
+			m.Value = right.Value
+		default:
+			if right != nil {
+				m.Value = right.String()
+			}
+		}
+		return m
 	default:
 		return nil
 	}

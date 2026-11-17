@@ -12,7 +12,7 @@ func TestNextToken(t *testing.T) {
 		expectedLiteral string
 	}{
 		{token.SELECT, "select"},
-		{token.PROCESS, "p:"},
+		{token.PROCESS_ATTR, "p:"},
 		{token.LBRACKET, "["},
 		{token.IDENT, "name"},
 		{token.COMMA, ","},
@@ -20,7 +20,7 @@ func TestNextToken(t *testing.T) {
 		{token.IDENT, "time"},
 		{token.RBRACKET, "]"},
 		{token.COMMA, ","},
-		{token.SAMPLE, "s:"},
+		{token.SAMPLE_ATTR, "s:"},
 		{token.LBRACKET, "["},
 		{token.ATTR, "a:"},
 		{token.IDENT, "metal hardness"},

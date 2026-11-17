@@ -146,10 +146,10 @@ func (i *SampleAttributeIdentifier) TokenLiteral() string {
 }
 
 func (i *SampleAttributeIdentifier) String() string {
-	if strings.Contains(i.Token.Literal, " ") {
-		return fmt.Sprintf("sample:'%s' %s %s", i.Attribute, i.Operator, i.Value)
+	if strings.Contains(i.Value, " ") {
+		return fmt.Sprintf("sample:'%s'", i.Value)
 	}
-	return fmt.Sprintf("sample:%s %s %s", i.Attribute, i.Operator, i.Value)
+	return fmt.Sprintf("sample:%s", i.Value)
 }
 
 /////////////////////////////////////////
@@ -169,10 +169,10 @@ func (i *ProcessAttributeIdentifier) TokenLiteral() string {
 }
 
 func (i *ProcessAttributeIdentifier) String() string {
-	if strings.Contains(i.Token.Literal, " ") {
-		return fmt.Sprintf("process:'%s' %s %s", i.Attribute, i.Operator, i.Value)
+	if strings.Contains(i.Value, " ") {
+		return fmt.Sprintf("process:'%s'", i.Value)
 	}
-	return fmt.Sprintf("process:%s %s %s", i.Attribute, i.Operator, i.Value)
+	return fmt.Sprintf("process:%s", i.Value)
 }
 
 /////////////////////////////////////////

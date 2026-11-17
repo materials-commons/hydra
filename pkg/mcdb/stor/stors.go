@@ -109,13 +109,13 @@ type ActivityStor interface {
 	CreateActivity(activity *mcmodel.Activity) (*mcmodel.Activity, error)
 }
 
-//type ClientTransferStor interface {
-//	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
-//	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, *mcmodel.TransferRequestFile, error)
-//	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
-//	CloseClientTransfer(clientTransferID int) error
-//	AbortClientTransfer(clientTransferID int) error
-//}
+type ClientTransferStor interface {
+	CreateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+	GetOrCreateClientTransferByPath(clientUUID string, projectID, ownerID int, filePath string) (*mcmodel.ClientTransfer, error)
+	UpdateClientTransfer(ct *mcmodel.ClientTransfer) (*mcmodel.ClientTransfer, error)
+	CloseClientTransfer(clientTransferID int) error
+	AbortClientTransfer(clientTransferID int) error
+}
 
 type Stors struct {
 	ConversionStor           ConversionStor
@@ -127,6 +127,7 @@ type Stors struct {
 	UserStor                 UserStor
 	RemoteClientStor         RemoteClientStor
 	RemoteClientTransferStor RemoteClientTransferStor
+	ClientTransferStor       ClientTransferStor
 }
 
 func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
@@ -140,5 +141,6 @@ func NewGormStors(db *gorm.DB, mcfsRoot string) *Stors {
 		UserStor:                 NewGormUserStor(db),
 		RemoteClientStor:         NewGormRemoteClientStor(db),
 		RemoteClientTransferStor: NewGormRemoteClientTransferStor(db),
+		ClientTransferStor:       NewGormClientTransferStor(db),
 	}
 }

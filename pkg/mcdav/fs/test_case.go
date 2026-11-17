@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/materials-commons/hydra/pkg/mcdb"
@@ -28,23 +29,24 @@ type testCase struct {
 }
 
 func newTestCase(t *testing.T) *testCase {
-	dsn := mcdb.SqliteInMemoryDSN
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	require.NoErrorf(t, err, "gorm.Open failed: %s", err)
 	sqlitedb, err := db.DB()
+	require.NoError(t, err)
 	sqlitedb.SetMaxOpenConns(1)
 	err = mcdb.RunMigrations(db)
+	require.NoErrorf(t, err, "Migration failed with: %s", err)
+
+	mcfsDir := filepath.Join(tempDir, "mcfs")
+	_ = os.MkdirAll(mcfsDir, 0755)
+
 	tc := &testCase{
 		db:      db,
 		T:       t,
-		mcfsDir: "/tmp/mcfs",
+		mcfsDir: mcfsDir,
 	}
-
-	_ = os.RemoveAll(tc.mcfsDir)
-
-	_ = os.MkdirAll(tc.mcfsDir, 0755)
-
-	require.NoErrorf(t, err, "Migration failed with: %s", err)
 
 	tc.populateDatabase()
 

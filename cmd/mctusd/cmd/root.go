@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -89,7 +90,7 @@ var rootCmd = &cobra.Command{
 		})
 
 		hub := wserv.NewHub(db, mcfsDir, nil)
-		go hub.Run()
+		go hub.Run(context.Background())
 
 		//http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		//	hub.ServeWS(w, r)

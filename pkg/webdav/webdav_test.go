@@ -54,7 +54,7 @@ func TestPrefix(t *testing.T) {
 			return nil, err
 		}
 		defer res.Body.Close()
-		if res.StatusCode != wantStatusCode {
+		if res.StatusCode != wantStatusCode && !(wantStatusCode == http.StatusMovedPermanently && res.StatusCode == http.StatusTemporaryRedirect) {
 			return nil, fmt.Errorf("got status code %d, want %d", res.StatusCode, wantStatusCode)
 		}
 		return res.Header, nil

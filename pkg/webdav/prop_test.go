@@ -518,6 +518,11 @@ func TestMemPS(t *testing.T) {
 				t.Fatalf("%s: calcProps: %v", desc, err)
 			}
 
+			fi, err := fs.Stat(ctx, op.name)
+			if err != nil {
+				t.Fatalf("%s: Stat: %v", desc, err)
+			}
+
 			// Call property system.
 			var propstats []Propstat
 			switch op.op {
@@ -534,9 +539,9 @@ func TestMemPS(t *testing.T) {
 				}
 				continue
 			case "allprop":
-				propstats, err = allprop(ctx, fs, ls, op.name, op.pnames)
+				propstats, err = allprop(ctx, fs, ls, fi, op.name, op.pnames)
 			case "propfind":
-				propstats, err = props(ctx, fs, ls, op.name, op.pnames)
+				propstats, err = props(ctx, fs, ls, fi, op.name, op.pnames)
 			case "proppatch":
 				propstats, err = patch(ctx, fs, ls, op.name, op.patches)
 			default:

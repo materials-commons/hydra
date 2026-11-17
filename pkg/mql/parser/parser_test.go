@@ -129,8 +129,8 @@ func testSampleIdentifierExpression(t *testing.T, s ast.Statement, token, identi
 		t.Errorf("Expected value '%s', got %s", identifier, sampleAttribute.Value)
 	}
 
-	if sampleAttribute.TokenLiteral() != identifier {
-		t.Errorf("Expected token literal '%s', got %s", identifier, sampleAttribute.Value)
+	if sampleAttribute.TokenLiteral() != token {
+		t.Errorf("Expected token literal '%s', got %s", token, sampleAttribute.TokenLiteral())
 	}
 }
 
@@ -179,8 +179,8 @@ func testProcessIdentifierExpression(t *testing.T, s ast.Statement, token, ident
 		t.Errorf("Expected value '%s', got %s", identifier, processAttribute.Value)
 	}
 
-	if processAttribute.TokenLiteral() != identifier {
-		t.Errorf("Expected token literal '%s', got %s", identifier, processAttribute.Value)
+	if processAttribute.TokenLiteral() != token {
+		t.Errorf("Expected token literal '%s', got %s", token, processAttribute.TokenLiteral())
 	}
 }
 

@@ -253,7 +253,7 @@ func TestNewMCHookHandler(t *testing.T) {
 
 func Test_rejectRequest(t *testing.T) {
 	type args struct {
-		reason string
+		reason error
 	}
 	tests := []struct {
 		name    string
