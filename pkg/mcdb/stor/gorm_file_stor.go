@@ -1,7 +1,6 @@
 package stor
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,14 +184,13 @@ func findDirByPath(db *gorm.DB, projectID int, path string) (*mcmodel.File, erro
 }
 
 func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path, name string) (*mcmodel.File, error) {
-	var dir mcmodel.File
-	err := WithTxRetry(s.db, func(tx *gorm.DB) error {
-		err := tx.Where("path = ?", path).
-			Where("deleted_at IS NULL").
-			Where("dataset_id IS NULL").
-			Where("project_id = ?", projectID).
-			Find(&dir).Error
-		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+	var (
+		dir *mcmodel.File
+		err error
+	)
+	err = WithTxRetry(s.db, func(tx *gorm.DB) error {
+		dir, err = findDirByPath(tx, projectID, path)
+		if err == nil {
 			// directory already exists no need to create
 			return nil
 		}
@@ -202,7 +200,7 @@ func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path
 			return result.Error
 		}
 
-		dir = mcmodel.File{
+		dir = &mcmodel.File{
 			OwnerID:              ownerID,
 			MimeType:             "directory",
 			MediaTypeDescription: "directory",
@@ -217,19 +215,16 @@ func (s *GormFileStor) CreateDirectory(parentDirID, projectID, ownerID int, path
 			return err
 		}
 
-		if err := tx.Create(&dir).Error; err != nil {
+		if err := tx.Create(dir).Error; err != nil {
 			// Create failed, so lets checks if the directory already exists, and if so, return it.
-			return tx.Where("path = ?", path).
-				Where("deleted_at IS NULL").
-				Where("dataset_id IS NULL").
-				Where("project_id = ?", projectID).
-				Find(&dir).Error
+			dir, err = findDirByPath(tx, projectID, path)
+			return err
 		}
 
 		return tx.Model(&project).Updates(&mcmodel.Project{DirectoryCount: project.DirectoryCount + 1}).Error
 	})
 
-	return &dir, err
+	return dir, err
 }
 
 func (s *GormFileStor) CreateDirIfNotExists(parentDirID int, path, name string, projectID, ownerID int) (*mcmodel.File, error) {
