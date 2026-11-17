@@ -5,6 +5,9 @@ all: fmt bin
 fmt:
 	-go fmt ./...
 
+test:
+	go test ./...
+
 bin: cli server
 
 ssh-hostkey:
