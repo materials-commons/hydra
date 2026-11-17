@@ -34,6 +34,7 @@ type FileTransferHandler struct {
 	projectStore stor.ProjectStor
 	fileStore    stor.FileStor
 	convStore    stor.ConversionStor
+	userStor     stor.UserStor
 	hasher       hash.Hash
 	mcfsRoot     string
 }
@@ -45,6 +46,7 @@ func NewFileTransferHandler(ws *websocket.Conn, db *gorm.DB) *FileTransferHandle
 		projectStore: stor.NewGormProjectStor(db),
 		fileStore:    stor.NewGormFileStor(db, GetMCFSRoot()),
 		convStore:    stor.NewGormConversionStor(db),
+		userStor:     stor.NewGormUserStor(db),
 		hasher:       md5.New(),
 		mcfsRoot:     GetMCFSRoot(),
 	}
@@ -136,19 +138,17 @@ func (h *FileTransferHandler) authenticate() error {
 		return err
 	}
 
-	var user mcmodel.User
-
-	if err := h.db.Where("api_token = ?", authReq.APIToken).First(&user).Error; err != nil {
+	user, err := h.userStor.GetUserByAPIToken(authReq.APIToken)
+	if err != nil {
 		return err
 	}
 
-	h.User = user
+	h.User = *user
 
 	if !h.projectStore.UserCanAccessProject(h.User.ID, authReq.ProjectID) {
 		return ErrNotAuthenticated
 	}
 
-	var err error
 	h.Project, err = h.projectStore.GetProjectByID(authReq.ProjectID)
 	if err != nil {
 		return err
