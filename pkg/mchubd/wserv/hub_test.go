@@ -3,6 +3,8 @@ package wserv
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -479,6 +481,16 @@ func TestRunStopsWhenContextCancelled(t *testing.T) {
 
 	cancel()
 	waitForHubToStop(t, done)
+}
+
+func TestHashingOfApiToken(t *testing.T) {
+	token := "6Kne6dCxZdB4VVM3G1UHS0uaQJgmj2IqaZdYN9MwSPV9Vx8mj66P0l3UMpMortBgv5ekSdExBWzzL8dY"
+	sum := sha256.Sum256([]byte(token))
+	hashed := hex.EncodeToString(sum[:])
+	expected := "d3843a2c3862f7d875278caaece86061328d2b55420856d2e5ab0b7a4ec3a481"
+	if hashed != expected {
+		t.Fatalf("hashed = %s, want %s", hashed, expected)
+	}
 }
 
 func newTestHubForHubTests() *Hub {

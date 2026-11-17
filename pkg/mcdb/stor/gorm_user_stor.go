@@ -1,6 +1,9 @@
 package stor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/hashicorp/go-uuid"
 	"github.com/materials-commons/hydra/pkg/mcdb/mcmodel"
 	"gorm.io/gorm"
@@ -56,11 +59,21 @@ func (s *GormUserStor) GetUserByEmail(email string) (*mcmodel.User, error) {
 	return &user, nil
 }
 
+// GetUserByAPIToken returns a user by their API token. It hashes the apitoken and looks for the hashed token.
 func (s *GormUserStor) GetUserByAPIToken(apitoken string) (*mcmodel.User, error) {
-	var user mcmodel.User
-	if err := s.db.Where("api_token = ?", apitoken).First(&user).Error; err != nil {
+	var userAPIToken mcmodel.UserApiToken
+
+	// Tokens are stored hashed.
+	sum := sha256.Sum256([]byte(apitoken))
+	hashedToken := hex.EncodeToString(sum[:])
+
+	// Look for the hashed token.
+	err := s.db.Preload("Owner").
+		Where("token = ?", hashedToken).
+		First(&userAPIToken).Error
+	if err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return userAPIToken.Owner, nil
 }
